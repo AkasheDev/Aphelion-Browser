@@ -18,7 +18,14 @@ public sealed class SplitTabPanel : Panel
 {
     protected override Size MeasureOverride(Size availableSize)
     {
-        var width = double.IsInfinity(availableSize.Width) ? 0 : availableSize.Width;
+        // Unbounded width has no share to divide, so the halves fall back to
+        // their natural size. In practice the strip always bounds this.
+        if (double.IsInfinity(availableSize.Width))
+        {
+            return MeasureNaturally(availableSize);
+        }
+
+        var width = availableSize.Width;
         var visible = new List<Control>();
 
         foreach (var child in Children)
@@ -59,6 +66,27 @@ public sealed class SplitTabPanel : Panel
                 child.Measure(new Size(share, availableSize.Height));
             }
 
+            height = Math.Max(height, child.DesiredSize.Height);
+        }
+
+        return new Size(width, height);
+    }
+
+    /// <summary>Measures every child at its natural size and totals the widths.</summary>
+    private Size MeasureNaturally(Size availableSize)
+    {
+        var width = 0d;
+        var height = 0d;
+
+        foreach (var child in Children)
+        {
+            if (!child.IsVisible)
+            {
+                continue;
+            }
+
+            child.Measure(new Size(double.PositiveInfinity, availableSize.Height));
+            width += child.DesiredSize.Width;
             height = Math.Max(height, child.DesiredSize.Height);
         }
 

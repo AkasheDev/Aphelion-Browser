@@ -127,15 +127,20 @@
                            keep their share even when collapsed and leave a gap. -->
                       <controls:SplitTabPanel Grid.Column="1">
 
-                        <StackPanel Classes="half" Orientation="Horizontal">
-                          <Image Classes="favicon"
+                        <!-- Grid, not StackPanel: a horizontal StackPanel offers
+                             its children unlimited width, so the title measures
+                             at full length and paints over the other half. -->
+                        <Grid Classes="half" ColumnDefinitions="Auto,*">
+                          <Image Grid.Column="0"
+                                 Classes="favicon"
                                  Source="{Binding Favicon}"
                                  RenderOptions.BitmapInterpolationMode="HighQuality"
                                  IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
                           <!-- Placeholder until the site's icon arrives, or when it
                                has none: a blank gap would make the strip jump. -->
-                          <Path Classes="favicon-fallback"
+                          <Path Grid.Column="0"
+                                Classes="favicon-fallback"
                                 Width="13" Height="13"
                                 Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
                                 IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNull}}" />
@@ -143,35 +148,39 @@
                           <!-- Squeezed to a single character as tabs narrow, but
                                never away: favicon, one letter and the close button
                                are what the narrowest tab keeps. -->
-                          <controls:MarqueeTextBlock Classes="tab-title"
+                          <controls:MarqueeTextBlock Grid.Column="1"
+                                                     Classes="tab-title"
                                                      MinWidth="10"
                                                      Text="{Binding Title}"
                                                      IsScrollEnabled="{Binding IsActive}" />
-                        </StackPanel>
+                        </Grid>
 
                         <Border Classes="split-divider"
                                 IsVisible="{Binding IsSplit}" />
 
-                        <StackPanel Classes="half"
-                                    Orientation="Horizontal"
-                                    IsVisible="{Binding IsSplit}">
-                          <Image Classes="favicon"
+                        <Grid Classes="half"
+                              ColumnDefinitions="Auto,*"
+                              IsVisible="{Binding IsSplit}">
+                          <Image Grid.Column="0"
+                                 Classes="favicon"
                                  Source="{Binding PartnerFavicon}"
                                  RenderOptions.BitmapInterpolationMode="HighQuality"
                                  IsVisible="{Binding PartnerFavicon, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
-                          <Path Classes="favicon-fallback"
+                          <Path Grid.Column="0"
+                                Classes="favicon-fallback"
                                 Width="13" Height="13"
                                 Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
                                 IsVisible="{Binding ShowsPartnerFallback}" />
 
                           <!-- Scrolls on its own side, exactly as the primary
                                title does, so a long partner name is readable. -->
-                          <controls:MarqueeTextBlock Classes="tab-title-partner"
+                          <controls:MarqueeTextBlock Grid.Column="1"
+                                                     Classes="tab-title-partner"
                                                      MinWidth="10"
                                                      Text="{Binding PartnerTitle}"
                                                      IsScrollEnabled="{Binding IsActive}" />
-                        </StackPanel>
+                        </Grid>
 
                       </controls:SplitTabPanel>
 
