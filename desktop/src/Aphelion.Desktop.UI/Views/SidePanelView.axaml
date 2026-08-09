@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+             x:Class="Aphelion.Desktop.UI.Views.SidePanelView"
+             x:DataType="vm:SidePanelViewModel">
+
+  <Border Width="260" Background="{DynamicResource AphelionSidePanelBrush}">
+    <Grid RowDefinitions="Auto,*" Margin="12,10">
+
+      <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,10">
+        <TextBlock Grid.Column="0"
+                   Text="{Binding Header}"
+                   FontSize="13"
+                   FontWeight="SemiBold"
+                   VerticalAlignment="Center" />
+        <Button Grid.Column="1"
+                Content="&#x2715;"
+                FontSize="10"
+                Width="20"
+                Height="20"
+                Padding="0"
+                Command="{Binding CloseCommand}" />
+      </Grid>
+
+      <TextBlock Grid.Row="1"
+                 IsVisible="{Binding IsPlaceholder}"
+                 Text="Not implemented yet."
+                 FontSize="12"
+                 Opacity="0.55"
+                 TextWrapping="Wrap" />
+
+    </Grid>
+  </Border>
+
+</UserControl>
