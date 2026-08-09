@@ -1,0 +1,50 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+        x:Class="Aphelion.Desktop.UI.Views.SplashWindow"
+        x:DataType="vm:SplashViewModel"
+        Title="Aphelion"
+        Width="420"
+        Height="320"
+        WindowDecorations="None"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterScreen"
+        Background="Transparent"
+        TransparencyLevelHint="Transparent">
+
+  <Border CornerRadius="12"
+          Background="{DynamicResource AphelionSurfaceBrush}"
+          BorderBrush="{DynamicResource AphelionBrandPrimaryBrush}"
+          BorderThickness="1">
+
+    <Grid RowDefinitions="*,Auto" Margin="32">
+
+      <Image Grid.Row="0"
+             Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
+             Width="150"
+             HorizontalAlignment="Center"
+             VerticalAlignment="Center"
+             RenderOptions.BitmapInterpolationMode="HighQuality" />
+
+      <StackPanel Grid.Row="1" Spacing="10">
+
+        <ProgressBar Minimum="0"
+                     Maximum="100"
+                     Height="4"
+                     CornerRadius="2"
+                     Value="{Binding ProgressPercent}"
+                     Foreground="{DynamicResource AphelionBrandPrimaryBrush}" />
+
+        <TextBlock Text="{Binding StatusText}"
+                   FontSize="12"
+                   Opacity="0.65"
+                   HorizontalAlignment="Center" />
+
+      </StackPanel>
+
+    </Grid>
+
+  </Border>
+
+</Window>

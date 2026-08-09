@@ -24,6 +24,9 @@ public sealed class BrowserTab
 
     public TabId Id { get; }
 
+    /// <summary>The group this tab belongs to, or null when it is ungrouped.</summary>
+    public TabGroupId? GroupId { get; private set; }
+
     public PageAddress? Address { get; private set; }
 
     public string Title { get; private set; } = string.Empty;
@@ -82,4 +85,8 @@ public sealed class BrowserTab
             Title = title;
         }
     }
+
+    public void JoinGroup(TabGroupId groupId) => GroupId = groupId;
+
+    public void LeaveGroup() => GroupId = null;
 }

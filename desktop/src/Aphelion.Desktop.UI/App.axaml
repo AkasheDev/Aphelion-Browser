@@ -5,20 +5,119 @@
 
   <Application.Resources>
     <ResourceDictionary>
+
       <ResourceDictionary.ThemeDictionaries>
+
         <ResourceDictionary x:Key="Light">
+          <!-- Brand gradient endpoints, taken from shared/design/colors.json and the logo -->
           <Color x:Key="AphelionBrandPrimary">#5A4FCF</Color>
+          <Color x:Key="AphelionBrandAccent">#17B8C4</Color>
+          <!-- Window chrome -->
+          <Color x:Key="AphelionSurface">#F4F4F8</Color>
+          <Color x:Key="AphelionChrome">#E8E8F0</Color>
+          <Color x:Key="AphelionSidePanel">#EDEDF4</Color>
+          <Color x:Key="AphelionTabActive">#FFFFFF</Color>
         </ResourceDictionary>
+
         <ResourceDictionary x:Key="Dark">
           <Color x:Key="AphelionBrandPrimary">#8C83FF</Color>
+          <Color x:Key="AphelionBrandAccent">#3FD8E4</Color>
+          <Color x:Key="AphelionSurface">#16161E</Color>
+          <Color x:Key="AphelionChrome">#101017</Color>
+          <Color x:Key="AphelionSidePanel">#131320</Color>
+          <Color x:Key="AphelionTabActive">#1F1F2C</Color>
         </ResourceDictionary>
+
       </ResourceDictionary.ThemeDictionaries>
+
       <SolidColorBrush x:Key="AphelionBrandPrimaryBrush" Color="{DynamicResource AphelionBrandPrimary}" />
+      <SolidColorBrush x:Key="AphelionBrandAccentBrush" Color="{DynamicResource AphelionBrandAccent}" />
+      <SolidColorBrush x:Key="AphelionSurfaceBrush" Color="{DynamicResource AphelionSurface}" />
+      <SolidColorBrush x:Key="AphelionChromeBrush" Color="{DynamicResource AphelionChrome}" />
+      <SolidColorBrush x:Key="AphelionSidePanelBrush" Color="{DynamicResource AphelionSidePanel}" />
+      <SolidColorBrush x:Key="AphelionTabActiveBrush" Color="{DynamicResource AphelionTabActive}" />
+
+      <!-- Window border: the brand gradient, so a running window is recognisable
+           at a glance and matches the logo. -->
+      <LinearGradientBrush x:Key="AphelionWindowBorderBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Offset="0" Color="{DynamicResource AphelionBrandPrimary}" />
+        <GradientStop Offset="1" Color="{DynamicResource AphelionBrandAccent}" />
+      </LinearGradientBrush>
+
+      <!-- Tab group colours. A closed palette, mapped from the domain's GroupColor. -->
+      <SolidColorBrush x:Key="GroupColorVioletBrush" Color="#8C83FF" />
+      <SolidColorBrush x:Key="GroupColorCyanBrush" Color="#3FD8E4" />
+      <SolidColorBrush x:Key="GroupColorEmeraldBrush" Color="#3FD9A0" />
+      <SolidColorBrush x:Key="GroupColorAmberBrush" Color="#F0B849" />
+      <SolidColorBrush x:Key="GroupColorRoseBrush" Color="#F2688A" />
+      <SolidColorBrush x:Key="GroupColorSlateBrush" Color="#8A90A8" />
+
     </ResourceDictionary>
   </Application.Resources>
 
   <Application.Styles>
     <FluentTheme />
+
+    <!-- Tab strip -->
+    <Style Selector="Border.tab">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.tab:pointerover">
+      <Setter Property="Background" Value="{DynamicResource AphelionSurfaceBrush}" />
+    </Style>
+    <Style Selector="Border.tab.active">
+      <Setter Property="Background" Value="{DynamicResource AphelionTabActiveBrush}" />
+    </Style>
+
+    <Style Selector="Button.tabclose">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Opacity" Value="0.55" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.tabclose:pointerover">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!-- Title bar buttons -->
+    <Style Selector="Button.chrome">
+      <Setter Property="Width" Value="28" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="2,0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Opacity" Value="0.75" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.chrome:pointerover">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="Background" Value="{DynamicResource AphelionSurfaceBrush}" />
+    </Style>
+
+    <!-- Side rail -->
+    <Style Selector="Button.rail">
+      <Setter Property="Width" Value="36" />
+      <Setter Property="Height" Value="36" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Opacity" Value="0.7" />
+    </Style>
+    <Style Selector="Button.rail:pointerover">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="Background" Value="{DynamicResource AphelionSurfaceBrush}" />
+    </Style>
+
   </Application.Styles>
 
 </Application>

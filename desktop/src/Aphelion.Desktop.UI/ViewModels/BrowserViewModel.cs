@@ -18,8 +18,8 @@ namespace Aphelion.Desktop.UI.ViewModels;
 public sealed partial class BrowserViewModel : ViewModelBase
 {
     private readonly NavigateFromAddressBar _navigateFromAddressBar;
-    private readonly BrowserTab _tab = new(TabId.New());
 
+    private BrowserTab _tab = new(TabId.New());
     private IBrowserEngineSession? _session;
 
     public BrowserViewModel(NavigateFromAddressBar navigateFromAddressBar)
@@ -27,6 +27,19 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _navigateFromAddressBar = navigateFromAddressBar
             ?? throw new ArgumentNullException(nameof(navigateFromAddressBar));
     }
+
+    /// <summary>
+    /// Binds this view model to the tab it drives. The shell owns tab lifetime, so
+    /// the tab is supplied rather than created here.
+    /// </summary>
+    public void Bind(BrowserTab tab)
+    {
+        _tab = tab ?? throw new ArgumentNullException(nameof(tab));
+        SyncFromTab();
+    }
+
+    /// <summary>Current page title, surfaced so the tab strip can follow it.</summary>
+    public string PageTitle => _tab.DisplayTitle;
 
     /// <summary>Text currently in the address bar, which the user may be editing.</summary>
     [ObservableProperty]
@@ -149,6 +162,10 @@ public sealed partial class BrowserViewModel : ViewModelBase
             TabLoadState.Failed => _tab.FailureReason ?? "Navigation failed.",
             _ => string.Empty,
         };
+
+        // PageTitle is derived from the tab rather than stored, so it has to be
+        // raised by hand whenever the tab changes underneath it.
+        OnPropertyChanged(nameof(PageTitle));
     }
 
     private void RefreshHistoryState()

@@ -4,13 +4,137 @@
         xmlns:views="using:Aphelion.Desktop.UI.Views"
         x:Class="Aphelion.Desktop.UI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="{Binding Title}"
+        Title="{Binding Shell.WindowTitle}"
+        Icon="avares://Aphelion.Desktop.UI/Assets/aphelion_logo.ico"
         Width="1280"
         Height="800"
-        MinWidth="640"
-        MinHeight="480"
-        WindowStartupLocation="CenterScreen">
+        MinWidth="820"
+        MinHeight="520"
+        WindowStartupLocation="CenterScreen"
+        Background="Transparent"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="-1">
 
-  <views:BrowserView DataContext="{Binding Browser}" />
+  <!-- Brand-gradient border marks a running Aphelion window. ClipToBounds keeps the
+       native web view from painting over it. -->
+  <Border BorderBrush="{DynamicResource AphelionWindowBorderBrush}"
+          BorderThickness="1"
+          Background="{DynamicResource AphelionSurfaceBrush}"
+          ClipToBounds="True">
+
+    <Grid RowDefinitions="Auto,*" DataContext="{Binding Shell}">
+
+      <!-- Title bar: tabs live here -->
+      <Grid Grid.Row="0"
+            Name="TitleBar"
+            Height="40"
+            ColumnDefinitions="Auto,*,Auto,Auto"
+            Background="{DynamicResource AphelionChromeBrush}">
+
+        <Image Grid.Column="0"
+               Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
+               Width="18"
+               Margin="12,0,8,0"
+               VerticalAlignment="Center"
+               RenderOptions.BitmapInterpolationMode="HighQuality" />
+
+        <!-- Tab strip -->
+        <ScrollViewer Grid.Column="1"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding Tabs}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="2" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="vm:TabItemViewModel">
+                <Border Classes.active="{Binding IsActive}"
+                        Classes="tab"
+                        MinWidth="150"
+                        MaxWidth="240"
+                        Height="32"
+                        VerticalAlignment="Bottom"
+                        CornerRadius="8,8,0,0"
+                        Padding="10,0,6,0">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+
+                    <!-- Group colour marker -->
+                    <Border Grid.Column="0"
+                            Width="3"
+                            Height="14"
+                            CornerRadius="2"
+                            Margin="0,0,7,0"
+                            IsVisible="{Binding IsGrouped}"
+                            Background="{Binding GroupBrush}" />
+
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding Title}"
+                               VerticalAlignment="Center"
+                               FontSize="12"
+                               TextTrimming="CharacterEllipsis" />
+
+                    <Button Grid.Column="2"
+                            Classes="tabclose"
+                            Content="&#x2715;"
+                            FontSize="9"
+                            Width="18"
+                            Height="18"
+                            Padding="0"
+                            VerticalAlignment="Center"
+                            Command="{Binding $parent[ItemsControl].((vm:ShellViewModel)DataContext).CloseTabCommand}"
+                            CommandParameter="{Binding}" />
+
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+
+          <Button Classes="chrome"
+                  Content="+"
+                  FontSize="16"
+                  ToolTip.Tip="New tab"
+                  Command="{Binding NewTabCommand}" />
+
+          <Button Classes="chrome"
+                  Content="&#x25A3;"
+                  ToolTip.Tip="Group or ungroup the active tab"
+                  Command="{Binding GroupActiveTabCommand}" />
+
+        </StackPanel>
+
+        <!-- Space reserved for the system caption buttons -->
+        <Panel Grid.Column="3" Width="140" />
+
+      </Grid>
+
+      <!-- Body: side rail, optional panel, browser -->
+      <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*">
+
+        <views:SideRailView Grid.Column="0" DataContext="{Binding SidePanel}" />
+
+        <views:SidePanelView Grid.Column="1"
+                             DataContext="{Binding SidePanel}"
+                             IsVisible="{Binding IsExpanded}" />
+
+        <ContentControl Grid.Column="2"
+                        Content="{Binding ActiveBrowser}">
+          <ContentControl.ContentTemplate>
+            <DataTemplate DataType="vm:BrowserViewModel">
+              <views:BrowserView />
+            </DataTemplate>
+          </ContentControl.ContentTemplate>
+        </ContentControl>
+
+      </Grid>
+
+    </Grid>
+
+  </Border>
 
 </Window>
