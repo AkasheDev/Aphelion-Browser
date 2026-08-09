@@ -160,7 +160,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         SyncFromTab();
     }
 
-    private void OnNavigationCompleted(object? sender, EngineNavigationCompletedEventArgs e)
+    private async void OnNavigationCompleted(object? sender, EngineNavigationCompletedEventArgs e)
     {
         if (e.IsSuccess)
         {
@@ -173,7 +173,69 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
         SyncFromTab();
         RefreshHistoryState();
+
+        if (e.IsSuccess)
+        {
+            await ReadPageIdentityAsync();
+        }
     }
+
+    /// <summary>
+    /// Reads the page's title and favicon from the document.
+    /// </summary>
+    /// <remarks>
+    /// The engine raises no event for either, so both are pulled with a script
+    /// once navigation completes. The favicon href is resolved against the
+    /// document so relative paths work, falling back to the site's /favicon.ico.
+    /// </remarks>
+    private async Task ReadPageIdentityAsync()
+    {
+        if (_session is null)
+        {
+            return;
+        }
+
+        var navigated = _tab.Address;
+
+        // A literal separator rather than a newline: the result comes back as a
+        // JSON string, where a newline arrives escaped and would not split.
+        var result = await _session.EvaluateAsync(
+            """
+            (function () {
+              var icon = document.querySelector("link[rel~='icon']");
+              var href = icon ? new URL(icon.getAttribute('href'), document.baseURI).href
+                              : new URL('/favicon.ico', document.baseURI).href;
+              return document.title + '|@|' + href;
+            })()
+            """);
+
+        // The user may have navigated again while the script ran; a late result
+        // would relabel the wrong page.
+        if (result is null || _tab.Address != navigated)
+        {
+            return;
+        }
+
+        var parts = result.Trim().Trim('"').Split("|@|", StringSplitOptions.None);
+
+        if (parts.Length > 0 && !string.IsNullOrWhiteSpace(parts[0]))
+        {
+            _tab.UpdateTitle(parts[0].Trim());
+        }
+
+        if (parts.Length > 1 &&
+            Uri.TryCreate(parts[1].Trim(), UriKind.Absolute, out var iconUri) &&
+            PageAddress.TryCreate(iconUri, out var icon))
+        {
+            _tab.UpdateFavicon(icon);
+        }
+
+        SyncFromTab();
+        OnPropertyChanged(nameof(FaviconAddress));
+    }
+
+    /// <summary>The current page's favicon address, surfaced for the tab strip.</summary>
+    public PageAddress? FaviconAddress => _tab.FaviconAddress;
 
     private void SyncFromTab()
     {

@@ -28,7 +28,13 @@ internal sealed class WindowManager(IServiceProvider services)
 
     public MainWindow CreateWindow(PageAddress? initialAddress = null)
     {
-        var shell = new ShellViewModel(_services.GetRequiredService<Func<BrowserViewModel>>(), this);
+        // A torn-off window shares the favicon cache but not the session store:
+        // only the main window's tabs are restored on next launch.
+        var shell = new ShellViewModel(
+            _services.GetRequiredService<Func<BrowserViewModel>>(),
+            this,
+            sessionStore: null,
+            favicons: _services.GetService<Aphelion.Desktop.Application.Ports.IFaviconLoader>());
 
         var window = new MainWindow
         {

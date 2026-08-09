@@ -1,6 +1,8 @@
+using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Domain.Entities;
 using Aphelion.Desktop.Domain.ValueObjects;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Aphelion.Desktop.UI.ViewModels;
@@ -9,8 +11,13 @@ namespace Aphelion.Desktop.UI.ViewModels;
 /// One tab in the title-bar strip. A view over <see cref="BrowserTab"/>; the tab
 /// itself remains the source of truth.
 /// </summary>
-public sealed partial class TabItemViewModel(BrowserTab tab) : ViewModelBase
+public sealed partial class TabItemViewModel(BrowserTab tab, IFaviconLoader? favicons = null) : ViewModelBase
 {
+    private readonly IFaviconLoader? _favicons = favicons;
+
+    /// <summary>The icon address currently loaded, so it is fetched only once.</summary>
+    private string? _loadedIconKey;
+
     public BrowserTab Tab { get; } = tab ?? throw new ArgumentNullException(nameof(tab));
 
     public TabId Id => Tab.Id;
@@ -24,14 +31,13 @@ public sealed partial class TabItemViewModel(BrowserTab tab) : ViewModelBase
     [ObservableProperty]
     private bool _isLoading;
 
+    /// <summary>The page's icon, or null while it loads or when the site has none.</summary>
+    [ObservableProperty]
+    private Bitmap? _favicon;
+
     /// <summary>
     /// Brush for the owning group's colour, or null when ungrouped.
     /// </summary>
-    /// <remarks>
-    /// Resolved to a concrete brush here rather than bound through a key: the domain
-    /// keeps a closed colour set, and this is the single place that maps it to
-    /// presentation. One mapping beats a converter plus a key lookup at every tab.
-    /// </remarks>
     [ObservableProperty]
     private IBrush? _groupBrush;
 
@@ -45,6 +51,46 @@ public sealed partial class TabItemViewModel(BrowserTab tab) : ViewModelBase
         Title = Tab.DisplayTitle;
         IsLoading = Tab.LoadState == TabLoadState.Loading;
         GroupBrush = groupColor is null ? null : GroupBrushes.For(groupColor.Value);
+
+        LoadFaviconIfChanged();
+    }
+
+    private async void LoadFaviconIfChanged()
+    {
+        var key = Tab.FaviconAddress?.ToString();
+
+        if (key == _loadedIconKey)
+        {
+            return;
+        }
+
+        _loadedIconKey = key;
+        Favicon = null;
+
+        if (key is null || _favicons is null || Tab.FaviconAddress is not { } address)
+        {
+            return;
+        }
+
+        var bytes = await _favicons.LoadAsync(address.Value).ConfigureAwait(true);
+
+        // The tab may have navigated on while the icon was fetched.
+        if (bytes is null || _loadedIconKey != key)
+        {
+            return;
+        }
+
+        try
+        {
+            using var stream = new MemoryStream(bytes);
+            Favicon = new Bitmap(stream);
+        }
+        catch (Exception)
+        {
+            // Not every favicon is a format Avalonia can decode — .ico with
+            // unusual encodings in particular. The fallback glyph covers it.
+            Favicon = null;
+        }
     }
 }
 

@@ -1,5 +1,38 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:Aphelion.Desktop.UI.Controls">
+
+  <!-- ===== Typography =====
+
+       Inter throughout, bundled with the application rather than relying on a
+       system font, so the interface looks the same on Windows, macOS and Linux.
+       Google Sans, which inspired the look, is proprietary and cannot ship in an
+       AGPL project; Inter is the closest open-licensed equivalent. -->
+
+  <Style Selector="Window">
+    <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+    <Setter Property="FontSize" Value="13" />
+  </Style>
+
+  <Style Selector="ContextMenu">
+    <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
+  </Style>
+
+  <!-- Scrolling tab title -->
+  <Style Selector="controls|MarqueeTextBlock">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <TextBlock Name="PART_Text"
+                   Text="{TemplateBinding Text}"
+                   FontSize="{TemplateBinding FontSize}"
+                   FontFamily="{TemplateBinding FontFamily}"
+                   Foreground="{TemplateBinding Foreground}"
+                   VerticalAlignment="Center"
+                   HorizontalAlignment="Left"
+                   TextTrimming="CharacterEllipsis" />
+      </ControlTemplate>
+    </Setter>
+  </Style>
 
   <!--
     Shell chrome styling.
@@ -76,15 +109,30 @@
     <Setter Property="BorderThickness" Value="1" />
   </Style>
 
-  <Style Selector="Border.tab TextBlock.tab-title">
+  <Style Selector="Border.tab controls|MarqueeTextBlock.tab-title">
     <Setter Property="FontSize" Value="12" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
   </Style>
 
-  <Style Selector="Border.tab.active TextBlock.tab-title">
+  <Style Selector="Border.tab.active controls|MarqueeTextBlock.tab-title">
     <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <!-- Favicon, and the placeholder shown before one arrives -->
+  <Style Selector="Image.favicon">
+    <Setter Property="Width" Value="15" />
+    <Setter Property="Height" Value="15" />
+    <Setter Property="Margin" Value="0,0,9,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Path.favicon-fallback">
+    <Setter Property="Stroke" Value="{DynamicResource ForegroundMutedBrush}" />
+    <Setter Property="StrokeThickness" Value="1.2" />
+    <Setter Property="Margin" Value="0,0,9,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Opacity" Value="0.7" />
   </Style>
 
   <!-- Group marker: a rounded bar in the group's colour -->
@@ -245,6 +293,17 @@
 
   <Style Selector="MenuItem:disabled">
     <Setter Property="Opacity" Value="0.45" />
+  </Style>
+
+  <!-- An editor hosted inside a menu item, e.g. renaming a group -->
+  <Style Selector="TextBox.menu-editor">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
   </Style>
 
   <Style Selector="ContextMenu Separator">

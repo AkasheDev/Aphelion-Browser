@@ -3,6 +3,7 @@
         xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
         xmlns:views="using:Aphelion.Desktop.UI.Views"
         xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:controls="using:Aphelion.Desktop.UI.Controls"
         xmlns:dvo="using:Aphelion.Desktop.Domain.ValueObjects"
         x:Class="Aphelion.Desktop.UI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
@@ -69,23 +70,26 @@
                           Classes.active="{Binding IsActive}"
                           chrome:WindowDecorationProperties.ElementRole="User">
 
+                    <!-- Menu items are always present and enabled or disabled
+                         rather than hidden: hiding them leaves the separators
+                         stranded, doubled or leading. -->
                     <Border.ContextMenu>
                       <ContextMenu>
                         <MenuItem Header="Add to new group"
                                   Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).GroupActiveTabCommand}"
-                                  IsVisible="{Binding !IsGrouped}" />
+                                  IsEnabled="{Binding !IsGrouped}" />
                         <MenuItem Header="Remove from group"
                                   Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).UngroupTabCommand}"
                                   CommandParameter="{Binding}"
-                                  IsVisible="{Binding IsGrouped}" />
+                                  IsEnabled="{Binding IsGrouped}" />
                         <Separator />
                         <MenuItem Header="Open in split view"
                                   Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).SplitWithTabCommand}"
                                   CommandParameter="{Binding}"
-                                  IsVisible="{Binding !IsActive}" />
+                                  IsEnabled="{Binding !IsActive}" />
                         <MenuItem Header="Close split view"
                                   Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseSplitCommand}"
-                                  IsVisible="{Binding #TabStrip.((vm:ShellViewModel)DataContext).IsSplit}" />
+                                  IsEnabled="{Binding #TabStrip.((vm:ShellViewModel)DataContext).IsSplit}" />
                         <Separator />
                         <MenuItem Header="Close tab"
                                   Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseTabCommand}"
@@ -93,18 +97,33 @@
                       </ContextMenu>
                     </Border.ContextMenu>
 
-                    <Grid ColumnDefinitions="Auto,*,Auto">
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto">
 
                       <Border Grid.Column="0"
                               Classes="group-marker"
                               IsVisible="{Binding IsGrouped}"
                               Background="{Binding GroupBrush}" />
 
-                      <TextBlock Grid.Column="1"
-                                 Classes="tab-title"
-                                 Text="{Binding Title}" />
+                      <Image Grid.Column="1"
+                             Classes="favicon"
+                             Source="{Binding Favicon}"
+                             RenderOptions.BitmapInterpolationMode="HighQuality"
+                             IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
-                      <Button Grid.Column="2"
+                      <!-- Placeholder until the site's icon arrives, or when it
+                           has none: a blank gap would make the strip jump. -->
+                      <Path Grid.Column="1"
+                            Classes="favicon-fallback"
+                            Width="13" Height="13"
+                            Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
+                            IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNull}}" />
+
+                      <controls:MarqueeTextBlock Grid.Column="2"
+                                                 Classes="tab-title"
+                                                 Text="{Binding Title}"
+                                                 IsScrollEnabled="{Binding IsActive}" />
+
+                      <Button Grid.Column="3"
                               Classes="icon small"
                               ToolTip.Tip="Close tab"
                               Margin="6,0,0,0"
@@ -130,10 +149,17 @@
 
                     <Button.ContextMenu>
                       <ContextMenu>
-                        <MenuItem StaysOpenOnClick="True">
-                          <MenuItem.Header>
-                            <TextBox Width="150" Text="{Binding Name, Mode=TwoWay}" />
-                          </MenuItem.Header>
+                        <!-- Rename sits in a submenu rather than as a bare editor
+                             in the menu body: a headerless item renders as an
+                             empty row in the list. -->
+                        <MenuItem Header="Rename">
+                          <MenuItem StaysOpenOnClick="True">
+                            <MenuItem.Header>
+                              <TextBox Width="170"
+                                       Classes="menu-editor"
+                                       Text="{Binding Name, Mode=TwoWay}" />
+                            </MenuItem.Header>
+                          </MenuItem>
                         </MenuItem>
                         <MenuItem Header="Color">
                           <MenuItem Header="Violet" Command="{Binding RecolorCommand}" CommandParameter="{x:Static dvo:GroupColor.Violet}" />

@@ -26,17 +26,20 @@ public sealed partial class ShellViewModel : ViewModelBase
     private readonly Dictionary<TabId, TabItemViewModel> _tabItems = [];
     private readonly Dictionary<TabGroupId, GroupHeaderViewModel> _headers = [];
     private readonly ISessionStore? _sessionStore;
+    private readonly IFaviconLoader? _favicons;
 
     private TabId? _splitTabId;
 
     public ShellViewModel(
         Func<BrowserViewModel> browserFactory,
         object? windowManager = null,
-        ISessionStore? sessionStore = null)
+        ISessionStore? sessionStore = null,
+        IFaviconLoader? favicons = null)
     {
         _browserFactory = browserFactory ?? throw new ArgumentNullException(nameof(browserFactory));
         WindowManager = windowManager;
         _sessionStore = sessionStore;
+        _favicons = favicons;
 
         if (!TryRestore())
         {
@@ -405,7 +408,8 @@ public sealed partial class ShellViewModel : ViewModelBase
         // A tab's title and loading state change as pages load, so the strip has to
         // follow rather than only refreshing when tabs open and close.
         if (e.PropertyName is nameof(BrowserViewModel.IsLoading)
-            or nameof(BrowserViewModel.PageTitle))
+            or nameof(BrowserViewModel.PageTitle)
+            or nameof(BrowserViewModel.FaviconAddress))
         {
             RefreshTabDisplay();
         }
@@ -537,7 +541,7 @@ public sealed partial class ShellViewModel : ViewModelBase
     {
         if (!_tabItems.TryGetValue(tab.Id, out var item))
         {
-            item = new TabItemViewModel(tab);
+            item = new TabItemViewModel(tab, _favicons);
             _tabItems[tab.Id] = item;
         }
 

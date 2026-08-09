@@ -26,6 +26,16 @@ public interface IBrowserEngineSession
 
     bool StopLoading();
 
+    /// <summary>
+    /// Runs a script in the page and returns its result as text.
+    /// </summary>
+    /// <remarks>
+    /// The engine reports no page title or favicon of its own, so both are read
+    /// from the document through this. Returns null when the engine is not ready
+    /// or the script fails.
+    /// </remarks>
+    Task<string?> EvaluateAsync(string script);
+
     /// <summary>Raised when a navigation begins, whatever started it.</summary>
     event EventHandler<EngineNavigationStartedEventArgs>? NavigationStarted;
 

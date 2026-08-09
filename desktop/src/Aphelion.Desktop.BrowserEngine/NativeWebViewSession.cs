@@ -49,6 +49,21 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
 
     public bool StopLoading() => _webView.Stop();
 
+    public async Task<string?> EvaluateAsync(string script)
+    {
+        try
+        {
+            return await _webView.InvokeScript(script).ConfigureAwait(true);
+        }
+        catch (Exception)
+        {
+            // Script evaluation fails routinely — the page may be mid-navigation,
+            // cross-origin, or an error page. Reading a title is never worth
+            // surfacing an error for.
+            return null;
+        }
+    }
+
     private void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e) =>
         NavigationStarted?.Invoke(this, new EngineNavigationStartedEventArgs(e.Request));
 

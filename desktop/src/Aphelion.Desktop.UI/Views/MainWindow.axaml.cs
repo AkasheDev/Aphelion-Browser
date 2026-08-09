@@ -98,6 +98,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Only the left button activates. A middle-click has already closed the
+        // tab by the time this runs, and activating a closed tab is meaningless.
+        if (e.InitialPressMouseButton != MouseButton.Left)
+        {
+            return;
+        }
+
         if (source.FindAncestorOfType<Button>(includeSelf: true) is not null)
         {
             return;

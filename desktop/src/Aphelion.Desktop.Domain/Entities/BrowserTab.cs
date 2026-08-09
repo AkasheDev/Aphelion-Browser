@@ -31,6 +31,18 @@ public sealed class BrowserTab
 
     public string Title { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// Address of the page's favicon, when it reported one.
+    /// </summary>
+    public PageAddress? FaviconAddress { get; private set; }
+
+    /// <summary>
+    /// What the user typed to reach this page, when they searched rather than
+    /// navigated. A search result page's own title is the engine's wording; the
+    /// query is what the user recognises, so the strip shows that instead.
+    /// </summary>
+    public string? SearchTerm { get; private set; }
+
     public TabLoadState LoadState { get; private set; } = TabLoadState.Idle;
 
     /// <summary>Reason the last navigation failed, or null when it did not.</summary>
@@ -42,23 +54,33 @@ public sealed class BrowserTab
     /// </summary>
     public bool IsBlank => Address is null;
 
-    /// <summary>Best available label for the tab strip.</summary>
+    /// <summary>
+    /// Best available label for the tab strip: the search term for a results page,
+    /// otherwise the page's own title, falling back to the host while it loads.
+    /// </summary>
     public string DisplayTitle =>
-        !string.IsNullOrWhiteSpace(Title) ? Title
+        !string.IsNullOrWhiteSpace(SearchTerm) ? SearchTerm!
+        : !string.IsNullOrWhiteSpace(Title) ? Title
         : Address is not null ? Address.DisplayHost
         : "New tab";
 
-    public void BeginNavigation(PageAddress address)
+    /// <summary>
+    /// Starts a navigation. <paramref name="searchTerm"/> is set when the user
+    /// searched rather than typed an address, and becomes the tab's label.
+    /// </summary>
+    public void BeginNavigation(PageAddress address, string? searchTerm = null)
     {
         ArgumentNullException.ThrowIfNull(address);
 
         Address = address;
         LoadState = TabLoadState.Loading;
         FailureReason = null;
+        SearchTerm = string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm;
 
-        // The old title belongs to the previous page; keeping it would mislabel
-        // the tab for the whole load.
+        // The old title and icon belong to the previous page; keeping them would
+        // mislabel the tab for the whole load.
         Title = string.Empty;
+        FaviconAddress = null;
     }
 
     public void CompleteNavigation(string? title)
@@ -85,6 +107,8 @@ public sealed class BrowserTab
             Title = title;
         }
     }
+
+    public void UpdateFavicon(PageAddress? address) => FaviconAddress = address;
 
     public void JoinGroup(TabGroupId groupId) => GroupId = groupId;
 

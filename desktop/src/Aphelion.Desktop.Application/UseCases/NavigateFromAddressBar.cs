@@ -36,7 +36,9 @@ public sealed class NavigateFromAddressBar(ISearchQueryBuilder searchQueryBuilde
             return false;
         }
 
-        tab.BeginNavigation(target);
+        // A search keeps its query as the tab's label: the results page's own
+        // title is the engine's wording, not what the user asked for.
+        tab.BeginNavigation(target, intent == AddressBarIntent.Search ? searchTerm : null);
         session.Navigate(target);
         return true;
     }

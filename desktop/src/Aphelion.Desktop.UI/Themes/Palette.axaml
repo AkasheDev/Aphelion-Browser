@@ -75,6 +75,10 @@
   <SolidColorBrush x:Key="GroupRoseBrush" Color="#F2688A" />
   <SolidColorBrush x:Key="GroupSlateBrush" Color="#8A90A8" />
 
+  <!-- Typography. Inter ships with the application via Avalonia.Fonts.Inter, so
+       the interface renders identically on all three platforms. -->
+  <FontFamily x:Key="UiFont">avares://Avalonia.Fonts.Inter/Assets#Inter</FontFamily>
+
   <!-- Geometry -->
   <CornerRadius x:Key="RadiusSmall">4</CornerRadius>
   <CornerRadius x:Key="RadiusMedium">8</CornerRadius>

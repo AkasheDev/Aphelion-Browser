@@ -71,7 +71,21 @@ internal sealed class TabStripDragHandler
 
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (!e.GetCurrentPoint(_strip).Properties.IsLeftButtonPressed)
+        var point = e.GetCurrentPoint(_strip);
+
+        // Middle-click closes the tab under the pointer, as in every browser.
+        if (point.Properties.IsMiddleButtonPressed)
+        {
+            if (TabUnder(e.Source as Visual) is { } victim && _shell() is { } owner)
+            {
+                owner.CloseTabCommand.Execute(victim);
+                e.Handled = true;
+            }
+
+            return;
+        }
+
+        if (!point.Properties.IsLeftButtonPressed)
         {
             return;
         }

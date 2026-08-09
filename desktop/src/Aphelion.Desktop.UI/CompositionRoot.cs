@@ -26,6 +26,7 @@ internal static class CompositionRoot
         services.AddSingleton<ISearchQueryBuilder, DuckDuckGoSearchQueryBuilder>();
         services.AddSingleton<IUserDataLocation, UserDataLocation>();
         services.AddSingleton<ISessionStore, JsonSessionStore>();
+        services.AddSingleton<IFaviconLoader, FaviconLoader>();
 
         // Startup sequence. Tasks run in registration order; loading history,
         // bookmarks and settings will be added here as they gain persistence.
@@ -46,7 +47,8 @@ internal static class CompositionRoot
         services.AddSingleton(sp => new ShellViewModel(
             sp.GetRequiredService<Func<BrowserViewModel>>(),
             sp.GetRequiredService<WindowManager>(),
-            sp.GetRequiredService<ISessionStore>()));
+            sp.GetRequiredService<ISessionStore>(),
+            sp.GetRequiredService<IFaviconLoader>()));
         services.AddSingleton<SplashViewModel>();
         services.AddSingleton<MainWindowViewModel>();
 
