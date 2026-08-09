@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aphelion.local/schemas/settings.schema.json",
+  "title": "Aphelion Settings",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "values"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "values": { "type": "object" }
+  }
+}
