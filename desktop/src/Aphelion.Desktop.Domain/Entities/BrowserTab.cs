@@ -27,6 +27,20 @@ public sealed class BrowserTab
     /// <summary>The group this tab belongs to, or null when it is ungrouped.</summary>
     public TabGroupId? GroupId { get; private set; }
 
+    /// <summary>
+    /// The tab shown beside this one in split view, or null when not split.
+    /// </summary>
+    /// <remarks>
+    /// A split pair is one entry everywhere the user sees a list of tabs: the
+    /// strip, the overflow panel, the picker. The left tab holds the pairing and
+    /// is the one that appears; its partner is hidden from those lists while the
+    /// split lasts.
+    /// </remarks>
+    public TabId? SplitPartnerId { get; private set; }
+
+    /// <summary>True when this tab is the hidden right half of a split pair.</summary>
+    public bool IsSplitPartner { get; private set; }
+
     public PageAddress? Address { get; private set; }
 
     public string Title { get; private set; } = string.Empty;
@@ -109,6 +123,19 @@ public sealed class BrowserTab
     }
 
     public void UpdateFavicon(PageAddress? address) => FaviconAddress = address;
+
+    /// <summary>Pairs this tab with <paramref name="partner"/> as the left half.</summary>
+    public void SplitWith(TabId partner) => SplitPartnerId = partner;
+
+    /// <summary>Marks this tab as the hidden right half of a pair.</summary>
+    public void BecomeSplitPartner() => IsSplitPartner = true;
+
+    /// <summary>Breaks the pairing, whichever half this tab was.</summary>
+    public void LeaveSplit()
+    {
+        SplitPartnerId = null;
+        IsSplitPartner = false;
+    }
 
     public void JoinGroup(TabGroupId groupId) => GroupId = groupId;
 

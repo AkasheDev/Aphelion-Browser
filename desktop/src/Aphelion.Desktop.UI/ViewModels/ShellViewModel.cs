@@ -28,7 +28,11 @@ public sealed partial class ShellViewModel : ViewModelBase
     private readonly ISessionStore? _sessionStore;
     private readonly IFaviconLoader? _favicons;
 
-    private TabId? _splitTabId;
+    /// <summary>
+    /// How many tabs the strip can show at once, reported by the panel as it
+    /// lays out. Anything past this spills into the overflow panel.
+    /// </summary>
+    private int _visibleCapacity = int.MaxValue;
 
     public ShellViewModel(
         Func<BrowserViewModel> browserFactory,
@@ -41,11 +45,39 @@ public sealed partial class ShellViewModel : ViewModelBase
         _sessionStore = sessionStore;
         _favicons = favicons;
 
+        Overflow = new TabListViewModel("Other tabs", item =>
+        {
+            ActivateTab(item);
+            IsOverflowOpen = false;
+        });
+
+        SplitPicker = new TabListViewModel("Choose a tab to split with", item =>
+        {
+            SplitWithTab(item);
+            IsSplitPickerOpen = false;
+        });
+
         if (!TryRestore())
         {
             NewTab();
         }
     }
+
+    /// <summary>Tabs that did not fit the strip, listed a page at a time.</summary>
+    public TabListViewModel Overflow { get; }
+
+    /// <summary>Candidates for the second pane, listed a page at a time.</summary>
+    public TabListViewModel SplitPicker { get; }
+
+    [ObservableProperty]
+    private bool _isOverflowOpen;
+
+    [ObservableProperty]
+    private bool _isSplitPickerOpen;
+
+    /// <summary>True when tabs had to be pushed into the overflow panel.</summary>
+    [ObservableProperty]
+    private bool _hasOverflow;
 
     /// <summary>
     /// The window manager, held as <see cref="object"/> because it lives in the
@@ -130,13 +162,6 @@ public sealed partial class ShellViewModel : ViewModelBase
         if (item is null || !_session.Activate(item.Id))
         {
             return;
-        }
-
-        // Activating the split partner would put one view model in two panes;
-        // the split closes instead, and the tab takes the whole window.
-        if (_splitTabId == item.Id)
-        {
-            _splitTabId = null;
         }
 
         SyncTabs();
@@ -243,53 +268,88 @@ public sealed partial class ShellViewModel : ViewModelBase
     [RelayCommand]
     private void SplitWithTab(TabItemViewModel? item)
     {
-        if (item is null || _session.ActiveTab?.Id == item.Id)
+        if (item is null || _session.ActiveTab is not { } active || active.Id == item.Id)
         {
             return;
         }
 
-        _splitTabId = item.Id;
+        _session.Split(active.Id, item.Id);
         SyncTabs();
     }
 
     /// <summary>
-    /// Turns split view on or off from the toolbar. With no partner chosen it
-    /// pairs the active tab with its neighbour, opening one if the window has
-    /// only a single tab — a split button that does nothing on one tab would be
-    /// a dead control.
+    /// Turns split view on, or off when the active tab is already split. Opening
+    /// asks which tab to pair with rather than guessing, as Chrome does; with no
+    /// other tab to offer, it opens a blank one instead of showing an empty
+    /// picker.
     /// </summary>
     [RelayCommand]
     private void ToggleSplit()
     {
-        if (_splitTabId is not null)
-        {
-            _splitTabId = null;
-            SyncTabs();
-            return;
-        }
-
         if (_session.ActiveTab is not { } active)
         {
             return;
         }
 
-        var partner = _session.Tabs.FirstOrDefault(t => t.Id != active.Id && !IsHidden(t));
-
-        if (partner is null)
+        if (active.SplitPartnerId is not null)
         {
-            partner = _session.OpenTabNextTo(active, activate: false);
-            Attach(partner);
+            _session.Unsplit(active.Id);
+            SyncTabs();
+            return;
         }
 
-        _splitTabId = partner.Id;
+        var candidates = _session.VisibleTabs
+            .Where(t => t.Id != active.Id && !IsHidden(t))
+            .ToList();
+
+        if (candidates.Count == 0)
+        {
+            var partner = _session.OpenTabNextTo(active, activate: false);
+            Attach(partner);
+            _session.Split(active.Id, partner.Id);
+            SyncTabs();
+            return;
+        }
+
+        SplitPicker.SetItems(candidates.Select(ItemFor));
+        IsSplitPickerOpen = true;
+    }
+
+    [RelayCommand]
+    private void CloseSplitPicker() => IsSplitPickerOpen = false;
+
+    [RelayCommand]
+    private void ToggleOverflow() => IsOverflowOpen = !IsOverflowOpen;
+
+    [RelayCommand]
+    private void CloseOverflow() => IsOverflowOpen = false;
+
+    /// <summary>
+    /// Told by the strip how many tabs it can show. Anything beyond that is
+    /// listed in the overflow panel instead of being opened where the user
+    /// cannot reach it.
+    /// </summary>
+    public void ReportStripCapacity(int capacity)
+    {
+        var clamped = Math.Max(1, capacity);
+
+        if (clamped == _visibleCapacity)
+        {
+            return;
+        }
+
+        _visibleCapacity = clamped;
         SyncTabs();
     }
 
     [RelayCommand]
     private void CloseSplit()
     {
-        _splitTabId = null;
-        SyncTabs();
+        if (_session.ActiveTab is { } active)
+        {
+            _session.Unsplit(active.Id);
+            SyncTabs();
+        }
     }
 
     /// <summary>
@@ -471,12 +531,44 @@ public sealed partial class ShellViewModel : ViewModelBase
             }
         }
 
+        // Only tabs that fit go in the strip; the rest are listed in the overflow
+        // panel. Opening tabs the user cannot reach would strand them.
+        var listed = _session.VisibleTabs.Where(t => !IsHidden(t)).ToList();
+        var shown = listed.Take(_visibleCapacity).ToList();
+        var overflowed = listed.Skip(_visibleCapacity).ToList();
+
+        // The active tab is always reachable in the strip, even if it sorts past
+        // the capacity — swap it in for the last visible one.
+        if (_session.ActiveTab is { } current &&
+            overflowed.Any(t => t.Id == current.Id) &&
+            shown.Count > 0)
+        {
+            overflowed.Remove(current);
+            overflowed.Insert(0, shown[^1]);
+            shown[^1] = current;
+        }
+
+        var visibleIds = shown.Select(t => t.Id).ToHashSet();
+
+        Overflow.SetItems(overflowed.Select(ItemFor));
+        HasOverflow = overflowed.Count > 0;
+
+        if (!HasOverflow)
+        {
+            IsOverflowOpen = false;
+        }
+
         var desired = new List<object>();
         var seenGroups = new HashSet<TabGroupId>();
         TabGroupId? run = null;
 
         foreach (var tab in _session.Tabs)
         {
+            if (tab.IsSplitPartner || !visibleIds.Contains(tab.Id))
+            {
+                continue;
+            }
+
             if (tab.GroupId is { } groupId)
             {
                 if (run != groupId)
@@ -535,14 +627,10 @@ public sealed partial class ShellViewModel : ViewModelBase
             : null;
         ActiveBrowser = ActiveTab is null ? null : _browsers.GetValueOrDefault(ActiveTab.Id);
 
-        // Split housekeeping: the partner may have closed or become the active tab.
-        if (_splitTabId is { } split &&
-            (_session.Tabs.All(t => t.Id != split) || _session.ActiveTab?.Id == split))
-        {
-            _splitTabId = null;
-        }
-
-        SplitBrowser = _splitTabId is { } partner ? _browsers.GetValueOrDefault(partner) : null;
+        // The pairing lives on the tab, so the second pane simply follows it.
+        SplitBrowser = _session.ActiveTab?.SplitPartnerId is { } partner
+            ? _browsers.GetValueOrDefault(partner)
+            : null;
         IsSplit = SplitBrowser is not null;
     }
 

@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+             x:Class="Aphelion.Desktop.UI.Views.TabListView"
+             x:DataType="vm:TabListViewModel">
+
+  <!-- Shared by the overflow panel and the split picker: same list, same paging,
+       different title and different action on choosing a row. -->
+  <Border Classes="panel" Width="320">
+    <Grid RowDefinitions="Auto,*,Auto">
+
+      <TextBlock Grid.Row="0"
+                 Classes="panel-title"
+                 Text="{Binding Title}" />
+
+      <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ItemsControl ItemsSource="{Binding Page}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="vm:TabItemViewModel">
+              <Button Classes="panel-row"
+                      Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).ChooseCommand}"
+                      CommandParameter="{Binding}">
+                <Grid ColumnDefinitions="Auto,*">
+                  <Image Grid.Column="0"
+                         Classes="favicon"
+                         Source="{Binding Favicon}"
+                         RenderOptions.BitmapInterpolationMode="HighQuality"
+                         IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  <Path Grid.Column="0"
+                        Classes="favicon-fallback"
+                        Width="13" Height="13"
+                        Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
+                        IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNull}}" />
+                  <TextBlock Grid.Column="1"
+                             Text="{Binding Title}"
+                             VerticalAlignment="Center"
+                             TextTrimming="CharacterEllipsis" />
+                </Grid>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <TextBlock Grid.Row="1"
+                 Classes="subtle"
+                 Margin="0,16"
+                 VerticalAlignment="Top"
+                 Text="Nothing to show."
+                 IsVisible="{Binding IsEmpty}" />
+
+      <!-- Paging, hidden when everything fits on one page -->
+      <Grid Grid.Row="2"
+            ColumnDefinitions="Auto,*,Auto"
+            Margin="0,8,0,0"
+            IsVisible="{Binding HasPages}">
+        <Button Grid.Column="0" Classes="icon" ToolTip.Tip="Previous page"
+                Command="{Binding PreviousPageCommand}"
+                IsEnabled="{Binding CanGoPrevious}">
+          <Path Classes="glyph" Data="M8,1 L3,6.5 L8,12" />
+        </Button>
+        <TextBlock Grid.Column="1" Classes="subtle" Text="{Binding PageLabel}"
+                   VerticalAlignment="Center" />
+        <Button Grid.Column="2" Classes="icon" ToolTip.Tip="Next page"
+                Command="{Binding NextPageCommand}"
+                IsEnabled="{Binding CanGoNext}">
+          <Path Classes="glyph" Data="M4,1 L9,6.5 L4,12" />
+        </Button>
+      </Grid>
+
+    </Grid>
+  </Border>
+
+</UserControl>

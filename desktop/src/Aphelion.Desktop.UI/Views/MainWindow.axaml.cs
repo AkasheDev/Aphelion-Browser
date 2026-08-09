@@ -24,6 +24,12 @@ public partial class MainWindow : Window
             _tabDrag = new TabStripDragHandler(strip, () => Shell);
         }
 
+        // The strip panel measures how many tabs fit and reports it here; the
+        // shell lists the remainder. Routed while this window is active so the
+        // report reaches the right shell when several windows are open.
+        Activated += (_, _) => Controls.TabStripPanel.CapacityReporter =
+            capacity => Shell?.ReportStripCapacity(capacity);
+
         // Tab activation is handled here rather than with a per-tab command: a tab
         // header is a Border, not a Button, because a Button would swallow the
         // press the drag handler needs.
@@ -31,6 +37,15 @@ public partial class MainWindow : Window
     }
 
     private ShellViewModel? Shell => (DataContext as MainWindowViewModel)?.Shell;
+
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+
+        // Activated does not always fire for the first window on startup.
+        Controls.TabStripPanel.CapacityReporter =
+            capacity => Shell?.ReportStripCapacity(capacity);
+    }
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -73,6 +88,20 @@ public partial class MainWindow : Window
         host.ColumnDefinitions[2].Width = Shell?.IsSplit == true
             ? new GridLength(1, GridUnitType.Star)
             : new GridLength(0);
+    }
+
+    /// <summary>Clicking the backdrop dismisses whichever panel is open.</summary>
+    private void OnScrimPressed(object? sender, PointerPressedEventArgs e)
+    {
+        // Only the backdrop itself; a click inside the panel must not close it.
+        if (!ReferenceEquals(e.Source, sender) || Shell is not { } shell)
+        {
+            return;
+        }
+
+        shell.CloseOverflowCommand.Execute(null);
+        shell.CloseSplitPickerCommand.Execute(null);
+        e.Handled = true;
     }
 
     private void OnMinimizeRequested(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>

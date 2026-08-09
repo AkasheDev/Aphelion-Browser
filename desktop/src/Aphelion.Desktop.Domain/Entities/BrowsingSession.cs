@@ -77,6 +77,10 @@ public sealed class BrowsingSession
             return false;
         }
 
+        // Closing either half ends the split; the survivor becomes an ordinary
+        // tab rather than being left pointing at something that is gone.
+        Unsplit(id);
+
         var wasActive = ActiveTab?.Id == id;
         _tabs.RemoveAt(index);
 
@@ -102,7 +106,9 @@ public sealed class BrowsingSession
             return false;
         }
 
-        ActiveTab = tab;
+        // Activating the hidden half of a split activates the pair, which the
+        // visible half represents.
+        ActiveTab = tab.IsSplitPartner ? SplitOwnerOf(tab.Id) ?? tab : tab;
         return true;
     }
 
@@ -214,6 +220,95 @@ public sealed class BrowsingSession
         DiscardEmptyGroups();
         return true;
     }
+
+    /// <summary>
+    /// Tabs the user should see listed: a split pair counts once, represented by
+    /// its left half. Everything that presents tabs — the strip, the overflow
+    /// panel, the split picker — works from this rather than <see cref="Tabs"/>.
+    /// </summary>
+    public IReadOnlyList<BrowserTab> VisibleTabs =>
+        _tabs.FindAll(t => !t.IsSplitPartner);
+
+    /// <summary>
+    /// Pairs two tabs into a split, with <paramref name="leftId"/> as the half
+    /// that stays visible in lists. Returns false when either tab is missing, the
+    /// two are the same, or one is already part of another split.
+    /// </summary>
+    public bool Split(TabId leftId, TabId rightId)
+    {
+        if (leftId == rightId)
+        {
+            return false;
+        }
+
+        var left = _tabs.Find(t => t.Id == leftId);
+        var right = _tabs.Find(t => t.Id == rightId);
+
+        if (left is null || right is null ||
+            left.SplitPartnerId is not null || left.IsSplitPartner ||
+            right.SplitPartnerId is not null || right.IsSplitPartner)
+        {
+            return false;
+        }
+
+        left.SplitWith(rightId);
+        right.BecomeSplitPartner();
+
+        // The hidden half sits directly after its visible one, so unsplitting
+        // puts it back where the user would expect rather than at the end.
+        _tabs.Remove(right);
+        _tabs.Insert(_tabs.IndexOf(left) + 1, right);
+
+        if (right.GroupId != left.GroupId)
+        {
+            if (left.GroupId is { } group)
+            {
+                right.JoinGroup(group);
+            }
+            else
+            {
+                right.LeaveGroup();
+            }
+        }
+
+        if (ActiveTab?.Id == rightId)
+        {
+            ActiveTab = left;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Breaks the split that <paramref name="id"/> belongs to, whichever half it
+    /// is. Both tabs become ordinary tabs again.
+    /// </summary>
+    public bool Unsplit(TabId id)
+    {
+        var tab = _tabs.Find(t => t.Id == id);
+
+        if (tab is null)
+        {
+            return false;
+        }
+
+        var left = tab.SplitPartnerId is not null
+            ? tab
+            : _tabs.Find(t => t.SplitPartnerId == id);
+
+        if (left?.SplitPartnerId is not { } rightId)
+        {
+            return false;
+        }
+
+        _tabs.Find(t => t.Id == rightId)?.LeaveSplit();
+        left.LeaveSplit();
+        return true;
+    }
+
+    /// <summary>The visible half of the pair <paramref name="id"/> belongs to.</summary>
+    public BrowserTab? SplitOwnerOf(TabId id) =>
+        _tabs.Find(t => t.SplitPartnerId == id);
 
     public TabGroup CreateGroup(string name, GroupColor color)
     {

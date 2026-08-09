@@ -18,6 +18,18 @@ namespace Aphelion.Desktop.UI.Controls;
 /// </remarks>
 public sealed class TabStripPanel : Panel
 {
+    /// <summary>
+    /// Called with how many tabs the strip can hold at its current width, so the
+    /// shell can list the remainder in the overflow panel.
+    /// </summary>
+    /// <remarks>
+    /// A static handler rather than an event on the instance: the panel is built
+    /// by the ItemsControl's template and does not exist when the window wires
+    /// itself up, so there is nothing to subscribe to at that point.
+    /// </remarks>
+    public static Action<int>? CapacityReporter { get; set; }
+
+    private int _reportedCapacity = -1;
     /// <summary>Widest a tab is allowed to be, matching Chrome's comfortable size.</summary>
     public const double MaxTabWidth = 240;
 
@@ -90,7 +102,19 @@ public sealed class TabStripPanel : Panel
             }
         }
 
-        var tabWidth = TabWidthFor(tabCount, finalSize.Width - chrome);
+        var room = finalSize.Width - chrome;
+        var tabWidth = TabWidthFor(tabCount, room);
+
+        // How many tabs would still fit at the floor. Reported so the shell can
+        // list the rest in the overflow panel rather than opening tabs off-screen.
+        var capacity = Math.Max(1, (int)Math.Floor(room / MinTabWidth));
+
+        if (capacity != _reportedCapacity)
+        {
+            _reportedCapacity = capacity;
+            CapacityReporter?.Invoke(capacity);
+        }
+
         var x = 0d;
 
         foreach (var child in Children)

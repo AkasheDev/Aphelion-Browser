@@ -217,9 +217,18 @@
 
         </Panel>
 
-        <!-- Empty: the strip's own buttons live beside the tabs now, and the
-             split and group actions moved to the page toolbar. -->
-        <Panel Grid.Column="3" />
+        <!-- Overflow: opens the list of tabs the strip could not fit. Sits where
+             the new-tab button used to, and only appears when there is overflow. -->
+        <Button Grid.Column="3"
+                Classes="icon"
+                Margin="4,0"
+                VerticalAlignment="Center"
+                ToolTip.Tip="Other tabs"
+                chrome:WindowDecorationProperties.ElementRole="User"
+                IsVisible="{Binding HasOverflow}"
+                Command="{Binding ToggleOverflowCommand}">
+          <Path Classes="glyph" Data="M1,3 H11 M1,6.5 H11 M1,10 H11" />
+        </Button>
 
         <!-- Caption buttons. Hidden on macOS, where the system draws its own on
              the left and WindowDecorationMargin.Left is non-zero. -->
@@ -259,8 +268,11 @@
 
     <!-- Content: the active tab's page, and beside it the split partner's when
          split view is on. The third column's width is driven from code-behind,
-         since ColumnDefinitions sit outside the visual tree and cannot bind. -->
-    <Grid Name="BrowserHost">
+         since ColumnDefinitions sit outside the visual tree and cannot bind.
+         The two panels float above it, dismissed by clicking the scrim. -->
+    <Panel>
+
+      <Grid Name="BrowserHost">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
@@ -277,7 +289,28 @@
       <ContentControl Grid.Column="2"
                       Content="{Binding Shell.SplitBrowser}"
                       IsVisible="{Binding Shell.IsSplit}" />
-    </Grid>
+      </Grid>
+
+      <!-- Overflow panel: tabs that did not fit the strip -->
+      <Panel Classes="scrim"
+             IsVisible="{Binding Shell.IsOverflowOpen}"
+             PointerPressed="OnScrimPressed">
+        <views:TabListView DataContext="{Binding Shell.Overflow}"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Top"
+                           Margin="0,8,12,0" />
+      </Panel>
+
+      <!-- Split picker: which tab to show in the second pane -->
+      <Panel Classes="scrim"
+             IsVisible="{Binding Shell.IsSplitPickerOpen}"
+             PointerPressed="OnScrimPressed">
+        <views:TabListView DataContext="{Binding Shell.SplitPicker}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+      </Panel>
+
+    </Panel>
 
   </DockPanel>
 
