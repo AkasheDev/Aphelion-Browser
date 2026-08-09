@@ -100,9 +100,18 @@
                                   Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).SplitWithTabCommand}"
                                   CommandParameter="{Binding}"
                                   IsEnabled="{Binding !IsActive}" />
+                        <MenuItem Header="Close left side"
+                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseLeftSideCommand}"
+                                  CommandParameter="{Binding}"
+                                  IsEnabled="{Binding IsSplit}" />
+                        <MenuItem Header="Close right side"
+                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseRightSideCommand}"
+                                  CommandParameter="{Binding}"
+                                  IsEnabled="{Binding IsSplit}" />
                         <MenuItem Header="Close split view"
                                   Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseSplitCommand}"
-                                  IsEnabled="{Binding #TabStrip.((vm:ShellViewModel)DataContext).IsSplit}" />
+                                  CommandParameter="{Binding}"
+                                  IsEnabled="{Binding IsSplit}" />
                         <Separator />
                         <MenuItem Header="Close tab"
                                   Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseTabCommand}"

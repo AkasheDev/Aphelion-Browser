@@ -402,12 +402,46 @@ public sealed partial class ShellViewModel : ViewModelBase
         SyncTabs();
     }
 
-    [RelayCommand]
-    private void CloseSplit()
+    /// <summary>
+    /// Closes one side of a split pair, leaving the other as an ordinary tab.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="BrowsingSession.CloseTab"/> already breaks the pairing before
+    /// removing the tab, so the survivor comes back as a normal tab on its own.
+    /// </remarks>
+    private void CloseSplitSide(TabItemViewModel? item, bool right)
     {
-        if (_session.ActiveTab is { } active)
+        var owner = item?.Tab ?? _session.ActiveTab;
+
+        if (owner?.SplitPartnerId is not { } partnerId)
         {
-            _session.Unsplit(active.Id);
+            return;
+        }
+
+        var victim = right ? partnerId : owner.Id;
+
+        Detach(victim);
+        _session.CloseTab(victim);
+        SyncTabs();
+    }
+
+    [RelayCommand]
+    private void CloseLeftSide(TabItemViewModel? item) => CloseSplitSide(item, right: false);
+
+    [RelayCommand]
+    private void CloseRightSide(TabItemViewModel? item) => CloseSplitSide(item, right: true);
+
+    /// <summary>
+    /// Ends the split, keeping both pages as separate tabs. Acts on the tab the
+    /// menu was opened on, falling back to the active one for the toolbar.
+    /// </summary>
+    [RelayCommand]
+    private void CloseSplit(TabItemViewModel? item)
+    {
+        var owner = item?.Tab ?? _session.ActiveTab;
+
+        if (owner is not null && _session.Unsplit(owner.Id))
+        {
             SyncTabs();
         }
     }
