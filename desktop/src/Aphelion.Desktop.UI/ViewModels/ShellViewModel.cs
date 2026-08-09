@@ -140,16 +140,18 @@ public sealed partial class ShellViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Drops a dragged tab at <paramref name="targetIndex"/>. The tab takes the
-    /// group of whatever it lands among, so dragging into a group joins it and
-    /// dragging past the group's edge leaves it — the Chrome behaviour.
+    /// Drops a dragged tab at <paramref name="targetIndex"/>, joining
+    /// <paramref name="group"/> when one is given. The group comes from the view:
+    /// whatever tab or chip the pointer is over decides membership, which is how
+    /// Chrome lets a tab join a single-member group — a neighbour-based rule can
+    /// never fire there.
     /// </summary>
-    public void DropTab(TabItemViewModel item, int targetIndex)
+    public void DropTab(TabItemViewModel item, int targetIndex, TabGroupId? group)
     {
         ArgumentNullException.ThrowIfNull(item);
 
         var clamped = Math.Clamp(targetIndex, 0, Math.Max(0, _session.Tabs.Count - 1));
-        _session.MoveTabTo(item.Id, clamped, GroupAt(clamped, item.Id));
+        _session.MoveTabTo(item.Id, clamped, group);
         SyncTabs();
     }
 
@@ -158,27 +160,6 @@ public sealed partial class ShellViewModel : ViewModelBase
     {
         _session.MoveGroup(groupId, targetIndex);
         SyncTabs();
-    }
-
-    /// <summary>
-    /// The group a tab would belong to if dropped at <paramref name="index"/>: the
-    /// group of its new neighbours, but only when both sides agree. Landing between
-    /// a group and a loose tab leaves the tab ungrouped, which is how Chrome lets
-    /// you drag out of a group without aiming at empty space.
-    /// </summary>
-    private TabGroupId? GroupAt(int index, TabId moving)
-    {
-        var others = _session.Tabs.Where(t => t.Id != moving).ToList();
-
-        if (others.Count == 0)
-        {
-            return null;
-        }
-
-        var before = index > 0 && index - 1 < others.Count ? others[index - 1].GroupId : null;
-        var after = index < others.Count ? others[index].GroupId : null;
-
-        return before is not null && before == after ? before : null;
     }
 
     [RelayCommand]

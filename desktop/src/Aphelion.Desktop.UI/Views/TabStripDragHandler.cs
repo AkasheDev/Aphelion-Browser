@@ -35,6 +35,13 @@ internal sealed class TabStripDragHandler
     /// </summary>
     private const double TearOffMargin = 24;
 
+    /// <summary>
+    /// How far the dragged tab may peel vertically with the pointer. The strip
+    /// clips its children, so following the full distance would just slide the tab
+    /// under the edge; a bounded peel plus fading reads as "about to detach".
+    /// </summary>
+    private const double PeelLimit = 12;
+
     private static readonly TransformOperations NoOffset = TransformOperations.Parse("translate(0px, 0px)");
 
     private readonly ItemsControl _strip;
@@ -109,30 +116,49 @@ internal sealed class TabStripDragHandler
             }
         }
 
-        var target = TabIndexAt(position.X);
-        var current = shell.IndexOfTab(_dragging);
+        // Beyond the strip vertically the drag is a tear-off in progress: the strip
+        // stops reordering and the tab fades to say it is about to leave.
+        var inTearZone = position.Y < -TearOffMargin ||
+                         position.Y > _strip.Bounds.Height + TearOffMargin;
 
-        if (target >= 0 && current >= 0 && target != current)
+        if (!inTearZone)
         {
-            var before = CaptureLefts();
+            var target = TabIndexAt(position.X);
+            var group = GroupHintAt(position.X);
+            var current = shell.IndexOfTab(_dragging);
 
-            shell.DropTab(_dragging, target);
-
-            // Layout has to settle before the new positions can be measured.
-            _strip.UpdateLayout();
-            AnimateFrom(before);
-
-            // The dragged tab now sits in a new slot. Rebase the press origin onto
-            // it so its offset stays relative to its current home.
-            if (LeftOf(_dragging) is { } left)
+            if (target >= 0 && current >= 0 &&
+                (target != current || group != _dragging.Tab.GroupId))
             {
-                _pressOrigin = _pressOrigin.WithX(_pressOrigin.X + (left - _dragOriginX));
-                _dragOriginX = left;
+                var before = CaptureLefts();
+
+                shell.DropTab(_dragging, target, group);
+
+                // Layout has to settle before the new positions can be measured.
+                _strip.UpdateLayout();
+                AnimateFrom(before);
+
+                // The dragged tab now sits in a new slot. Rebase the press origin
+                // onto it so its offset stays relative to its current home.
+                if (LeftOf(_dragging) is { } left)
+                {
+                    _pressOrigin = _pressOrigin.WithX(_pressOrigin.X + (left - _dragOriginX));
+                    _dragOriginX = left;
+                }
             }
         }
 
-        // The dragged tab follows the pointer exactly.
-        Offset(_dragging, position.X - _pressOrigin.X);
+        // The dragged tab follows the pointer exactly in X, and peels a bounded
+        // distance in Y so pulling away from the strip is visible.
+        Offset(
+            _dragging,
+            position.X - _pressOrigin.X,
+            Math.Clamp(position.Y - _pressOrigin.Y, -PeelLimit, PeelLimit));
+
+        if (ContainerFor(_dragging) is { } hinted)
+        {
+            hinted.Opacity = inTearZone ? 0.65 : 1.0;
+        }
 
         // Preview on whichever other window's strip the pointer is over, so the
         // user can see where a cross-window drop would land.
@@ -173,6 +199,7 @@ internal sealed class TabStripDragHandler
         if (ContainerFor(dragged) is { } container)
         {
             container.ZIndex = 0;
+            container.Opacity = 1.0;
             container.Transitions = SlideTransitions();
             container.RenderTransform = NoOffset;
         }
@@ -310,17 +337,46 @@ internal sealed class TabStripDragHandler
         },
     ];
 
-    private void Offset(TabItemViewModel tab, double x)
+    private void Offset(TabItemViewModel tab, double x, double y = 0)
     {
         if (ContainerFor(tab) is not { } container)
         {
             return;
         }
 
-        container.RenderTransform = Math.Abs(x) < 0.5
+        container.RenderTransform = Math.Abs(x) < 0.5 && Math.Abs(y) < 0.5
             ? NoOffset
             : TransformOperations.Parse(
-                string.Create(CultureInfo.InvariantCulture, $"translate({x}px, 0px)"));
+                string.Create(CultureInfo.InvariantCulture, $"translate({x}px, {y}px)"));
+    }
+
+    /// <summary>
+    /// The group a tab dropped at <paramref name="x"/> would join: the group of the
+    /// tab or chip directly under the pointer. Hovering anywhere over a grouped
+    /// tab, or over the chip itself, joins that group; hovering over a loose tab or
+    /// empty space leaves it. A collapsed group refuses drops, since the tab would
+    /// vanish into it.
+    /// </summary>
+    private Domain.ValueObjects.TabGroupId? GroupHintAt(double x)
+    {
+        foreach (var container in _strip.GetRealizedContainers())
+        {
+            if (container.TranslatePoint(default, _strip) is not { } origin ||
+                x < origin.X ||
+                x >= origin.X + container.Bounds.Width)
+            {
+                continue;
+            }
+
+            return container.DataContext switch
+            {
+                TabItemViewModel tab => tab.Tab.GroupId,
+                GroupHeaderViewModel { IsCollapsed: false } chip => chip.Id,
+                _ => null,
+            };
+        }
+
+        return null;
     }
 
     private double? LeftOf(TabItemViewModel tab) =>
