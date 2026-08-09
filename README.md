@@ -64,4 +64,4 @@ Contributions are welcome. Please read the contributing guide before opening iss
 
 This project is licensed under the PolyForm Noncommercial License 1.0.0. Commercial use is not permitted without a separate commercial agreement.
 
-See the LICENSE file for details.
+See the LICENSE file for details and the official license page: https://polyformproject.org/licenses/noncommercial/1.0.0
