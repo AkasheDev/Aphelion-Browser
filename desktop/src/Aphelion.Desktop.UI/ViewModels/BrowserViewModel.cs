@@ -41,6 +41,32 @@ public sealed partial class BrowserViewModel : ViewModelBase
     /// <summary>Current page title, surfaced so the tab strip can follow it.</summary>
     public string PageTitle => _tab.DisplayTitle;
 
+    /// <summary>
+    /// Navigates directly to an address, bypassing the address bar. Used when a tab
+    /// arrives from another window and has to reload, since a native web view
+    /// cannot be carried across windows.
+    /// </summary>
+    public void NavigateTo(PageAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        _tab.BeginNavigation(address);
+        _session?.Navigate(address);
+        SyncFromTab();
+    }
+
+    /// <summary>
+    /// Replays the pending address once the engine session attaches. A tab adopted
+    /// from another window is told where to go before its view exists.
+    /// </summary>
+    private void ResumePendingNavigation()
+    {
+        if (_session is not null && _tab.Address is { } address && _tab.LoadState == TabLoadState.Loading)
+        {
+            _session.Navigate(address);
+        }
+    }
+
     /// <summary>Text currently in the address bar, which the user may be editing.</summary>
     [ObservableProperty]
     private string _addressText = string.Empty;
@@ -81,6 +107,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _session.NavigationCompleted += OnNavigationCompleted;
 
         RefreshHistoryState();
+        ResumePendingNavigation();
     }
 
     [RelayCommand]

@@ -129,6 +129,59 @@ public sealed class BrowsingSession
         return true;
     }
 
+    /// <summary>
+    /// Moves every tab in a group so the run starts at <paramref name="targetIndex"/>,
+    /// preserving their order within the group. Dragging a group header moves the
+    /// whole group, and the group must stay contiguous.
+    /// </summary>
+    public bool MoveGroup(TabGroupId groupId, int targetIndex)
+    {
+        var members = TabsInGroup(groupId);
+
+        if (members.Count == 0)
+        {
+            return false;
+        }
+
+        var others = _tabs.FindAll(t => t.GroupId != groupId);
+        var clamped = Math.Clamp(targetIndex, 0, others.Count);
+
+        _tabs.Clear();
+        _tabs.AddRange(others[..clamped]);
+        _tabs.AddRange(members);
+        _tabs.AddRange(others[clamped..]);
+        return true;
+    }
+
+    /// <summary>
+    /// Places a tab at an index and gives it the group of whatever it lands among,
+    /// which is how dragging into or out of a group changes membership.
+    /// </summary>
+    public bool MoveTabTo(TabId id, int targetIndex, TabGroupId? group)
+    {
+        var tab = _tabs.Find(t => t.Id == id);
+
+        if (tab is null)
+        {
+            return false;
+        }
+
+        if (group is { } groupId && _groups.ContainsKey(groupId))
+        {
+            tab.JoinGroup(groupId);
+        }
+        else
+        {
+            tab.LeaveGroup();
+        }
+
+        _tabs.Remove(tab);
+        _tabs.Insert(Math.Clamp(targetIndex, 0, _tabs.Count), tab);
+
+        DiscardEmptyGroups();
+        return true;
+    }
+
     public TabGroup CreateGroup(string name, GroupColor color)
     {
         var group = new TabGroup(TabGroupId.New(), name, color);

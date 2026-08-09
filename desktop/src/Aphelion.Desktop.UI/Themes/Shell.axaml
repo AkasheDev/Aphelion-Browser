@@ -18,6 +18,12 @@
 
   <!-- ===== Tabs ===== -->
 
+  <!--
+    Tabs animate their position so a reorder slides rather than jumping. The
+    transition is on RenderTransform: the drag handler reorders the collection,
+    which moves a tab instantly, and the transform carries it from where it was
+    to where it now is.
+  -->
   <Style Selector="Border.tab">
     <Setter Property="Height" Value="32" />
     <Setter Property="MinWidth" Value="150" />
@@ -27,6 +33,26 @@
     <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="RenderTransform" Value="none" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform"
+                                       Duration="0:0:0.16"
+                                       Easing="CubicEaseOut" />
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <!-- The tab under the pointer is lifted above its neighbours and follows the
+       cursor without easing, so it does not lag behind the drag. -->
+  <Style Selector="Border.tab.dragging">
+    <Setter Property="ZIndex" Value="10" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
   </Style>
 
   <Style Selector="Border.tab:pointerover">

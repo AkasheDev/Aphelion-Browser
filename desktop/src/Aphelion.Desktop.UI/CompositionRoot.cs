@@ -38,7 +38,12 @@ internal static class CompositionRoot
         // engine session and history; the shell creates one per tab.
         services.AddTransient<BrowserViewModel>();
         services.AddSingleton<Func<BrowserViewModel>>(sp => sp.GetRequiredService<BrowserViewModel>);
-        services.AddSingleton<ShellViewModel>();
+        // One window manager for the process; each window gets its own shell so
+        // tabs can move between windows.
+        services.AddSingleton<WindowManager>();
+        services.AddSingleton(sp => new ShellViewModel(
+            sp.GetRequiredService<Func<BrowserViewModel>>(),
+            sp.GetRequiredService<WindowManager>()));
         services.AddSingleton<SplashViewModel>();
         services.AddSingleton<MainWindowViewModel>();
 

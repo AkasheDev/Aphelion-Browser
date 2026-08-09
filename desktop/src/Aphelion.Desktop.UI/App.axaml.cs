@@ -71,6 +71,9 @@ public partial class App : Avalonia.Application
             DataContext = services.GetRequiredService<MainWindowViewModel>(),
         };
 
+        // Registered so tabs torn off this window can find their way back.
+        services.GetRequiredService<WindowManager>().Register(mainWindow);
+
         desktop.MainWindow = mainWindow;
         desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnMainWindowClose;
 
