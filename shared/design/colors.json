@@ -1,0 +1,9 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "color": {
+    "brand": {
+      "primary": { "$type": "color", "$value": "#5A4FCF" },
+      "primaryDark": { "$type": "color", "$value": "#8C83FF" }
+    }
+  }
+}

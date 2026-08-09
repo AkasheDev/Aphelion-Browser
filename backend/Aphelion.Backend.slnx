@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Aphelion.Api.Application/Aphelion.Api.Application.csproj" />
+    <Project Path="src/Aphelion.Api.Domain/Aphelion.Api.Domain.csproj" />
+    <Project Path="src/Aphelion.Api.Infrastructure/Aphelion.Api.Infrastructure.csproj" />
+    <Project Path="src/Aphelion.Api/Aphelion.Api.csproj" />
+  </Folder>
+</Solution>

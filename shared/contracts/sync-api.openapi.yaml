@@ -1,0 +1,10 @@
+openapi: 3.1.0
+info:
+  title: Aphelion Sync API
+  version: 0.1.0
+  description: Contract-first placeholder for encrypted browser data synchronization.
+servers: []
+paths: {}
+components:
+  securitySchemes: {}
+  schemas: {}

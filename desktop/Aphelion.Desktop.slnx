@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Aphelion.Desktop.Application/Aphelion.Desktop.Application.csproj" />
+    <Project Path="src/Aphelion.Desktop.BrowserEngine/Aphelion.Desktop.BrowserEngine.csproj" />
+    <Project Path="src/Aphelion.Desktop.Domain/Aphelion.Desktop.Domain.csproj" />
+    <Project Path="src/Aphelion.Desktop.Infrastructure/Aphelion.Desktop.Infrastructure.csproj" />
+    <Project Path="src/Aphelion.Desktop.UI/Aphelion.Desktop.UI.csproj" />
+  </Folder>
+</Solution>

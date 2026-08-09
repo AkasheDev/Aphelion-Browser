@@ -1,0 +1,156 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+        xmlns:views="using:Aphelion.Desktop.UI.Views"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        x:Class="Aphelion.Desktop.UI.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="{Binding Shell.WindowTitle}"
+        Icon="avares://Aphelion.Desktop.UI/Assets/aphelion_logo.ico"
+        Width="1280" Height="800"
+        MinWidth="860" MinHeight="560"
+        Background="{DynamicResource SurfaceBaseBrush}"
+        WindowStartupLocation="CenterScreen"
+        WindowDecorations="BorderOnly"
+        ExtendClientAreaToDecorationsHint="True">
+
+  <!--
+    WindowDecorations and ExtendClientAreaToDecorationsHint are both required.
+    BorderOnly keeps the system frame — and with it resizing, snapping and the
+    platform's own shadow and corners — while removing the system title bar.
+    ExtendClientAreaToDecorationsHint activates WindowDecorationProperties.ElementRole.
+
+    Setting only the first gives a title bar that cannot be dragged; using None
+    instead of BorderOnly loses resizing and snap entirely.
+  -->
+
+  <DockPanel>
+
+    <Border DockPanel.Dock="Top"
+            Classes="titlebar"
+            chrome:WindowDecorationProperties.ElementRole="TitleBar">
+
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" DataContext="{Binding Shell}">
+
+        <!-- Reserved for the macOS window controls, which stay system-drawn on the
+             leading edge. Zero width on Windows and Linux. -->
+        <Border Grid.Column="0"
+                Width="{Binding $parent[Window].WindowDecorationMargin.Left}" />
+
+        <Image Grid.Column="1"
+               Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
+               Width="20" Height="20"
+               Margin="14,0"
+               VerticalAlignment="Center"
+               RenderOptions.BitmapInterpolationMode="HighQuality" />
+
+        <!-- Tab strip. The User role goes on the tabs themselves, not on this
+             scroller: marking the whole strip interactive would make the empty
+             space beside the tabs undraggable. -->
+        <ScrollViewer Grid.Column="2"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding Tabs}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="vm:TabItemViewModel">
+                <Border Classes="tab"
+                        Classes.active="{Binding IsActive}"
+                        chrome:WindowDecorationProperties.ElementRole="User">
+                  <Grid ColumnDefinitions="Auto,*,Auto">
+
+                    <Border Grid.Column="0"
+                            Classes="group-marker"
+                            IsVisible="{Binding IsGrouped}"
+                            Background="{Binding GroupBrush}" />
+
+                    <TextBlock Grid.Column="1"
+                               Classes="tab-title"
+                               Text="{Binding Title}" />
+
+                    <Button Grid.Column="2"
+                            Classes="icon small"
+                            ToolTip.Tip="Close tab"
+                            Margin="6,0,0,0"
+                            Command="{Binding $parent[ItemsControl].((vm:ShellViewModel)DataContext).CloseTabCommand}"
+                            CommandParameter="{Binding}">
+                      <Path Classes="glyph" Data="M0,0 L8,8 M8,0 L0,8" />
+                    </Button>
+
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+
+        <StackPanel Grid.Column="3"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center"
+                    Margin="4,0">
+
+          <Button Classes="icon" ToolTip.Tip="New tab"
+                  chrome:WindowDecorationProperties.ElementRole="User"
+                  Command="{Binding NewTabCommand}">
+            <Path Classes="glyph" Data="M6,0 V12 M0,6 H12" />
+          </Button>
+
+          <Button Classes="icon" ToolTip.Tip="Group or ungroup the active tab"
+                  chrome:WindowDecorationProperties.ElementRole="User"
+                  Command="{Binding GroupActiveTabCommand}">
+            <Path Classes="glyph" Data="M0.5,2 H11.5 V10 H0.5 Z M4,2 V10" />
+          </Button>
+
+        </StackPanel>
+
+        <!-- Caption buttons. Hidden on macOS, where the system draws its own on
+             the left and WindowDecorationMargin.Left is non-zero. -->
+        <StackPanel Grid.Column="4"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Stretch"
+                    IsVisible="{Binding !$parent[Window].WindowDecorationMargin.Left}">
+
+          <Button Classes="caption" ToolTip.Tip="Minimize" Click="OnMinimizeRequested"
+                  chrome:WindowDecorationProperties.ElementRole="User">
+            <Path Classes="caption-glyph" Data="M0,5 H10" />
+          </Button>
+
+          <Button Classes="caption" ToolTip.Tip="Maximize" Click="OnMaximizeRequested"
+                  chrome:WindowDecorationProperties.ElementRole="User"
+                  IsVisible="{Binding $parent[Window].WindowState,
+                                      Converter={x:Static vm:BoolConverters.IsResizableAtEdges}}">
+            <Path Classes="caption-glyph" Data="M0,0 H10 V10 H0 Z" />
+          </Button>
+
+          <Button Classes="caption" ToolTip.Tip="Restore" Click="OnMaximizeRequested"
+                  chrome:WindowDecorationProperties.ElementRole="User"
+                  IsVisible="{Binding $parent[Window].WindowState,
+                                      Converter={x:Static vm:BoolConverters.IsMaximized}}">
+            <Path Classes="caption-glyph" Data="M0,2.5 H7.5 V10 H0 Z M2.5,2.5 V0 H10 V7.5 H7.5" />
+          </Button>
+
+          <Button Classes="caption close" ToolTip.Tip="Close" Click="OnCloseRequested"
+                  chrome:WindowDecorationProperties.ElementRole="User">
+            <Path Classes="caption-glyph" Data="M0,0 L10,10 M10,0 L0,10" />
+          </Button>
+
+        </StackPanel>
+
+      </Grid>
+    </Border>
+
+    <ContentControl Content="{Binding Shell.ActiveBrowser}">
+      <ContentControl.ContentTemplate>
+        <DataTemplate DataType="vm:BrowserViewModel">
+          <views:BrowserView />
+        </DataTemplate>
+      </ContentControl.ContentTemplate>
+    </ContentControl>
+
+  </DockPanel>
+
+</Window>

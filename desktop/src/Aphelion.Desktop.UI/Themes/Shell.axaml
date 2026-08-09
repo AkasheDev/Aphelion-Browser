@@ -1,0 +1,198 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!--
+    Shell chrome styling.
+
+    All glyphs are vector Path data rather than icon-font characters: the icon
+    fonts present on Windows do not exist on macOS or Linux, where they would
+    render as replacement boxes.
+  -->
+
+  <!-- ===== Title bar ===== -->
+
+  <Style Selector="Border.titlebar">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+    <Setter Property="Height" Value="40" />
+  </Style>
+
+  <!-- ===== Tabs ===== -->
+
+  <Style Selector="Border.tab">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="MinWidth" Value="150" />
+    <Setter Property="MaxWidth" Value="240" />
+    <Setter Property="Margin" Value="2,0" />
+    <Setter Property="Padding" Value="11,0,6,0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Border.tab:pointerover">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+  </Style>
+
+  <!-- The active tab is lifted out of the title bar with a lighter fill and a
+       hairline border; without the border the two surfaces read as one block. -->
+  <Style Selector="Border.tab.active">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="Border.tab TextBlock.tab-title">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <Style Selector="Border.tab.active TextBlock.tab-title">
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <!-- Group marker: a rounded bar in the group's colour -->
+  <Style Selector="Border.group-marker">
+    <Setter Property="Width" Value="3" />
+    <Setter Property="Height" Value="14" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Margin" Value="0,0,8,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- ===== Icon buttons: tab close, chrome actions ===== -->
+
+  <Style Selector="Button.icon">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.icon /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.icon:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+  </Style>
+
+  <Style Selector="Button.icon.small">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
+  </Style>
+
+  <Style Selector="Button.icon Path.glyph">
+    <Setter Property="Stroke" Value="{DynamicResource ForegroundMutedBrush}" />
+    <Setter Property="StrokeThickness" Value="1.3" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.icon:pointerover Path.glyph">
+    <Setter Property="Stroke" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Button.icon:disabled Path.glyph">
+    <Setter Property="Opacity" Value="0.35" />
+  </Style>
+
+  <!-- ===== Caption buttons ===== -->
+
+  <Style Selector="Button.caption">
+    <Setter Property="Width" Value="46" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.caption /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <Style Selector="Button.caption:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+  </Style>
+
+  <Style Selector="Button.caption.close:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource CloseHoverBrush}" />
+  </Style>
+
+  <Style Selector="Path.caption-glyph">
+    <Setter Property="Stroke" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="StrokeThickness" Value="1" />
+    <Setter Property="Width" Value="10" />
+    <Setter Property="Height" Value="10" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.caption.close:pointerover Path.caption-glyph">
+    <Setter Property="Stroke" Value="{DynamicResource ForegroundOnAccentBrush}" />
+  </Style>
+
+  <!-- ===== Address bar ===== -->
+
+  <Style Selector="TextBox.address">
+    <Setter Property="Height" Value="34" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusPill}" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TextBox.address:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <Style Selector="TextBox.address:focus /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusRingBrush}" />
+    <Setter Property="BorderThickness" Value="1.5" />
+  </Style>
+
+  <!-- ===== New tab page ===== -->
+
+  <Style Selector="TextBlock.wordmark">
+    <Setter Property="FontSize" Value="44" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource BrandPrimaryBrush}" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBlock.subtle">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+
+  <!-- ===== Status bar ===== -->
+
+  <Style Selector="Border.statusbar">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+    <Setter Property="Padding" Value="12,4" />
+  </Style>
+
+  <Style Selector="Border.statusbar TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+</Styles>

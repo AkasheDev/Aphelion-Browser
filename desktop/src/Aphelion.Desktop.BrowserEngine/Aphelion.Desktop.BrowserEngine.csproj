@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Controls.WebView" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aphelion.Desktop.Application\Aphelion.Desktop.Application.csproj" />
+    <ProjectReference Include="..\Aphelion.Desktop.Domain\Aphelion.Desktop.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

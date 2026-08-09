@@ -1,6 +1,13 @@
 # General
 .DS_Store
 Thumbs.db
+Desktop.ini
+
+# Internal working files — kept local, not published
+Memory Bank/
+ai-guidelines.md
+current-state.md
+project-goals.md
 
 # Flutter / Dart
 .dart_tool/
@@ -13,14 +20,25 @@ build/
 # Avalonia / .NET
 bin/
 obj/
+out/
 .vs/
 *.user
 *.suo
 *.userosscache
 *.sln.docstates
 
-# VS Code
+# IDE
 .vscode/
+.idea/
+*.swp
 
 # Logs
 *.log
+
+# Secrets — never commit
+.env
+.env.*
+*.pfx
+*.p12
+appsettings.Local.json
+appsettings.*.Local.json
