@@ -3,6 +3,7 @@
         xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
         xmlns:views="using:Aphelion.Desktop.UI.Views"
         xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:dvo="using:Aphelion.Desktop.Domain.ValueObjects"
         x:Class="Aphelion.Desktop.UI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Shell.WindowTitle}"
@@ -19,10 +20,13 @@
     BorderOnly keeps the system frame — and with it resizing, snapping and the
     platform's own shadow and corners — while removing the system title bar.
     ExtendClientAreaToDecorationsHint activates WindowDecorationProperties.ElementRole.
-
-    Setting only the first gives a title bar that cannot be dragged; using None
-    instead of BorderOnly loses resizing and snap entirely.
   -->
+
+  <Window.DataTemplates>
+    <DataTemplate DataType="vm:BrowserViewModel">
+      <views:BrowserView />
+    </DataTemplate>
+  </Window.DataTemplates>
 
   <DockPanel>
 
@@ -44,66 +48,124 @@
                VerticalAlignment="Center"
                RenderOptions.BitmapInterpolationMode="HighQuality" />
 
-        <!-- Tab strip. The User role goes on the tabs themselves, not on this
-             scroller: marking the whole strip interactive would make the empty
-             space beside the tabs undraggable. -->
-        <ScrollViewer Grid.Column="2"
-                      HorizontalScrollBarVisibility="Auto"
-                      VerticalScrollBarVisibility="Disabled">
-          <ItemsControl Name="TabStrip" ItemsSource="{Binding Tabs}">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate>
-                <StackPanel Orientation="Horizontal" />
-              </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate DataType="vm:TabItemViewModel">
-                <Border Classes="tab"
-                        Classes.active="{Binding IsActive}"
-                        chrome:WindowDecorationProperties.ElementRole="User">
+        <!-- Tab strip: tabs interleaved with group chips. The User role goes on the
+             interactive elements themselves, never their containers — marking a
+             container makes its whole region undraggable. -->
+        <Panel Grid.Column="2" Name="StripHost">
 
-                  <Border.ContextMenu>
-                    <ContextMenu>
-                      <MenuItem Header="Add to new group"
-                                Command="{Binding $parent[ItemsControl].((vm:ShellViewModel)DataContext).GroupActiveTabCommand}"
-                                IsVisible="{Binding !IsGrouped}" />
-                      <MenuItem Header="Remove from group"
-                                Command="{Binding $parent[ItemsControl].((vm:ShellViewModel)DataContext).UngroupTabCommand}"
-                                CommandParameter="{Binding}"
-                                IsVisible="{Binding IsGrouped}" />
-                      <Separator />
-                      <MenuItem Header="Close tab"
-                                Command="{Binding $parent[ItemsControl].((vm:ShellViewModel)DataContext).CloseTabCommand}"
-                                CommandParameter="{Binding}" />
-                    </ContextMenu>
-                  </Border.ContextMenu>
+          <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                        VerticalScrollBarVisibility="Disabled">
+            <ItemsControl Name="TabStrip" ItemsSource="{Binding StripItems}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
 
-                  <Grid ColumnDefinitions="Auto,*,Auto">
+              <ItemsControl.DataTemplates>
 
-                    <Border Grid.Column="0"
-                            Classes="group-marker"
-                            IsVisible="{Binding IsGrouped}"
-                            Background="{Binding GroupBrush}" />
+                <DataTemplate DataType="vm:TabItemViewModel">
+                  <Border Classes="tab"
+                          Classes.active="{Binding IsActive}"
+                          chrome:WindowDecorationProperties.ElementRole="User">
 
-                    <TextBlock Grid.Column="1"
-                               Classes="tab-title"
-                               Text="{Binding Title}" />
+                    <Border.ContextMenu>
+                      <ContextMenu>
+                        <MenuItem Header="Add to new group"
+                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).GroupActiveTabCommand}"
+                                  IsVisible="{Binding !IsGrouped}" />
+                        <MenuItem Header="Remove from group"
+                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).UngroupTabCommand}"
+                                  CommandParameter="{Binding}"
+                                  IsVisible="{Binding IsGrouped}" />
+                        <Separator />
+                        <MenuItem Header="Open in split view"
+                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).SplitWithTabCommand}"
+                                  CommandParameter="{Binding}"
+                                  IsVisible="{Binding !IsActive}" />
+                        <MenuItem Header="Close split view"
+                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseSplitCommand}"
+                                  IsVisible="{Binding #TabStrip.((vm:ShellViewModel)DataContext).IsSplit}" />
+                        <Separator />
+                        <MenuItem Header="Close tab"
+                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseTabCommand}"
+                                  CommandParameter="{Binding}" />
+                      </ContextMenu>
+                    </Border.ContextMenu>
 
-                    <Button Grid.Column="2"
-                            Classes="icon small"
-                            ToolTip.Tip="Close tab"
-                            Margin="6,0,0,0"
-                            Command="{Binding $parent[ItemsControl].((vm:ShellViewModel)DataContext).CloseTabCommand}"
-                            CommandParameter="{Binding}">
-                      <Path Classes="glyph" Data="M0,0 L8,8 M8,0 L0,8" />
-                    </Button>
+                    <Grid ColumnDefinitions="Auto,*,Auto">
 
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </ScrollViewer>
+                      <Border Grid.Column="0"
+                              Classes="group-marker"
+                              IsVisible="{Binding IsGrouped}"
+                              Background="{Binding GroupBrush}" />
+
+                      <TextBlock Grid.Column="1"
+                                 Classes="tab-title"
+                                 Text="{Binding Title}" />
+
+                      <Button Grid.Column="2"
+                              Classes="icon small"
+                              ToolTip.Tip="Close tab"
+                              Margin="6,0,0,0"
+                              Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseTabCommand}"
+                              CommandParameter="{Binding}">
+                        <Path Classes="glyph" Data="M0,0 L8,8 M8,0 L0,8" />
+                      </Button>
+
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+
+                <!-- Group chip: click collapses, menu renames/recolours/ungroups/closes -->
+                <DataTemplate DataType="vm:GroupHeaderViewModel">
+                  <Button Classes="chip"
+                          Command="{Binding ToggleCollapsedCommand}"
+                          ToolTip.Tip="{Binding Name}"
+                          chrome:WindowDecorationProperties.ElementRole="User">
+
+                    <Border Classes="chip-pill" Background="{Binding Brush}">
+                      <TextBlock Classes="chip-text" Text="{Binding Name}" />
+                    </Border>
+
+                    <Button.ContextMenu>
+                      <ContextMenu>
+                        <MenuItem StaysOpenOnClick="True">
+                          <MenuItem.Header>
+                            <TextBox Width="150" Text="{Binding Name, Mode=TwoWay}" />
+                          </MenuItem.Header>
+                        </MenuItem>
+                        <MenuItem Header="Color">
+                          <MenuItem Header="Violet" Command="{Binding RecolorCommand}" CommandParameter="{x:Static dvo:GroupColor.Violet}" />
+                          <MenuItem Header="Cyan" Command="{Binding RecolorCommand}" CommandParameter="{x:Static dvo:GroupColor.Cyan}" />
+                          <MenuItem Header="Emerald" Command="{Binding RecolorCommand}" CommandParameter="{x:Static dvo:GroupColor.Emerald}" />
+                          <MenuItem Header="Amber" Command="{Binding RecolorCommand}" CommandParameter="{x:Static dvo:GroupColor.Amber}" />
+                          <MenuItem Header="Rose" Command="{Binding RecolorCommand}" CommandParameter="{x:Static dvo:GroupColor.Rose}" />
+                          <MenuItem Header="Slate" Command="{Binding RecolorCommand}" CommandParameter="{x:Static dvo:GroupColor.Slate}" />
+                        </MenuItem>
+                        <Separator />
+                        <MenuItem Header="Ungroup" Command="{Binding UngroupCommand}" />
+                        <MenuItem Header="Close group" Command="{Binding CloseGroupCommand}" />
+                      </ContextMenu>
+                    </Button.ContextMenu>
+
+                  </Button>
+                </DataTemplate>
+
+              </ItemsControl.DataTemplates>
+            </ItemsControl>
+          </ScrollViewer>
+
+          <!-- Insertion preview for a tab dragged in from another window -->
+          <Border Name="DropIndicator"
+                  Width="2" Height="26"
+                  HorizontalAlignment="Left"
+                  VerticalAlignment="Center"
+                  Background="{DynamicResource BrandPrimaryBrush}"
+                  IsHitTestVisible="False"
+                  IsVisible="False" />
+
+        </Panel>
 
         <StackPanel Grid.Column="3"
                     Orientation="Horizontal"
@@ -160,13 +222,27 @@
       </Grid>
     </Border>
 
-    <ContentControl Content="{Binding Shell.ActiveBrowser}">
-      <ContentControl.ContentTemplate>
-        <DataTemplate DataType="vm:BrowserViewModel">
-          <views:BrowserView />
-        </DataTemplate>
-      </ContentControl.ContentTemplate>
-    </ContentControl>
+    <!-- Content: the active tab's page, and beside it the split partner's when
+         split view is on. The third column's width is driven from code-behind,
+         since ColumnDefinitions sit outside the visual tree and cannot bind. -->
+    <Grid Name="BrowserHost">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="0" />
+      </Grid.ColumnDefinitions>
+
+      <ContentControl Grid.Column="0" Content="{Binding Shell.ActiveBrowser}" />
+
+      <GridSplitter Grid.Column="1"
+                    Width="4"
+                    Background="{DynamicResource DividerBrush}"
+                    IsVisible="{Binding Shell.IsSplit}" />
+
+      <ContentControl Grid.Column="2"
+                      Content="{Binding Shell.SplitBrowser}"
+                      IsVisible="{Binding Shell.IsSplit}" />
+    </Grid>
 
   </DockPanel>
 

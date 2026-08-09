@@ -1,24 +1,28 @@
+using System.Globalization;
 using Aphelion.Desktop.UI.ViewModels;
-using Aphelion.Desktop.UI;
 using Avalonia;
 using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using Avalonia.Controls;
 using Avalonia.Input;
-using Avalonia.Media;
+using Avalonia.Media.Transformation;
 using Avalonia.VisualTree;
 
 namespace Aphelion.Desktop.UI.Views;
 
 /// <summary>
 /// Chrome-style dragging for the tab strip: tabs reorder live as the pointer
-/// moves, displaced tabs slide into their new places, and dropping among a
-/// group's members joins that group.
+/// moves, displaced tabs slide into their new places, dropping among a group's
+/// members joins that group, and a drag released outside the strip tears the tab
+/// into its own window or drops it onto another window's strip.
 /// </summary>
 /// <remarks>
-/// The animation works by compensation. Reordering the collection moves a tab
-/// instantly; immediately afterwards each tab is offset back to where it just was
-/// and then released, so the styled transition carries it to its new position.
-/// The dragged tab is exempt — it tracks the pointer directly, without easing.
+/// Transforms are applied to the item containers the ItemsControl creates, not to
+/// the templated Border inside them — an earlier version targeted the Border and
+/// no transform ever landed. The slide works by compensation: reordering the
+/// collection moves a container instantly, so each displaced container is offset
+/// back to where it just was and released, letting a transition carry it forward.
+/// The dragged tab is exempt and tracks the pointer directly.
 /// </remarks>
 internal sealed class TabStripDragHandler
 {
@@ -31,6 +35,8 @@ internal sealed class TabStripDragHandler
     /// </summary>
     private const double TearOffMargin = 24;
 
+    private static readonly TransformOperations NoOffset = TransformOperations.Parse("translate(0px, 0px)");
+
     private readonly ItemsControl _strip;
     private readonly Func<ShellViewModel?> _shell;
 
@@ -38,7 +44,7 @@ internal sealed class TabStripDragHandler
     private Point _pressOrigin;
     private bool _isDragging;
 
-    /// <summary>Where the dragged tab sat when the drag began, in strip space.</summary>
+    /// <summary>Where the dragged tab's container sat when the drag began, in strip space.</summary>
     private double _dragOriginX;
 
     public TabStripDragHandler(ItemsControl strip, Func<ShellViewModel?> shell)
@@ -54,6 +60,8 @@ internal sealed class TabStripDragHandler
 
     public bool IsDragging => _isDragging;
 
+    private WindowManager? Manager => _shell()?.WindowManager as WindowManager;
+
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(_strip).Properties.IsLeftButtonPressed)
@@ -61,8 +69,8 @@ internal sealed class TabStripDragHandler
             return;
         }
 
-        // The close button owns its own clicks.
-        if (e.Source is Visual source && source.FindAncestorOfType<Button>() is not null)
+        // Buttons — the close button, the group chips — own their own clicks.
+        if (e.Source is Visual source && source.FindAncestorOfType<Button>(includeSelf: true) is not null)
         {
             return;
         }
@@ -91,13 +99,20 @@ internal sealed class TabStripDragHandler
 
             _isDragging = true;
             _dragOriginX = LeftOf(_dragging) ?? position.X;
-            SetDraggingClass(_dragging, true);
+
+            if (ContainerFor(_dragging) is { } lifted)
+            {
+                // Above its neighbours, and no easing: an eased dragged tab lags
+                // behind the cursor.
+                lifted.ZIndex = 10;
+                lifted.Transitions = null;
+            }
         }
 
-        var target = IndexAt(position.X);
-        var current = shell.Tabs.IndexOf(_dragging);
+        var target = TabIndexAt(position.X);
+        var current = shell.IndexOfTab(_dragging);
 
-        if (target >= 0 && target != current)
+        if (target >= 0 && current >= 0 && target != current)
         {
             var before = CaptureLefts();
 
@@ -108,8 +123,7 @@ internal sealed class TabStripDragHandler
             AnimateFrom(before);
 
             // The dragged tab now sits in a new slot. Rebase the press origin onto
-            // it so the offset below stays relative to the tab's current home
-            // rather than the one it started in.
+            // it so its offset stays relative to its current home.
             if (LeftOf(_dragging) is { } left)
             {
                 _pressOrigin = _pressOrigin.WithX(_pressOrigin.X + (left - _dragOriginX));
@@ -117,28 +131,55 @@ internal sealed class TabStripDragHandler
             }
         }
 
-        // The dragged tab follows the pointer exactly rather than snapping to its
-        // slot, so the cursor stays on the same part of the tab throughout.
+        // The dragged tab follows the pointer exactly.
         Offset(_dragging, position.X - _pressOrigin.X);
+
+        // Preview on whichever other window's strip the pointer is over, so the
+        // user can see where a cross-window drop would land.
+        if (TopLevel.GetTopLevel(_strip) is MainWindow owner && Manager is { } manager)
+        {
+            manager.UpdateDropPreview(owner.PointToScreen(e.GetPosition(owner)), owner);
+        }
     }
 
-    private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
+    private void OnPointerReleased(object? sender, PointerReleasedEventArgs e) =>
+        EndDrag(e);
+
+    /// <summary>Escape abandons the drag, leaving the strip as it stands.</summary>
+    private void OnKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && _isDragging)
+        {
+            EndDrag(release: null);
+            e.Handled = true;
+        }
+    }
+
+    private void EndDrag(PointerReleasedEventArgs? release)
     {
         var dragged = _dragging;
         var wasDragging = _isDragging;
 
-        if (dragged is not null)
-        {
-            SetDraggingClass(dragged, false);
-            Offset(dragged, 0);
-        }
-
         _dragging = null;
         _isDragging = false;
 
-        if (wasDragging && dragged is not null)
+        Manager?.ClearDropPreview();
+
+        if (dragged is null)
         {
-            CompleteAcrossWindows(dragged, e);
+            return;
+        }
+
+        if (ContainerFor(dragged) is { } container)
+        {
+            container.ZIndex = 0;
+            container.Transitions = SlideTransitions();
+            container.RenderTransform = NoOffset;
+        }
+
+        if (wasDragging && release is not null)
+        {
+            CompleteAcrossWindows(dragged, release);
         }
     }
 
@@ -149,7 +190,7 @@ internal sealed class TabStripDragHandler
     private void CompleteAcrossWindows(TabItemViewModel dragged, PointerReleasedEventArgs e)
     {
         if (_shell() is not { } shell ||
-            shell.WindowManager is not WindowManager manager ||
+            Manager is not { } manager ||
             TopLevel.GetTopLevel(_strip) is not MainWindow owner)
         {
             return;
@@ -175,7 +216,7 @@ internal sealed class TabStripDragHandler
             shell.DetachTab(dragged);
             AdoptInto(target, address, index);
 
-            if (shell.Tabs.Count == 0)
+            if (shell.StripItems.Count == 0)
             {
                 owner.Close();
             }
@@ -207,35 +248,15 @@ internal sealed class TabStripDragHandler
         }
     }
 
-    /// <summary>Escape abandons the drag, leaving the strip as it stands.</summary>
-    private void OnKeyDown(object? sender, KeyEventArgs e)
-    {
-        if (e.Key != Key.Escape || !_isDragging)
-        {
-            return;
-        }
-
-        if (_dragging is not null)
-        {
-            SetDraggingClass(_dragging, false);
-            Offset(_dragging, 0);
-        }
-
-        _dragging = null;
-        _isDragging = false;
-        e.Handled = true;
-    }
-
-    /// <summary>Records where every tab currently sits, keyed by its view model.</summary>
+    /// <summary>Records where every strip item currently sits, keyed by its view model.</summary>
     private Dictionary<object, double> CaptureLefts()
     {
         var positions = new Dictionary<object, double>();
 
         foreach (var container in _strip.GetRealizedContainers())
         {
-            if (container is Visual visual &&
-                container.DataContext is { } key &&
-                visual.TranslatePoint(default, _strip) is { } origin)
+            if (container.DataContext is { } key &&
+                container.TranslatePoint(default, _strip) is { } origin)
             {
                 positions[key] = origin.X;
             }
@@ -245,26 +266,21 @@ internal sealed class TabStripDragHandler
     }
 
     /// <summary>
-    /// Offsets each tab back to where it was, then releases it so the styled
-    /// transition slides it to its new place.
+    /// Offsets each displaced container back to where it was, then releases it so
+    /// the transition slides it to its new place.
     /// </summary>
     private void AnimateFrom(Dictionary<object, double> before)
     {
         foreach (var container in _strip.GetRealizedContainers())
         {
-            if (container is not Border border ||
-                container.DataContext is not { } key ||
+            if (container.DataContext is not { } key ||
+                ReferenceEquals(key, _dragging) ||
                 !before.TryGetValue(key, out var previous))
             {
                 continue;
             }
 
-            if (ReferenceEquals(key, _dragging))
-            {
-                continue;
-            }
-
-            if (border.TranslatePoint(default, _strip) is not { } origin)
+            if (container.TranslatePoint(default, _strip) is not { } origin)
             {
                 continue;
             }
@@ -276,63 +292,47 @@ internal sealed class TabStripDragHandler
                 continue;
             }
 
-            // Jump back without easing, then let the transition carry it forward.
-            border.Transitions = null;
-            border.RenderTransform = new TranslateTransform(delta, 0);
-            border.Transitions = TabTransitions();
-            border.RenderTransform = null;
+            container.Transitions = null;
+            container.RenderTransform = TransformOperations.Parse(
+                string.Create(CultureInfo.InvariantCulture, $"translate({delta}px, 0px)"));
+            container.Transitions = SlideTransitions();
+            container.RenderTransform = NoOffset;
         }
     }
 
-    private static Transitions TabTransitions() =>
+    private static Transitions SlideTransitions() =>
     [
         new TransformOperationsTransition
         {
             Property = Visual.RenderTransformProperty,
             Duration = TimeSpan.FromMilliseconds(160),
-            Easing = new Avalonia.Animation.Easings.CubicEaseOut(),
+            Easing = new CubicEaseOut(),
         },
     ];
 
     private void Offset(TabItemViewModel tab, double x)
     {
-        if (ContainerFor(tab) is not { } border)
+        if (ContainerFor(tab) is not { } container)
         {
             return;
         }
 
-        border.RenderTransform = Math.Abs(x) < 0.5 ? null : new TranslateTransform(x, 0);
-    }
-
-    private void SetDraggingClass(TabItemViewModel tab, bool dragging)
-    {
-        if (ContainerFor(tab) is not { } border)
-        {
-            return;
-        }
-
-        if (dragging)
-        {
-            border.Transitions = null;
-            border.Classes.Add("dragging");
-        }
-        else
-        {
-            border.Classes.Remove("dragging");
-            border.Transitions = TabTransitions();
-        }
+        container.RenderTransform = Math.Abs(x) < 0.5
+            ? NoOffset
+            : TransformOperations.Parse(
+                string.Create(CultureInfo.InvariantCulture, $"translate({x}px, 0px)"));
     }
 
     private double? LeftOf(TabItemViewModel tab) =>
         ContainerFor(tab)?.TranslatePoint(default, _strip)?.X;
 
-    private Border? ContainerFor(TabItemViewModel tab)
+    private Control? ContainerFor(TabItemViewModel tab)
     {
         foreach (var container in _strip.GetRealizedContainers())
         {
-            if (container is Border border && ReferenceEquals(container.DataContext, tab))
+            if (ReferenceEquals(container.DataContext, tab))
             {
-                return border;
+                return container;
             }
         }
 
@@ -341,29 +341,37 @@ internal sealed class TabStripDragHandler
 
     private static TabItemViewModel? TabUnder(Visual? visual)
     {
-        var border = visual as Border ?? visual?.FindAncestorOfType<Border>();
-        return border?.DataContext as TabItemViewModel;
+        for (var element = visual as StyledElement; element is not null; element = element.Parent)
+        {
+            if (element.DataContext is TabItemViewModel tab)
+            {
+                return tab;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
-    /// The index the dragged tab should occupy for a pointer at <paramref name="x"/>.
-    /// A tab is displaced once the pointer passes its midpoint, so tabs swap under
-    /// the cursor rather than only when it reaches their far edge.
+    /// The session index the dragged tab should occupy for a pointer at
+    /// <paramref name="x"/>. Group chips occupy strip space but no session index,
+    /// so only tab containers are counted. A tab is displaced once the pointer
+    /// passes its midpoint, so tabs swap under the cursor rather than only when it
+    /// reaches their far edge.
     /// </summary>
-    private int IndexAt(double x)
+    private int TabIndexAt(double x)
     {
         var index = 0;
 
         foreach (var container in _strip.GetRealizedContainers())
         {
-            if (container is not Visual visual ||
-                visual.TranslatePoint(default, _strip) is not { } origin)
+            if (container.DataContext is not TabItemViewModel)
             {
-                index++;
                 continue;
             }
 
-            if (x < origin.X + visual.Bounds.Width / 2)
+            if (container.TranslatePoint(default, _strip) is { } origin &&
+                x < origin.X + container.Bounds.Width / 2)
             {
                 return index;
             }

@@ -1,4 +1,6 @@
 using System.Collections.ObjectModel;
+using Aphelion.Desktop.Application.Dtos;
+using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Domain.Entities;
 using Aphelion.Desktop.Domain.ValueObjects;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -7,27 +9,39 @@ using CommunityToolkit.Mvvm.Input;
 namespace Aphelion.Desktop.UI.ViewModels;
 
 /// <summary>
-/// The window shell: the tab strip in the title bar, the side panel, and which
-/// browser view is on screen.
+/// The window shell: the tab strip in the title bar, the split view, and which
+/// browser views are on screen.
 /// </summary>
 /// <remarks>
 /// Every tab owns its own <see cref="BrowserViewModel"/>, because every tab needs
-/// its own engine session and navigation history. The shell keeps them alive and
-/// swaps which one is visible; it does not reuse a single view across tabs, which
-/// would lose per-tab history.
+/// its own engine session and navigation history. The strip is a mixed sequence:
+/// a <see cref="GroupHeaderViewModel"/> chip precedes each group's run of tabs,
+/// as in Chrome, and a collapsed group shows only its chip.
 /// </remarks>
 public sealed partial class ShellViewModel : ViewModelBase
 {
     private readonly BrowsingSession _session = new();
     private readonly Func<BrowserViewModel> _browserFactory;
     private readonly Dictionary<TabId, BrowserViewModel> _browsers = [];
+    private readonly Dictionary<TabId, TabItemViewModel> _tabItems = [];
+    private readonly Dictionary<TabGroupId, GroupHeaderViewModel> _headers = [];
+    private readonly ISessionStore? _sessionStore;
 
-    public ShellViewModel(Func<BrowserViewModel> browserFactory, object? windowManager = null)
+    private TabId? _splitTabId;
+
+    public ShellViewModel(
+        Func<BrowserViewModel> browserFactory,
+        object? windowManager = null,
+        ISessionStore? sessionStore = null)
     {
         _browserFactory = browserFactory ?? throw new ArgumentNullException(nameof(browserFactory));
         WindowManager = windowManager;
+        _sessionStore = sessionStore;
 
-        NewTab();
+        if (!TryRestore())
+        {
+            NewTab();
+        }
     }
 
     /// <summary>
@@ -36,54 +50,8 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// </summary>
     public object? WindowManager { get; }
 
-    /// <summary>True when this window has exactly one tab left.</summary>
-    public bool IsSingleTab => _session.Tabs.Count <= 1;
-
-    /// <summary>The address of a tab, for handing to a new window when torn off.</summary>
-    public static PageAddress? AddressOf(TabItemViewModel item) => item?.Tab.Address;
-
-    /// <summary>
-    /// Removes a tab because it moved to another window. Unlike closing, this never
-    /// opens a replacement tab: the caller is responsible for where the tab went.
-    /// </summary>
-    public void DetachTab(TabItemViewModel item)
-    {
-        ArgumentNullException.ThrowIfNull(item);
-
-        if (_browsers.Remove(item.Id, out var browser))
-        {
-            browser.PropertyChanged -= OnBrowserPropertyChanged;
-        }
-
-        _session.CloseTab(item.Id);
-        SyncTabs();
-    }
-
-    /// <summary>Adds a tab received from another window and activates it.</summary>
-    public void AdoptTab(PageAddress? address, int targetIndex)
-    {
-        var tab = _session.OpenTab(address);
-        Attach(tab);
-        _session.MoveTabTo(tab.Id, targetIndex, null);
-        _session.Activate(tab.Id);
-        SyncTabs();
-
-        if (address is not null && _browsers.TryGetValue(tab.Id, out var browser))
-        {
-            browser.NavigateTo(address);
-        }
-    }
-
-    /// <summary>Navigates the active tab, used when a new window opens on an address.</summary>
-    public void NavigateActiveTab(PageAddress address)
-    {
-        if (ActiveBrowser is { } browser)
-        {
-            browser.NavigateTo(address);
-        }
-    }
-
-    public ObservableCollection<TabItemViewModel> Tabs { get; } = [];
+    /// <summary>Tabs and group chips, in the order the strip draws them.</summary>
+    public ObservableCollection<object> StripItems { get; } = [];
 
     [ObservableProperty]
     private TabItemViewModel? _activeTab;
@@ -92,8 +60,37 @@ public sealed partial class ShellViewModel : ViewModelBase
     [ObservableProperty]
     private BrowserViewModel? _activeBrowser;
 
+    /// <summary>The browser shown beside the active one while split view is on.</summary>
+    [ObservableProperty]
+    private BrowserViewModel? _splitBrowser;
+
+    [ObservableProperty]
+    private bool _isSplit;
+
     [ObservableProperty]
     private string _windowTitle = "Aphelion";
+
+    /// <summary>True when this window has exactly one tab left.</summary>
+    public bool IsSingleTab => _session.Tabs.Count <= 1;
+
+    /// <summary>The address of a tab, for handing to a new window when torn off.</summary>
+    public static PageAddress? AddressOf(TabItemViewModel item) => item?.Tab.Address;
+
+    /// <summary>The tab's position in the session, which is the order the user sees.</summary>
+    public int IndexOfTab(TabItemViewModel item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        for (var i = 0; i < _session.Tabs.Count; i++)
+        {
+            if (_session.Tabs[i].Id == item.Id)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
 
     [RelayCommand]
     private void NewTab()
@@ -111,11 +108,7 @@ public sealed partial class ShellViewModel : ViewModelBase
             return;
         }
 
-        if (_browsers.Remove(item.Id, out var browser))
-        {
-            browser.PropertyChanged -= OnBrowserPropertyChanged;
-        }
-
+        Detach(item.Id);
         _session.CloseTab(item.Id);
 
         // Closing the last tab opens a fresh one rather than leaving an empty
@@ -134,6 +127,13 @@ public sealed partial class ShellViewModel : ViewModelBase
         if (item is null || !_session.Activate(item.Id))
         {
             return;
+        }
+
+        // Activating the split partner would put one view model in two panes;
+        // the split closes instead, and the tab takes the whole window.
+        if (_splitTabId == item.Id)
+        {
+            _splitTabId = null;
         }
 
         SyncTabs();
@@ -184,7 +184,21 @@ public sealed partial class ShellViewModel : ViewModelBase
     [RelayCommand]
     private void ToggleGroupCollapsed(TabGroupId groupId)
     {
-        _session.FindGroup(groupId)?.ToggleCollapsed();
+        var group = _session.FindGroup(groupId);
+
+        if (group is null)
+        {
+            return;
+        }
+
+        group.ToggleCollapsed();
+
+        // Collapsing the last visible run would leave the strip empty.
+        if (group.IsCollapsed && _session.Tabs.All(IsHidden))
+        {
+            group.Expand();
+        }
+
         SyncTabs();
     }
 
@@ -193,10 +207,7 @@ public sealed partial class ShellViewModel : ViewModelBase
     {
         foreach (var tab in _session.TabsInGroup(groupId))
         {
-            if (_browsers.Remove(tab.Id, out var browser))
-            {
-                browser.PropertyChanged -= OnBrowserPropertyChanged;
-            }
+            Detach(tab.Id);
         }
 
         _session.CloseGroup(groupId);
@@ -244,6 +255,147 @@ public sealed partial class ShellViewModel : ViewModelBase
         SyncTabs();
     }
 
+    /// <summary>Shows <paramref name="item"/>'s page beside the active tab's.</summary>
+    [RelayCommand]
+    private void SplitWithTab(TabItemViewModel? item)
+    {
+        if (item is null || _session.ActiveTab?.Id == item.Id)
+        {
+            return;
+        }
+
+        _splitTabId = item.Id;
+        SyncTabs();
+    }
+
+    [RelayCommand]
+    private void CloseSplit()
+    {
+        _splitTabId = null;
+        SyncTabs();
+    }
+
+    /// <summary>
+    /// Removes a tab because it moved to another window. Unlike closing, this never
+    /// opens a replacement tab: the caller is responsible for where the tab went.
+    /// </summary>
+    public void DetachTab(TabItemViewModel item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        Detach(item.Id);
+        _session.CloseTab(item.Id);
+        SyncTabs();
+    }
+
+    /// <summary>Adds a tab received from another window and activates it.</summary>
+    public void AdoptTab(PageAddress? address, int targetIndex)
+    {
+        var tab = _session.OpenTab(address);
+        Attach(tab);
+        _session.MoveTabTo(tab.Id, targetIndex, null);
+        _session.Activate(tab.Id);
+        SyncTabs();
+
+        if (address is not null && _browsers.TryGetValue(tab.Id, out var browser))
+        {
+            browser.NavigateTo(address);
+        }
+    }
+
+    /// <summary>Navigates the active tab, used when a new window opens on an address.</summary>
+    public void NavigateActiveTab(PageAddress address)
+    {
+        ActiveBrowser?.NavigateTo(address);
+    }
+
+    /// <summary>The open-tab state to persist at shutdown.</summary>
+    public SessionSnapshot CaptureSnapshot()
+    {
+        var tabs = new List<SessionTabSnapshot>();
+        var activeIndex = 0;
+
+        for (var i = 0; i < _session.Tabs.Count; i++)
+        {
+            var tab = _session.Tabs[i];
+            var group = tab.GroupId is { } id ? _session.FindGroup(id) : null;
+
+            if (_session.ActiveTab?.Id == tab.Id)
+            {
+                activeIndex = i;
+            }
+
+            tabs.Add(new SessionTabSnapshot(
+                tab.Address?.ToString(),
+                group?.Name,
+                group?.Color.ToString(),
+                group?.IsCollapsed ?? false));
+        }
+
+        return new SessionSnapshot(tabs, activeIndex);
+    }
+
+    /// <summary>
+    /// Rebuilds the previous session, returning false when there is nothing to
+    /// restore so the caller opens a fresh tab instead.
+    /// </summary>
+    private bool TryRestore()
+    {
+        if (_sessionStore?.Load() is not { Tabs.Count: > 0 } snapshot)
+        {
+            return false;
+        }
+
+        var groups = new Dictionary<string, TabGroup>();
+
+        foreach (var saved in snapshot.Tabs)
+        {
+            PageAddress? address = null;
+
+            if (saved.Address is not null &&
+                Uri.TryCreate(saved.Address, UriKind.Absolute, out var uri))
+            {
+                PageAddress.TryCreate(uri, out address);
+            }
+
+            var tab = _session.OpenTab(address, activate: false);
+            Attach(tab);
+
+            if (saved.GroupName is not null)
+            {
+                var key = $"{saved.GroupName}|{saved.GroupColor}";
+
+                if (!groups.TryGetValue(key, out var group))
+                {
+                    var color = Enum.TryParse<GroupColor>(saved.GroupColor, out var parsed)
+                        ? parsed
+                        : GroupColor.Slate;
+                    group = _session.CreateGroup(saved.GroupName, color);
+                    groups[key] = group;
+                }
+
+                _session.AddToGroup(tab.Id, group.Id);
+
+                if (saved.GroupCollapsed)
+                {
+                    group.Collapse();
+                }
+            }
+
+            // Marks the tab as loading so the navigation replays once its view
+            // attaches an engine session.
+            if (address is not null)
+            {
+                _browsers[tab.Id].NavigateTo(address);
+            }
+        }
+
+        var index = Math.Clamp(snapshot.ActiveIndex, 0, _session.Tabs.Count - 1);
+        _session.Activate(_session.Tabs[index].Id);
+        SyncTabs();
+        return true;
+    }
+
     /// <summary>Cycles the palette so consecutive groups are visually distinct.</summary>
     private GroupColor NextGroupColor()
     {
@@ -259,6 +411,14 @@ public sealed partial class ShellViewModel : ViewModelBase
         _browsers[tab.Id] = browser;
     }
 
+    private void Detach(TabId id)
+    {
+        if (_browsers.Remove(id, out var browser))
+        {
+            browser.PropertyChanged -= OnBrowserPropertyChanged;
+        }
+    }
+
     private void OnBrowserPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         // A tab's title and loading state change as pages load, so the strip has to
@@ -270,64 +430,176 @@ public sealed partial class ShellViewModel : ViewModelBase
         }
     }
 
+    private bool IsHidden(BrowserTab tab) =>
+        tab.GroupId is { } id && _session.FindGroup(id)?.IsCollapsed == true;
+
     /// <summary>
-    /// Brings the strip in line with the session and updates the visible browser.
+    /// Brings the strip in line with the session and updates the visible browsers.
     /// </summary>
     /// <remarks>
-    /// Reconciles in place rather than clearing and refilling. Rebuilding the
-    /// collection on every change would discard the item that a drag is currently
-    /// holding, and would make the strip flash on each reorder.
+    /// Reconciles in place rather than clearing and refilling: rebuilding the
+    /// collection would discard the item a drag is holding and flash the strip.
     /// </remarks>
     private void SyncTabs()
     {
-        var existing = Tabs.ToDictionary(t => t.Id);
-
-        for (var index = 0; index < _session.Tabs.Count; index++)
+        // A collapsed group hides its tabs; the active tab must stay visible.
+        if (_session.ActiveTab is { } hiddenActive && IsHidden(hiddenActive))
         {
-            var tab = _session.Tabs[index];
+            var visible = _session.Tabs.FirstOrDefault(t => !IsHidden(t));
 
-            if (!existing.TryGetValue(tab.Id, out var item))
+            if (visible is not null)
             {
-                item = new TabItemViewModel(tab);
+                _session.Activate(visible.Id);
             }
-
-            var currentIndex = Tabs.IndexOf(item);
-
-            if (currentIndex < 0)
-            {
-                Tabs.Insert(index, item);
-            }
-            else if (currentIndex != index)
-            {
-                Tabs.Move(currentIndex, index);
-            }
-
-            item.IsActive = _session.ActiveTab?.Id == tab.Id;
-            item.Refresh(GroupColorOf(tab));
         }
 
-        // Anything left over was closed.
-        for (var index = Tabs.Count - 1; index >= _session.Tabs.Count; index--)
+        var desired = new List<object>();
+        TabGroupId? run = null;
+
+        foreach (var tab in _session.Tabs)
         {
-            Tabs.RemoveAt(index);
+            if (tab.GroupId is { } groupId)
+            {
+                if (run != groupId)
+                {
+                    run = groupId;
+                    desired.Add(HeaderFor(groupId));
+                }
+
+                if (_session.FindGroup(groupId)?.IsCollapsed == true)
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                run = null;
+            }
+
+            desired.Add(ItemFor(tab));
         }
 
-        ActiveTab = Tabs.FirstOrDefault(t => t.IsActive);
+        for (var i = StripItems.Count - 1; i >= 0; i--)
+        {
+            if (!desired.Contains(StripItems[i]))
+            {
+                StripItems.RemoveAt(i);
+            }
+        }
+
+        for (var i = 0; i < desired.Count; i++)
+        {
+            var index = StripItems.IndexOf(desired[i]);
+
+            if (index < 0)
+            {
+                StripItems.Insert(i, desired[i]);
+            }
+            else if (index != i)
+            {
+                StripItems.Move(index, i);
+            }
+        }
+
+        PruneCaches();
+        RefreshTabDisplay();
+
+        ActiveTab = _session.ActiveTab is { } active
+            ? _tabItems.GetValueOrDefault(active.Id)
+            : null;
         ActiveBrowser = ActiveTab is null ? null : _browsers.GetValueOrDefault(ActiveTab.Id);
 
-        WindowTitle = ActiveTab is null ? "Aphelion" : $"{ActiveTab.Title} — Aphelion";
+        // Split housekeeping: the partner may have closed or become the active tab.
+        if (_splitTabId is { } split &&
+            (_session.Tabs.All(t => t.Id != split) || _session.ActiveTab?.Id == split))
+        {
+            _splitTabId = null;
+        }
+
+        SplitBrowser = _splitTabId is { } partner ? _browsers.GetValueOrDefault(partner) : null;
+        IsSplit = SplitBrowser is not null;
     }
 
     private void RefreshTabDisplay()
     {
-        foreach (var item in Tabs)
+        foreach (var tab in _session.Tabs)
         {
-            item.Refresh(GroupColorOf(item.Tab));
+            if (_tabItems.TryGetValue(tab.Id, out var item))
+            {
+                item.IsActive = _session.ActiveTab?.Id == tab.Id;
+                item.Refresh(GroupColorOf(tab));
+            }
         }
 
-        if (ActiveTab is not null)
+        foreach (var (id, header) in _headers)
         {
-            WindowTitle = $"{ActiveTab.Title} — Aphelion";
+            if (_session.FindGroup(id) is { } group)
+            {
+                header.Refresh(group);
+            }
+        }
+
+        WindowTitle = _session.ActiveTab is { } active
+            ? $"{active.DisplayTitle} — Aphelion"
+            : "Aphelion";
+    }
+
+    private TabItemViewModel ItemFor(BrowserTab tab)
+    {
+        if (!_tabItems.TryGetValue(tab.Id, out var item))
+        {
+            item = new TabItemViewModel(tab);
+            _tabItems[tab.Id] = item;
+        }
+
+        return item;
+    }
+
+    private GroupHeaderViewModel HeaderFor(TabGroupId id)
+    {
+        if (_headers.TryGetValue(id, out var header))
+        {
+            return header;
+        }
+
+        header = new GroupHeaderViewModel(
+            id,
+            rename: name =>
+            {
+                _session.FindGroup(id)?.Rename(name);
+                SyncTabs();
+            },
+            recolor: color =>
+            {
+                _session.FindGroup(id)?.Recolor(color);
+                SyncTabs();
+            },
+            toggle: () => ToggleGroupCollapsed(id),
+            ungroup: () =>
+            {
+                foreach (var tab in _session.TabsInGroup(id))
+                {
+                    _session.RemoveFromGroup(tab.Id);
+                }
+
+                SyncTabs();
+            },
+            close: () => CloseGroup(id));
+
+        _headers[id] = header;
+        return header;
+    }
+
+    private void PruneCaches()
+    {
+        foreach (var id in _tabItems.Keys.Where(k => _session.Tabs.All(t => t.Id != k)).ToList())
+        {
+            _tabItems.Remove(id);
+        }
+
+        foreach (var id in _headers.Keys.Where(k => _session.FindGroup(k) is null).ToList())
+        {
+            _headers.Remove(id);
         }
     }
 

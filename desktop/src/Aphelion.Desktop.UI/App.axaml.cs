@@ -85,7 +85,26 @@ public partial class App : Avalonia.Application
     {
         Dispatcher.UIThread.VerifyAccess();
 
+        SaveSession();
+
         _services?.Dispose();
         _services = null;
+    }
+
+    /// <summary>Persists the open tabs so the next run reopens where the user left off.</summary>
+    private void SaveSession()
+    {
+        try
+        {
+            if (_services?.GetService<ViewModels.ShellViewModel>() is { } shell &&
+                _services.GetService<Aphelion.Desktop.Application.Ports.ISessionStore>() is { } store)
+            {
+                store.Save(shell.CaptureSnapshot());
+            }
+        }
+        catch (Exception)
+        {
+            // Failing to persist the session must not block shutdown.
+        }
     }
 }

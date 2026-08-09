@@ -1,7 +1,9 @@
+using System.ComponentModel;
 using Aphelion.Desktop.UI.ViewModels;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.VisualTree;
 
 namespace Aphelion.Desktop.UI.Views;
@@ -9,6 +11,7 @@ namespace Aphelion.Desktop.UI.Views;
 public partial class MainWindow : Window
 {
     private TabStripDragHandler? _tabDrag;
+    private ShellViewModel? _hookedShell;
 
     public MainWindow()
     {
@@ -29,48 +32,47 @@ public partial class MainWindow : Window
 
     private ShellViewModel? Shell => (DataContext as MainWindowViewModel)?.Shell;
 
-    /// <summary>
-    /// True when a screen point falls inside this window's tab strip, which is how
-    /// a released drag decides whether it landed on another window.
-    /// </summary>
-    public bool TabStripContainsScreenPoint(PixelPoint screenPoint)
+    protected override void OnDataContextChanged(EventArgs e)
     {
-        if (this.FindControl<ItemsControl>("TabStrip") is not { } strip ||
-            strip.TranslatePoint(default, this) is not { } origin)
+        base.OnDataContextChanged(e);
+
+        if (_hookedShell is not null)
         {
-            return false;
+            _hookedShell.PropertyChanged -= OnShellPropertyChanged;
         }
 
-        var local = this.PointToClient(screenPoint);
+        _hookedShell = Shell;
 
-        return local.X >= origin.X && local.X <= origin.X + strip.Bounds.Width &&
-               local.Y >= origin.Y && local.Y <= origin.Y + strip.Bounds.Height;
+        if (_hookedShell is not null)
+        {
+            _hookedShell.PropertyChanged += OnShellPropertyChanged;
+        }
+
+        UpdateSplitLayout();
     }
 
-    /// <summary>The index a tab dropped at this screen point should take.</summary>
-    public int DropIndexForScreenPoint(PixelPoint screenPoint)
+    private void OnShellPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (this.FindControl<ItemsControl>("TabStrip") is not { } strip)
+        if (e.PropertyName == nameof(ShellViewModel.IsSplit))
         {
-            return 0;
+            UpdateSplitLayout();
+        }
+    }
+
+    /// <summary>
+    /// Gives the split pane its half of the window. Driven from code because
+    /// ColumnDefinitions sit outside the visual tree and cannot carry bindings.
+    /// </summary>
+    private void UpdateSplitLayout()
+    {
+        if (this.FindControl<Grid>("BrowserHost") is not { ColumnDefinitions.Count: 3 } host)
+        {
+            return;
         }
 
-        var local = this.PointToClient(screenPoint);
-        var index = 0;
-
-        foreach (var container in strip.GetRealizedContainers())
-        {
-            if (container is Visual visual &&
-                visual.TranslatePoint(default, this) is { } origin &&
-                local.X < origin.X + visual.Bounds.Width / 2)
-            {
-                return index;
-            }
-
-            index++;
-        }
-
-        return index;
+        host.ColumnDefinitions[2].Width = Shell?.IsSplit == true
+            ? new GridLength(1, GridUnitType.Star)
+            : new GridLength(0);
     }
 
     private void OnMinimizeRequested(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
@@ -96,7 +98,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (source is Button || source.FindAncestorOfType<Button>() is not null)
+        if (source.FindAncestorOfType<Button>(includeSelf: true) is not null)
         {
             return;
         }
@@ -106,6 +108,108 @@ public partial class MainWindow : Window
         if (header?.DataContext is TabItemViewModel tab)
         {
             shell.ActivateTabCommand.Execute(tab);
+        }
+    }
+
+    /// <summary>
+    /// True when a screen point falls inside this window's tab strip, which is how
+    /// a released drag decides whether it landed on another window.
+    /// </summary>
+    public bool TabStripContainsScreenPoint(PixelPoint screenPoint)
+    {
+        if (this.FindControl<ItemsControl>("TabStrip") is not { } strip ||
+            strip.TranslatePoint(default, this) is not { } origin)
+        {
+            return false;
+        }
+
+        var local = this.PointToClient(screenPoint);
+
+        return local.X >= origin.X && local.X <= origin.X + strip.Bounds.Width &&
+               local.Y >= origin.Y && local.Y <= origin.Y + strip.Bounds.Height;
+    }
+
+    /// <summary>
+    /// The session index a tab dropped at this screen point should take. Group
+    /// chips occupy strip space but no session index, so only tabs are counted.
+    /// </summary>
+    public int DropIndexForScreenPoint(PixelPoint screenPoint)
+    {
+        if (this.FindControl<ItemsControl>("TabStrip") is not { } strip)
+        {
+            return 0;
+        }
+
+        var local = this.PointToClient(screenPoint);
+        var index = 0;
+
+        foreach (var container in strip.GetRealizedContainers())
+        {
+            if (container.DataContext is not TabItemViewModel)
+            {
+                continue;
+            }
+
+            if (container.TranslatePoint(default, this) is { } origin &&
+                local.X < origin.X + container.Bounds.Width / 2)
+            {
+                return index;
+            }
+
+            index++;
+        }
+
+        return index;
+    }
+
+    /// <summary>Shows the insertion preview where a dropped tab would land.</summary>
+    public void ShowDropIndicatorAt(PixelPoint screenPoint)
+    {
+        if (this.FindControl<ItemsControl>("TabStrip") is not { } strip ||
+            this.FindControl<Border>("DropIndicator") is not { } indicator ||
+            indicator.Parent is not Visual host)
+        {
+            return;
+        }
+
+        var local = this.PointToClient(screenPoint);
+        double x = 0;
+
+        foreach (var container in strip.GetRealizedContainers())
+        {
+            if (container.DataContext is not TabItemViewModel)
+            {
+                continue;
+            }
+
+            if (container.TranslatePoint(default, this) is not { } origin)
+            {
+                continue;
+            }
+
+            if (local.X < origin.X + container.Bounds.Width / 2)
+            {
+                x = origin.X;
+                break;
+            }
+
+            x = origin.X + container.Bounds.Width;
+        }
+
+        if (host.TranslatePoint(default, this) is { } hostOrigin)
+        {
+            x -= hostOrigin.X;
+        }
+
+        indicator.RenderTransform = new TranslateTransform(Math.Max(0, x - 1), 0);
+        indicator.IsVisible = true;
+    }
+
+    public void HideDropIndicator()
+    {
+        if (this.FindControl<Border>("DropIndicator") is { } indicator)
+        {
+            indicator.IsVisible = false;
         }
     }
 }

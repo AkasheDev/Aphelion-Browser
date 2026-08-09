@@ -25,6 +25,7 @@ internal static class CompositionRoot
         // Infrastructure
         services.AddSingleton<ISearchQueryBuilder, DuckDuckGoSearchQueryBuilder>();
         services.AddSingleton<IUserDataLocation, UserDataLocation>();
+        services.AddSingleton<ISessionStore, JsonSessionStore>();
 
         // Startup sequence. Tasks run in registration order; loading history,
         // bookmarks and settings will be added here as they gain persistence.
@@ -39,11 +40,13 @@ internal static class CompositionRoot
         services.AddTransient<BrowserViewModel>();
         services.AddSingleton<Func<BrowserViewModel>>(sp => sp.GetRequiredService<BrowserViewModel>);
         // One window manager for the process; each window gets its own shell so
-        // tabs can move between windows.
+        // tabs can move between windows. Only the main shell restores and saves
+        // the session — torn-off windows are transient.
         services.AddSingleton<WindowManager>();
         services.AddSingleton(sp => new ShellViewModel(
             sp.GetRequiredService<Func<BrowserViewModel>>(),
-            sp.GetRequiredService<WindowManager>()));
+            sp.GetRequiredService<WindowManager>(),
+            sp.GetRequiredService<ISessionStore>()));
         services.AddSingleton<SplashViewModel>();
         services.AddSingleton<MainWindowViewModel>();
 

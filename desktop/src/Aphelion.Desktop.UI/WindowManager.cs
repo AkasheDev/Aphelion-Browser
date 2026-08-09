@@ -74,6 +74,36 @@ internal sealed class WindowManager(IServiceProvider services)
     }
 
     /// <summary>
+    /// Shows the drop indicator on whichever window's strip the pointer is over,
+    /// and hides it everywhere else. Called continuously during a drag so the user
+    /// sees where a cross-window drop would land before releasing.
+    /// </summary>
+    public void UpdateDropPreview(PixelPoint screenPoint, MainWindow source)
+    {
+        var target = WindowAcceptingDropAt(screenPoint, source);
+
+        foreach (var window in _windows)
+        {
+            if (ReferenceEquals(window, target))
+            {
+                window.ShowDropIndicatorAt(screenPoint);
+            }
+            else
+            {
+                window.HideDropIndicator();
+            }
+        }
+    }
+
+    public void ClearDropPreview()
+    {
+        foreach (var window in _windows)
+        {
+            window.HideDropIndicator();
+        }
+    }
+
+    /// <summary>
     /// The window whose tab strip contains <paramref name="screenPoint"/>, ignoring
     /// <paramref name="exclude"/>. Used to decide whether a released drag lands on
     /// another window rather than on empty desktop.

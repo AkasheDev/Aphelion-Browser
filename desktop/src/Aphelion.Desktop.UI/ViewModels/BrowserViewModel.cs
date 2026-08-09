@@ -56,14 +56,18 @@ public sealed partial class BrowserViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Replays the pending address once the engine session attaches. A tab adopted
-    /// from another window is told where to go before its view exists.
+    /// Reloads the tab's page once an engine session attaches. The engine surface
+    /// is created fresh every time the view attaches, so whatever page the tab
+    /// held has to be loaded again — this is why switching back to a tab reloads
+    /// it, and why a tab adopted from another window starts loading on arrival.
     /// </summary>
     private void ResumePendingNavigation()
     {
-        if (_session is not null && _tab.Address is { } address && _tab.LoadState == TabLoadState.Loading)
+        if (_session is not null && _tab.Address is { } address)
         {
+            _tab.BeginNavigation(address);
             _session.Navigate(address);
+            SyncFromTab();
         }
     }
 

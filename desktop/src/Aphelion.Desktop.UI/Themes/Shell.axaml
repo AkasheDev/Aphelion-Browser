@@ -18,12 +18,8 @@
 
   <!-- ===== Tabs ===== -->
 
-  <!--
-    Tabs animate their position so a reorder slides rather than jumping. The
-    transition is on RenderTransform: the drag handler reorders the collection,
-    which moves a tab instantly, and the transform carries it from where it was
-    to where it now is.
-  -->
+  <!-- Slide animation for reordering lives on the item containers and is driven
+       by TabStripDragHandler; only the hover colour animates from here. -->
   <Style Selector="Border.tab">
     <Setter Property="Height" Value="32" />
     <Setter Property="MinWidth" Value="150" />
@@ -33,26 +29,39 @@
     <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="VerticalAlignment" Value="Center" />
-    <Setter Property="RenderTransform" Value="none" />
     <Setter Property="Transitions">
       <Transitions>
-        <TransformOperationsTransition Property="RenderTransform"
-                                       Duration="0:0:0.16"
-                                       Easing="CubicEaseOut" />
         <BrushTransition Property="Background" Duration="0:0:0.12" />
       </Transitions>
     </Setter>
   </Style>
 
-  <!-- The tab under the pointer is lifted above its neighbours and follows the
-       cursor without easing, so it does not lag behind the drag. -->
-  <Style Selector="Border.tab.dragging">
-    <Setter Property="ZIndex" Value="10" />
-    <Setter Property="Transitions">
-      <Transitions>
-        <BrushTransition Property="Background" Duration="0:0:0.12" />
-      </Transitions>
-    </Setter>
+  <!-- Group chips -->
+  <Style Selector="Button.chip">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="4,0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.chip /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.chip:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Button.chip:pointerover Border.chip-pill">
+    <Setter Property="Opacity" Value="0.85" />
+  </Style>
+  <Style Selector="Border.chip-pill">
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="10,3" />
+  </Style>
+  <Style Selector="TextBlock.chip-text">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundOnAccentBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
   <Style Selector="Border.tab:pointerover">
