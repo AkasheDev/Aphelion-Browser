@@ -18,13 +18,19 @@ public sealed partial class TabListViewModel : ViewModelBase
     private readonly List<TabItemViewModel> _all = [];
     private readonly Action<TabItemViewModel> _choose;
 
-    public TabListViewModel(string title, Action<TabItemViewModel> choose)
+    public TabListViewModel(string title, Action<TabItemViewModel> choose, Action? createNew = null)
     {
         Title = title;
         _choose = choose ?? throw new ArgumentNullException(nameof(choose));
+        _createNew = createNew;
     }
 
+    private readonly Action? _createNew;
+
     public string Title { get; }
+
+    /// <summary>Whether the list offers a "new tab" row alongside the existing tabs.</summary>
+    public bool CanCreateNew => _createNew is not null;
 
     /// <summary>The rows on the current page.</summary>
     public ObservableCollection<TabItemViewModel> Page { get; } = [];
@@ -38,7 +44,11 @@ public sealed partial class TabListViewModel : ViewModelBase
 
     public string PageLabel => $"{PageIndex + 1} / {PageCount}";
 
-    public bool IsEmpty => _all.Count == 0;
+    /// <summary>
+    /// True when there is nothing at all to offer. A list that can create a new
+    /// tab is never empty in this sense — that row is always something to pick.
+    /// </summary>
+    public bool IsEmpty => _all.Count == 0 && !CanCreateNew;
 
     public bool CanGoPrevious => PageIndex > 0;
 
@@ -62,6 +72,9 @@ public sealed partial class TabListViewModel : ViewModelBase
             _choose(item);
         }
     }
+
+    [RelayCommand]
+    private void CreateNew() => _createNew?.Invoke();
 
     [RelayCommand]
     private void PreviousPage()

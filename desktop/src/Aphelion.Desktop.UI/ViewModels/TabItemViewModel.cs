@@ -18,6 +18,9 @@ public sealed partial class TabItemViewModel(BrowserTab tab, IFaviconLoader? fav
     /// <summary>The icon address currently loaded, so it is fetched only once.</summary>
     private string? _loadedIconKey;
 
+    /// <summary>The same, for the split partner's icon.</summary>
+    private string? _loadedPartnerIconKey;
+
     public BrowserTab Tab { get; } = tab ?? throw new ArgumentNullException(nameof(tab));
 
     public TabId Id => Tab.Id;
@@ -36,6 +39,17 @@ public sealed partial class TabItemViewModel(BrowserTab tab, IFaviconLoader? fav
     private Bitmap? _favicon;
 
     /// <summary>
+    /// The split partner's icon. A split pair occupies one tab, but the tab shows
+    /// both icons so it is visibly a pair rather than an ordinary tab.
+    /// </summary>
+    [ObservableProperty]
+    private Bitmap? _partnerFavicon;
+
+    /// <summary>True when this tab is the visible half of a split pair.</summary>
+    [ObservableProperty]
+    private bool _isSplit;
+
+    /// <summary>
     /// Brush for the owning group's colour, or null when ungrouped.
     /// </summary>
     [ObservableProperty]
@@ -46,13 +60,21 @@ public sealed partial class TabItemViewModel(BrowserTab tab, IFaviconLoader? fav
     partial void OnGroupBrushChanged(IBrush? value) => OnPropertyChanged(nameof(IsGrouped));
 
     /// <summary>Pulls display state back from the domain tab.</summary>
-    public void Refresh(GroupColor? groupColor)
+    public void Refresh(GroupColor? groupColor, BrowserTab? partner = null)
     {
-        Title = Tab.DisplayTitle;
+        IsSplit = Tab.SplitPartnerId is not null;
+
+        // A split pair reads as one tab carrying two pages, so the label names
+        // both rather than hiding that the second one is there.
+        Title = IsSplit && partner is not null
+            ? $"{Tab.DisplayTitle}  |  {partner.DisplayTitle}"
+            : Tab.DisplayTitle;
+
         IsLoading = Tab.LoadState == TabLoadState.Loading;
         GroupBrush = groupColor is null ? null : GroupBrushes.For(groupColor.Value);
 
         LoadFaviconIfChanged();
+        LoadPartnerFaviconIfChanged(partner);
     }
 
     private async void LoadFaviconIfChanged()
@@ -65,31 +87,50 @@ public sealed partial class TabItemViewModel(BrowserTab tab, IFaviconLoader? fav
         }
 
         _loadedIconKey = key;
-        Favicon = null;
+        Favicon = await FetchAsync(Tab.FaviconAddress, () => _loadedIconKey == key);
+    }
 
-        if (key is null || _favicons is null || Tab.FaviconAddress is not { } address)
+    private async void LoadPartnerFaviconIfChanged(BrowserTab? partner)
+    {
+        var key = partner?.FaviconAddress?.ToString();
+
+        if (key == _loadedPartnerIconKey)
         {
             return;
         }
 
+        _loadedPartnerIconKey = key;
+        PartnerFavicon = await FetchAsync(partner?.FaviconAddress, () => _loadedPartnerIconKey == key);
+    }
+
+    /// <summary>
+    /// Fetches and decodes an icon, discarding the result if the tab moved on
+    /// while it was in flight.
+    /// </summary>
+    private async Task<Bitmap?> FetchAsync(PageAddress? address, Func<bool> stillWanted)
+    {
+        if (address is null || _favicons is null)
+        {
+            return null;
+        }
+
         var bytes = await _favicons.LoadAsync(address.Value).ConfigureAwait(true);
 
-        // The tab may have navigated on while the icon was fetched.
-        if (bytes is null || _loadedIconKey != key)
+        if (bytes is null || !stillWanted())
         {
-            return;
+            return null;
         }
 
         try
         {
             using var stream = new MemoryStream(bytes);
-            Favicon = new Bitmap(stream);
+            return new Bitmap(stream);
         }
         catch (Exception)
         {
             // Not every favicon is a format Avalonia can decode — .ico with
             // unusual encodings in particular. The fallback glyph covers it.
-            Favicon = null;
+            return null;
         }
     }
 }

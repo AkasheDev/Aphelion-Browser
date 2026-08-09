@@ -61,9 +61,14 @@
              container makes its whole region undraggable. -->
         <Panel Grid.Column="2" Name="StripHost">
 
-          <Grid ColumnDefinitions="*,Auto">
+          <!-- The strip reports the width its tabs actually occupy, so the
+               new-tab button lands against the last tab rather than being pushed
+               to the far right. It still measures against the space available,
+               which is what limits how many tabs fit. -->
+          <Grid ColumnDefinitions="Auto,Auto" HorizontalAlignment="Left">
 
-            <ItemsControl Grid.Column="0" Name="TabStrip" ItemsSource="{Binding StripItems}">
+            <ItemsControl Grid.Column="0" Name="TabStrip" ItemsSource="{Binding StripItems}"
+                          MaxWidth="{Binding $parent[Panel].Bounds.Width}">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                   <controls:TabStripPanel />
@@ -104,7 +109,7 @@
                       </ContextMenu>
                     </Border.ContextMenu>
 
-                    <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                    <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
 
                       <Border Grid.Column="0"
                               Classes="group-marker"
@@ -125,16 +130,33 @@
                             Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
                             IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNull}}" />
 
+                      <!-- The split partner's icon, so a pair reads as one tab
+                           that visibly carries two pages. -->
+                      <StackPanel Grid.Column="2"
+                                  Orientation="Horizontal"
+                                  VerticalAlignment="Center"
+                                  IsVisible="{Binding IsSplit}">
+                        <Border Classes="split-divider" />
+                        <Image Classes="favicon"
+                               Source="{Binding PartnerFavicon}"
+                               RenderOptions.BitmapInterpolationMode="HighQuality"
+                               IsVisible="{Binding PartnerFavicon, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        <Path Classes="favicon-fallback"
+                              Width="13" Height="13"
+                              Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
+                              IsVisible="{Binding PartnerFavicon, Converter={x:Static ObjectConverters.IsNull}}" />
+                      </StackPanel>
+
                       <!-- Squeezed down to a single character as tabs narrow, but
                            never away entirely: the favicon, one letter and the
                            close button are what the narrowest tab must keep. -->
-                      <controls:MarqueeTextBlock Grid.Column="2"
+                      <controls:MarqueeTextBlock Grid.Column="3"
                                                  Classes="tab-title"
                                                  MinWidth="10"
                                                  Text="{Binding Title}"
                                                  IsScrollEnabled="{Binding IsActive}" />
 
-                      <Button Grid.Column="3"
+                      <Button Grid.Column="4"
                               Classes="icon small"
                               ToolTip.Tip="Close tab"
                               Margin="6,0,0,0"

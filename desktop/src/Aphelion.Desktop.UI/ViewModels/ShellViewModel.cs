@@ -51,11 +51,18 @@ public sealed partial class ShellViewModel : ViewModelBase
             IsOverflowOpen = false;
         });
 
-        SplitPicker = new TabListViewModel("Choose a tab to split with", item =>
-        {
-            SplitWithTab(item);
-            IsSplitPickerOpen = false;
-        });
+        SplitPicker = new TabListViewModel(
+            "Choose a tab to split with",
+            item =>
+            {
+                SplitWithTab(item);
+                IsSplitPickerOpen = false;
+            },
+            createNew: () =>
+            {
+                SplitWithNewTab();
+                IsSplitPickerOpen = false;
+            });
 
         if (!TryRestore())
         {
@@ -298,21 +305,29 @@ public sealed partial class ShellViewModel : ViewModelBase
             return;
         }
 
+        // The picker always opens; the user chooses the second page, never the
+        // application on their behalf. With nothing to offer it still opens, and
+        // its "New tab" row is the way to create one.
         var candidates = _session.VisibleTabs
             .Where(t => t.Id != active.Id && !IsHidden(t))
             .ToList();
 
-        if (candidates.Count == 0)
+        SplitPicker.SetItems(candidates.Select(ItemFor));
+        IsSplitPickerOpen = true;
+    }
+
+    /// <summary>Splits the active tab with a freshly opened blank one.</summary>
+    private void SplitWithNewTab()
+    {
+        if (_session.ActiveTab is not { } active)
         {
-            var partner = _session.OpenTabNextTo(active, activate: false);
-            Attach(partner);
-            _session.Split(active.Id, partner.Id);
-            SyncTabs();
             return;
         }
 
-        SplitPicker.SetItems(candidates.Select(ItemFor));
-        IsSplitPickerOpen = true;
+        var partner = _session.OpenTabNextTo(active, activate: false);
+        Attach(partner);
+        _session.Split(active.Id, partner.Id);
+        SyncTabs();
     }
 
     [RelayCommand]
@@ -641,7 +656,12 @@ public sealed partial class ShellViewModel : ViewModelBase
             if (_tabItems.TryGetValue(tab.Id, out var item))
             {
                 item.IsActive = _session.ActiveTab?.Id == tab.Id;
-                item.Refresh(GroupColorOf(tab));
+
+                var partner = tab.SplitPartnerId is { } id
+                    ? _session.Tabs.FirstOrDefault(t => t.Id == id)
+                    : null;
+
+                item.Refresh(GroupColorOf(tab), partner);
             }
         }
 
