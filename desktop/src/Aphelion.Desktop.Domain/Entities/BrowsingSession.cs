@@ -190,11 +190,23 @@ public sealed class BrowsingSession
 
         if (before is { } run && before == after && tab.GroupId != run)
         {
-            // Slide forward to the end of the run.
-            while (index < _tabs.Count && _tabs[index].GroupId == run)
+            // Slide to whichever edge of the run is closer, so a drop just inside
+            // the run's left edge lands before the group rather than after it.
+            var start = index;
+
+            while (start > 0 && _tabs[start - 1].GroupId == run)
             {
-                index++;
+                start--;
             }
+
+            var end = index;
+
+            while (end < _tabs.Count && _tabs[end].GroupId == run)
+            {
+                end++;
+            }
+
+            index = index - start <= end - index ? start : end;
         }
 
         _tabs.Insert(index, tab);
