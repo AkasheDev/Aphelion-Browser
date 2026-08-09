@@ -252,6 +252,39 @@ public sealed partial class ShellViewModel : ViewModelBase
         SyncTabs();
     }
 
+    /// <summary>
+    /// Turns split view on or off from the toolbar. With no partner chosen it
+    /// pairs the active tab with its neighbour, opening one if the window has
+    /// only a single tab — a split button that does nothing on one tab would be
+    /// a dead control.
+    /// </summary>
+    [RelayCommand]
+    private void ToggleSplit()
+    {
+        if (_splitTabId is not null)
+        {
+            _splitTabId = null;
+            SyncTabs();
+            return;
+        }
+
+        if (_session.ActiveTab is not { } active)
+        {
+            return;
+        }
+
+        var partner = _session.Tabs.FirstOrDefault(t => t.Id != active.Id && !IsHidden(t));
+
+        if (partner is null)
+        {
+            partner = _session.OpenTabNextTo(active, activate: false);
+            Attach(partner);
+        }
+
+        _splitTabId = partner.Id;
+        SyncTabs();
+    }
+
     [RelayCommand]
     private void CloseSplit()
     {

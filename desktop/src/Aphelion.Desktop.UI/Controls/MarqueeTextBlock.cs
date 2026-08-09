@@ -20,11 +20,20 @@ namespace Aphelion.Desktop.UI.Controls;
 /// </remarks>
 public sealed class MarqueeTextBlock : TemplatedControl, IDisposable
 {
-    /// <summary>Pixels travelled per second.</summary>
-    private const double Speed = 30;
+    /// <summary>Pixels per second while revealing the end of the text.</summary>
+    private const double RevealSpeed = 26;
 
-    /// <summary>Pause at each end before reversing, so the text can be read.</summary>
-    private static readonly TimeSpan EdgePause = TimeSpan.FromSeconds(1.4);
+    /// <summary>
+    /// Pixels per second on the way back. Much faster than the reveal: the return
+    /// is not there to be read, it just resets the text.
+    /// </summary>
+    private const double ReturnSpeed = 320;
+
+    /// <summary>Pause before scrolling out, giving the start time to be read.</summary>
+    private static readonly TimeSpan StartPause = TimeSpan.FromSeconds(1.6);
+
+    /// <summary>Shorter pause at the far end before snapping back.</summary>
+    private static readonly TimeSpan EndPause = TimeSpan.FromSeconds(0.9);
 
     public static readonly StyledProperty<string?> TextProperty =
         AvaloniaProperty.Register<MarqueeTextBlock, string?>(nameof(Text));
@@ -121,22 +130,26 @@ public sealed class MarqueeTextBlock : TemplatedControl, IDisposable
     }
 
     /// <summary>
-    /// Slides the text to its far end and back, pausing at each edge, until the
-    /// control stops scrolling or leaves the tree.
+    /// Reveals the end of the text with a slow leftward crawl, then snaps back to
+    /// the start quickly, and repeats until the control stops scrolling.
     /// </summary>
     private static async Task RunAsync(TextBlock text, double overflow, CancellationToken token)
     {
-        var duration = TimeSpan.FromSeconds(overflow / Speed);
+        var reveal = TimeSpan.FromSeconds(overflow / RevealSpeed);
+        var back = TimeSpan.FromSeconds(overflow / ReturnSpeed);
 
         try
         {
             while (!token.IsCancellationRequested)
             {
-                await Task.Delay(EdgePause, token).ConfigureAwait(true);
-                await Slide(text, 0, -overflow, duration, token).ConfigureAwait(true);
+                await Task.Delay(StartPause, token).ConfigureAwait(true);
+                await Slide(text, 0, -overflow, reveal, new LinearEasing(), token).ConfigureAwait(true);
 
-                await Task.Delay(EdgePause, token).ConfigureAwait(true);
-                await Slide(text, -overflow, 0, duration, token).ConfigureAwait(true);
+                await Task.Delay(EndPause, token).ConfigureAwait(true);
+
+                // Eased on the way back so the snap decelerates into place rather
+                // than stopping dead.
+                await Slide(text, -overflow, 0, back, new CubicEaseOut(), token).ConfigureAwait(true);
             }
         }
         catch (OperationCanceledException)
@@ -145,11 +158,17 @@ public sealed class MarqueeTextBlock : TemplatedControl, IDisposable
         }
     }
 
-    private static Task Slide(TextBlock text, double from, double to, TimeSpan duration, CancellationToken token) =>
+    private static Task Slide(
+        TextBlock text,
+        double from,
+        double to,
+        TimeSpan duration,
+        Easing easing,
+        CancellationToken token) =>
         new Animation
         {
             Duration = duration,
-            Easing = new LinearEasing(),
+            Easing = easing,
             Children =
             {
                 new KeyFrame

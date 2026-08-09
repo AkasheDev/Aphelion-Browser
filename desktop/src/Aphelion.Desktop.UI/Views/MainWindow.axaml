@@ -29,6 +29,12 @@
     </DataTemplate>
   </Window.DataTemplates>
 
+  <Window.KeyBindings>
+    <KeyBinding Gesture="Ctrl+T" Command="{Binding Shell.NewTabCommand}" />
+    <KeyBinding Gesture="Ctrl+W" Command="{Binding Shell.CloseTabCommand}"
+                CommandParameter="{Binding Shell.ActiveTab}" />
+  </Window.KeyBindings>
+
   <DockPanel>
 
     <Border DockPanel.Dock="Top"
@@ -49,17 +55,18 @@
                VerticalAlignment="Center"
                RenderOptions.BitmapInterpolationMode="HighQuality" />
 
-        <!-- Tab strip: tabs interleaved with group chips. The User role goes on the
+        <!-- Tab strip: tabs interleaved with group chips, with the new-tab button
+             pinned immediately after the last tab. The User role goes on the
              interactive elements themselves, never their containers — marking a
              container makes its whole region undraggable. -->
         <Panel Grid.Column="2" Name="StripHost">
 
-          <ScrollViewer HorizontalScrollBarVisibility="Auto"
-                        VerticalScrollBarVisibility="Disabled">
-            <ItemsControl Name="TabStrip" ItemsSource="{Binding StripItems}">
+          <Grid ColumnDefinitions="*,Auto">
+
+            <ItemsControl Grid.Column="0" Name="TabStrip" ItemsSource="{Binding StripItems}">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
-                  <StackPanel Orientation="Horizontal" />
+                  <controls:TabStripPanel />
                 </ItemsPanelTemplate>
               </ItemsControl.ItemsPanel>
 
@@ -118,8 +125,12 @@
                             Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
                             IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNull}}" />
 
+                      <!-- Squeezed down to a single character as tabs narrow, but
+                           never away entirely: the favicon, one letter and the
+                           close button are what the narrowest tab must keep. -->
                       <controls:MarqueeTextBlock Grid.Column="2"
                                                  Classes="tab-title"
+                                                 MinWidth="10"
                                                  Text="{Binding Title}"
                                                  IsScrollEnabled="{Binding IsActive}" />
 
@@ -180,7 +191,20 @@
 
               </ItemsControl.DataTemplates>
             </ItemsControl>
-          </ScrollViewer>
+
+            <!-- Pinned immediately after the last tab, so it travels with the
+                 strip instead of sitting at a fixed spot on the right. -->
+            <Button Grid.Column="1"
+                    Classes="icon"
+                    Margin="4,0"
+                    VerticalAlignment="Center"
+                    ToolTip.Tip="New tab"
+                    chrome:WindowDecorationProperties.ElementRole="User"
+                    Command="{Binding NewTabCommand}">
+              <Path Classes="glyph" Data="M6,0 V12 M0,6 H12" />
+            </Button>
+
+          </Grid>
 
           <!-- Insertion preview for a tab dragged in from another window -->
           <Border Name="DropIndicator"
@@ -193,24 +217,9 @@
 
         </Panel>
 
-        <StackPanel Grid.Column="3"
-                    Orientation="Horizontal"
-                    VerticalAlignment="Center"
-                    Margin="4,0">
-
-          <Button Classes="icon" ToolTip.Tip="New tab"
-                  chrome:WindowDecorationProperties.ElementRole="User"
-                  Command="{Binding NewTabCommand}">
-            <Path Classes="glyph" Data="M6,0 V12 M0,6 H12" />
-          </Button>
-
-          <Button Classes="icon" ToolTip.Tip="Group or ungroup the active tab"
-                  chrome:WindowDecorationProperties.ElementRole="User"
-                  Command="{Binding GroupActiveTabCommand}">
-            <Path Classes="glyph" Data="M0.5,2 H11.5 V10 H0.5 Z M4,2 V10" />
-          </Button>
-
-        </StackPanel>
+        <!-- Empty: the strip's own buttons live beside the tabs now, and the
+             split and group actions moved to the page toolbar. -->
+        <Panel Grid.Column="3" />
 
         <!-- Caption buttons. Hidden on macOS, where the system draws its own on
              the left and WindowDecorationMargin.Left is non-zero. -->
