@@ -16,7 +16,8 @@
           <Color x:Key="AphelionSurface">#F4F4F8</Color>
           <Color x:Key="AphelionChrome">#E8E8F0</Color>
           <Color x:Key="AphelionSidePanel">#EDEDF4</Color>
-          <Color x:Key="AphelionTabActive">#FFFFFF</Color>
+          <Color x:Key="AphelionTabActive">#F4F4F8</Color>
+          <Color x:Key="AphelionTabHover">#DFDFE9</Color>
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Dark">
@@ -25,7 +26,8 @@
           <Color x:Key="AphelionSurface">#16161E</Color>
           <Color x:Key="AphelionChrome">#101017</Color>
           <Color x:Key="AphelionSidePanel">#131320</Color>
-          <Color x:Key="AphelionTabActive">#1F1F2C</Color>
+          <Color x:Key="AphelionTabActive">#16161E</Color>
+          <Color x:Key="AphelionTabHover">#1C1C28</Color>
         </ResourceDictionary>
 
       </ResourceDictionary.ThemeDictionaries>
@@ -36,13 +38,7 @@
       <SolidColorBrush x:Key="AphelionChromeBrush" Color="{DynamicResource AphelionChrome}" />
       <SolidColorBrush x:Key="AphelionSidePanelBrush" Color="{DynamicResource AphelionSidePanel}" />
       <SolidColorBrush x:Key="AphelionTabActiveBrush" Color="{DynamicResource AphelionTabActive}" />
-
-      <!-- Window border: the brand gradient, so a running window is recognisable
-           at a glance and matches the logo. -->
-      <LinearGradientBrush x:Key="AphelionWindowBorderBrush" StartPoint="0%,0%" EndPoint="100%,100%">
-        <GradientStop Offset="0" Color="{DynamicResource AphelionBrandPrimary}" />
-        <GradientStop Offset="1" Color="{DynamicResource AphelionBrandAccent}" />
-      </LinearGradientBrush>
+      <SolidColorBrush x:Key="AphelionTabHoverBrush" Color="{DynamicResource AphelionTabHover}" />
 
       <!-- Tab group colours. A closed palette, mapped from the domain's GroupColor. -->
       <SolidColorBrush x:Key="GroupColorVioletBrush" Color="#8C83FF" />
@@ -58,14 +54,30 @@
   <Application.Styles>
     <FluentTheme />
 
-    <!-- Tab strip -->
-    <Style Selector="Border.tab">
+    <!-- Tab strip. Three pieces make the Chrome-style shape: a body with rounded
+         top corners, and a skirt on each side whose inner corner is cut away by a
+         notch painted in the title-bar colour. -->
+    <Style Selector="Panel.tabhost Border.tabbody">
       <Setter Property="Background" Value="Transparent" />
     </Style>
-    <Style Selector="Border.tab:pointerover">
-      <Setter Property="Background" Value="{DynamicResource AphelionSurfaceBrush}" />
+    <Style Selector="Panel.tabhost Border.tabskirt">
+      <Setter Property="Background" Value="Transparent" />
     </Style>
-    <Style Selector="Border.tab.active">
+    <Style Selector="Panel.tabhost Border.tabnotch">
+      <Setter Property="Background" Value="{DynamicResource AphelionChromeBrush}" />
+    </Style>
+
+    <Style Selector="Panel.tabhost:pointerover Border.tabbody">
+      <Setter Property="Background" Value="{DynamicResource AphelionTabHoverBrush}" />
+    </Style>
+    <Style Selector="Panel.tabhost:pointerover Border.tabskirt">
+      <Setter Property="Background" Value="{DynamicResource AphelionTabHoverBrush}" />
+    </Style>
+
+    <Style Selector="Panel.tabhost.active Border.tabbody">
+      <Setter Property="Background" Value="{DynamicResource AphelionTabActiveBrush}" />
+    </Style>
+    <Style Selector="Panel.tabhost.active Border.tabskirt">
       <Setter Property="Background" Value="{DynamicResource AphelionTabActiveBrush}" />
     </Style>
 
@@ -99,24 +111,27 @@
       <Setter Property="Background" Value="{DynamicResource AphelionSurfaceBrush}" />
     </Style>
 
-    <!-- Caption buttons -->
+    <!-- Caption buttons. Glyphs are drawn as vectors rather than font codepoints:
+         Segoe Fluent Icons exists only on Windows. -->
     <Style Selector="Button.caption">
       <Setter Property="Width" Value="46" />
       <Setter Property="Height" Value="40" />
       <Setter Property="Padding" Value="0" />
-      <Setter Property="FontSize" Value="12" />
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="BorderThickness" Value="0" />
       <Setter Property="CornerRadius" Value="0" />
       <Setter Property="HorizontalContentAlignment" Value="Center" />
       <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Opacity" Value="0.8" />
     </Style>
     <Style Selector="Button.caption:pointerover">
-      <Setter Property="Background" Value="{DynamicResource AphelionSurfaceBrush}" />
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="Background" Value="{DynamicResource AphelionTabHoverBrush}" />
     </Style>
     <Style Selector="Button.caption.close:pointerover">
       <Setter Property="Background" Value="#E81123" />
       <Setter Property="Foreground" Value="White" />
+      <Setter Property="Opacity" Value="1" />
     </Style>
 
     <!-- Side rail -->

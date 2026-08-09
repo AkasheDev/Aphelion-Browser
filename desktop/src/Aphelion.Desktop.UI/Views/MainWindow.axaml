@@ -2,6 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
         xmlns:views="using:Aphelion.Desktop.UI.Views"
+        xmlns:chrome="using:Avalonia.Controls.Chrome"
+        xmlns:input="using:Avalonia.Input"
         x:Class="Aphelion.Desktop.UI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Shell.WindowTitle}"
@@ -11,60 +13,87 @@
         MinWidth="820"
         MinHeight="520"
         WindowStartupLocation="CenterScreen"
-        Background="Transparent"
-        WindowDecorations="None">
+        Background="{DynamicResource AphelionSurfaceBrush}"
+        WindowDecorations="None"
+        ExtendClientAreaToDecorationsHint="True">
 
-  <!-- Brand-gradient border marks a running Aphelion window. ClipToBounds keeps the
-       native web view from painting over it. -->
-  <Border BorderBrush="{DynamicResource AphelionWindowBorderBrush}"
-          BorderThickness="1"
-          Background="{DynamicResource AphelionSurfaceBrush}"
-          ClipToBounds="True">
+  <!-- The window frame, its corners, shadow, resize borders and snap behaviour all
+       come from the operating system. Drawing our own looked wrong and broke
+       resizing, and could not behave correctly on Windows, macOS and Linux at once. -->
+  <Panel Background="{DynamicResource AphelionSurfaceBrush}">
 
-    <Grid RowDefinitions="Auto,*" DataContext="{Binding Shell}">
+    <Grid RowDefinitions="Auto,*" DataContext="{Binding Shell}" Margin="{Binding $parent[Window].OffScreenMargin}">
 
-      <!-- Title bar: tabs live here -->
+      <!-- Title bar. The TitleBar role hands dragging, double-click maximise and
+           Windows snap back to the system, which a hand-rolled drag cannot provide. -->
       <Grid Grid.Row="0"
             Name="TitleBar"
             Height="40"
-            ColumnDefinitions="Auto,*,Auto,Auto"
-            Background="{DynamicResource AphelionChromeBrush}">
+            ColumnDefinitions="Auto,Auto,*,Auto,Auto"
+            Background="{DynamicResource AphelionChromeBrush}"
+            chrome:WindowDecorationProperties.ElementRole="TitleBar">
 
-        <Image Grid.Column="0"
+        <!-- Room for macOS traffic lights, which sit on the left. Zero elsewhere. -->
+        <Panel Grid.Column="0"
+               Width="{Binding $parent[Window].WindowDecorationMargin.Left}" />
+
+        <!-- Logo occupies the side rail's width so the first tab lines up with the
+             content area rather than floating over the rail. -->
+        <Image Grid.Column="1"
                Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
-               Width="18"
-               Margin="12,0,8,0"
+               Width="20"
+               Height="20"
+               Margin="14,0"
                VerticalAlignment="Center"
                RenderOptions.BitmapInterpolationMode="HighQuality" />
 
         <!-- Tab strip -->
-        <ScrollViewer Grid.Column="1"
+        <ScrollViewer Grid.Column="2"
                       HorizontalScrollBarVisibility="Auto"
                       VerticalScrollBarVisibility="Disabled">
           <ItemsControl ItemsSource="{Binding Tabs}">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
-                <StackPanel Orientation="Horizontal" Spacing="2" />
+                <StackPanel Orientation="Horizontal" />
               </ItemsPanelTemplate>
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate DataType="vm:TabItemViewModel">
-                <Border Classes.active="{Binding IsActive}"
-                        Classes="tab"
-                        MinWidth="150"
-                        MaxWidth="240"
-                        Height="32"
-                        VerticalAlignment="Bottom"
-                        CornerRadius="8,8,0,0"
-                        Padding="10,0,6,0">
-                  <Grid ColumnDefinitions="Auto,*,Auto">
+                <!-- Chrome-style tab: the active one merges into the content area
+                     below, with the skirt pieces curving away on both sides. -->
+                <Panel Classes.active="{Binding IsActive}"
+                       Classes="tabhost"
+                       MinWidth="160"
+                       MaxWidth="250"
+                       Height="40">
 
-                    <!-- Group colour marker -->
+                  <Grid ColumnDefinitions="8,*,8" VerticalAlignment="Bottom" Height="34">
+
+                    <!-- Left skirt: fills the corner, then the inner curve cuts it -->
+                    <Panel Grid.Column="0" VerticalAlignment="Bottom" Height="10">
+                      <Border Classes="tabskirt" />
+                      <Border Classes="tabnotch" CornerRadius="0,0,8,0" />
+                    </Panel>
+
+                    <Border Grid.Column="1" Classes="tabbody" CornerRadius="8,8,0,0" />
+
+                    <Panel Grid.Column="2" VerticalAlignment="Bottom" Height="10">
+                      <Border Classes="tabskirt" />
+                      <Border Classes="tabnotch" CornerRadius="0,0,0,8" />
+                    </Panel>
+
+                  </Grid>
+
+                  <!-- Content sits above the shape -->
+                  <Grid ColumnDefinitions="Auto,*,Auto"
+                        Margin="14,0,8,0"
+                        VerticalAlignment="Center">
+
                     <Border Grid.Column="0"
                             Width="3"
-                            Height="14"
+                            Height="15"
                             CornerRadius="2"
-                            Margin="0,0,7,0"
+                            Margin="0,0,8,0"
                             IsVisible="{Binding IsGrouped}"
                             Background="{Binding GroupBrush}" />
 
@@ -78,21 +107,22 @@
                             Classes="tabclose"
                             Content="&#x2715;"
                             FontSize="9"
-                            Width="18"
-                            Height="18"
+                            Width="20"
+                            Height="20"
                             Padding="0"
+                            Margin="6,0,0,0"
                             VerticalAlignment="Center"
                             Command="{Binding $parent[ItemsControl].((vm:ShellViewModel)DataContext).CloseTabCommand}"
                             CommandParameter="{Binding}" />
 
                   </Grid>
-                </Border>
+                </Panel>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
           </ItemsControl>
         </ScrollViewer>
 
-        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
 
           <Button Classes="chrome"
                   Content="+"
@@ -107,24 +137,32 @@
 
         </StackPanel>
 
-        <!-- Caption buttons. The window has no system decorations, so these are
-             ours to draw and wire. -->
-        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Stretch">
+        <!-- Caption buttons. The element roles hand their behaviour to the window
+             manager, so these act like real caption buttons rather than ordinary
+             buttons that happen to call Close(). Hidden on macOS, where the system
+             draws traffic lights on the left instead. -->
+        <StackPanel Grid.Column="4"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Stretch"
+                    IsVisible="{Binding !$parent[Window].WindowDecorationMargin.Left}">
 
-          <Button Classes="caption"
-                  Content="&#x2013;"
-                  ToolTip.Tip="Minimize"
-                  Click="OnMinimizeClick" />
+          <Button Classes="caption" ToolTip.Tip="Minimize"
+                  chrome:WindowDecorationProperties.ElementRole="MinimizeButton">
+            <Rectangle Width="10" Height="1" Fill="{Binding $parent[Button].Foreground}" />
+          </Button>
 
-          <Button Classes="caption"
-                  Content="&#x25A1;"
-                  ToolTip.Tip="Maximize"
-                  Click="OnMaximizeClick" />
+          <Button Classes="caption" ToolTip.Tip="Maximize"
+                  chrome:WindowDecorationProperties.ElementRole="MaximizeButton">
+            <Rectangle Width="9" Height="9" StrokeThickness="1"
+                       Stroke="{Binding $parent[Button].Foreground}" />
+          </Button>
 
-          <Button Classes="caption close"
-                  Content="&#x2715;"
-                  ToolTip.Tip="Close"
-                  Click="OnCloseClick" />
+          <Button Classes="caption close" ToolTip.Tip="Close"
+                  chrome:WindowDecorationProperties.ElementRole="CloseButton">
+            <Path Data="M 0,0 L 10,10 M 10,0 L 0,10"
+                  StrokeThickness="1"
+                  Stroke="{Binding $parent[Button].Foreground}" />
+          </Button>
 
         </StackPanel>
 
@@ -152,6 +190,39 @@
 
     </Grid>
 
-  </Border>
+    <!-- Resize handles. Avalonia does not add them for an extended client area, so
+         the window is unresizable without these. Each is a transparent strip on the
+         window edge whose element role tells the window manager which direction it
+         resizes; they sit above the content so they still work over the web view.
+         Hidden when maximised, where the edges belong to the screen. -->
+    <Grid Name="ResizeHandles"
+          IsHitTestVisible="True"
+          IsVisible="{Binding $parent[Window].WindowState,
+                              Converter={x:Static vm:BoolConverters.IsResizableAtEdges}}"
+          RowDefinitions="6,*,6"
+          ColumnDefinitions="6,*,6">
+
+      <Panel Grid.Row="0" Grid.Column="0" Background="Transparent" Cursor="TopLeftCorner"
+             chrome:WindowDecorationProperties.ElementRole="ResizeNW" />
+      <Panel Grid.Row="0" Grid.Column="1" Background="Transparent" Cursor="SizeNorthSouth"
+             chrome:WindowDecorationProperties.ElementRole="ResizeN" />
+      <Panel Grid.Row="0" Grid.Column="2" Background="Transparent" Cursor="TopRightCorner"
+             chrome:WindowDecorationProperties.ElementRole="ResizeNE" />
+
+      <Panel Grid.Row="1" Grid.Column="0" Background="Transparent" Cursor="SizeWestEast"
+             chrome:WindowDecorationProperties.ElementRole="ResizeW" />
+      <Panel Grid.Row="1" Grid.Column="2" Background="Transparent" Cursor="SizeWestEast"
+             chrome:WindowDecorationProperties.ElementRole="ResizeE" />
+
+      <Panel Grid.Row="2" Grid.Column="0" Background="Transparent" Cursor="BottomLeftCorner"
+             chrome:WindowDecorationProperties.ElementRole="ResizeSW" />
+      <Panel Grid.Row="2" Grid.Column="1" Background="Transparent" Cursor="SizeNorthSouth"
+             chrome:WindowDecorationProperties.ElementRole="ResizeS" />
+      <Panel Grid.Row="2" Grid.Column="2" Background="Transparent" Cursor="BottomRightCorner"
+             chrome:WindowDecorationProperties.ElementRole="ResizeSE" />
+
+    </Grid>
+
+  </Panel>
 
 </Window>
