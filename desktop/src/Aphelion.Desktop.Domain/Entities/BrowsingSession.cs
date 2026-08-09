@@ -157,6 +157,11 @@ public sealed class BrowsingSession
     /// Places a tab at an index and gives it the group of whatever it lands among,
     /// which is how dragging into or out of a group changes membership.
     /// </summary>
+    /// <remarks>
+    /// A group is always a contiguous run. A tab that does not belong to a group
+    /// may not be inserted into the middle of one — the insert point slides to the
+    /// nearest edge of the run instead, since a split group cannot be drawn.
+    /// </remarks>
     public bool MoveTabTo(TabId id, int targetIndex, TabGroupId? group)
     {
         var tab = _tabs.Find(t => t.Id == id);
@@ -176,7 +181,23 @@ public sealed class BrowsingSession
         }
 
         _tabs.Remove(tab);
-        _tabs.Insert(Math.Clamp(targetIndex, 0, _tabs.Count), tab);
+
+        var index = Math.Clamp(targetIndex, 0, _tabs.Count);
+
+        // Would this insert split a run it does not belong to?
+        var before = index > 0 ? _tabs[index - 1].GroupId : null;
+        var after = index < _tabs.Count ? _tabs[index].GroupId : null;
+
+        if (before is { } run && before == after && tab.GroupId != run)
+        {
+            // Slide forward to the end of the run.
+            while (index < _tabs.Count && _tabs[index].GroupId == run)
+            {
+                index++;
+            }
+        }
+
+        _tabs.Insert(index, tab);
 
         DiscardEmptyGroups();
         return true;

@@ -435,6 +435,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         }
 
         var desired = new List<object>();
+        var seenGroups = new HashSet<TabGroupId>();
         TabGroupId? run = null;
 
         foreach (var tab in _session.Tabs)
@@ -444,7 +445,14 @@ public sealed partial class ShellViewModel : ViewModelBase
                 if (run != groupId)
                 {
                     run = groupId;
-                    desired.Add(HeaderFor(groupId));
+
+                    // Each chip appears once even if a group were ever split across
+                    // the strip — a duplicate instance would corrupt the in-place
+                    // reconcile below and crash.
+                    if (seenGroups.Add(groupId))
+                    {
+                        desired.Add(HeaderFor(groupId));
+                    }
                 }
 
                 if (_session.FindGroup(groupId)?.IsCollapsed == true)
