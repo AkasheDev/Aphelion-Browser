@@ -55,13 +55,13 @@ public sealed partial class ShellViewModel : ViewModelBase
             "Choose a tab to split with",
             item =>
             {
-                SplitWithTab(item);
                 IsSplitPickerOpen = false;
+                SplitWithTab(item);
             },
             createNew: () =>
             {
-                SplitWithNewTab();
                 IsSplitPickerOpen = false;
+                SplitWithNewTab();
             });
 
         if (!TryRestore())
@@ -305,15 +305,16 @@ public sealed partial class ShellViewModel : ViewModelBase
             return;
         }
 
-        // The picker always opens; the user chooses the second page, never the
-        // application on their behalf. With nothing to offer it still opens, and
-        // its "New tab" row is the way to create one.
+        // Chrome opens the split first and asks what fills the second pane
+        // afterwards, with the picker sitting in that empty pane. The picker's
+        // "New tab" row covers the case where there is nothing to choose.
         var candidates = _session.VisibleTabs
             .Where(t => t.Id != active.Id && !IsHidden(t))
             .ToList();
 
         SplitPicker.SetItems(candidates.Select(ItemFor));
         IsSplitPickerOpen = true;
+        SyncTabs();
     }
 
     /// <summary>Splits the active tab with a freshly opened blank one.</summary>
@@ -330,8 +331,16 @@ public sealed partial class ShellViewModel : ViewModelBase
         SyncTabs();
     }
 
+    /// <summary>
+    /// Dismisses the picker. The second pane closes with it unless a partner was
+    /// chosen, since an empty pane with no picker in it serves no purpose.
+    /// </summary>
     [RelayCommand]
-    private void CloseSplitPicker() => IsSplitPickerOpen = false;
+    private void CloseSplitPicker()
+    {
+        IsSplitPickerOpen = false;
+        SyncTabs();
+    }
 
     [RelayCommand]
     private void ToggleOverflow() => IsOverflowOpen = !IsOverflowOpen;
@@ -646,7 +655,10 @@ public sealed partial class ShellViewModel : ViewModelBase
         SplitBrowser = _session.ActiveTab?.SplitPartnerId is { } partner
             ? _browsers.GetValueOrDefault(partner)
             : null;
-        IsSplit = SplitBrowser is not null;
+
+        // The second pane is also open while the picker is choosing what goes in
+        // it, which is where the picker appears.
+        IsSplit = SplitBrowser is not null || IsSplitPickerOpen;
     }
 
     private void RefreshTabDisplay()

@@ -80,6 +80,7 @@
                 <DataTemplate DataType="vm:TabItemViewModel">
                   <Border Classes="tab"
                           Classes.active="{Binding IsActive}"
+                          Classes.split="{Binding IsSplit}"
                           chrome:WindowDecorationProperties.ElementRole="User">
 
                     <!-- Menu items are always present and enabled or disabled
@@ -109,54 +110,77 @@
                       </ContextMenu>
                     </Border.ContextMenu>
 
-                    <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
+                    <!-- A split pair reads as "favicon name | favicon name". The
+                         halves live in a uniform grid inside one star column, so
+                         each gets exactly half the space when split and the first
+                         takes all of it when not. -->
+                    <Grid ColumnDefinitions="Auto,*,Auto">
 
                       <Border Grid.Column="0"
                               Classes="group-marker"
                               IsVisible="{Binding IsGrouped}"
                               Background="{Binding GroupBrush}" />
 
-                      <Image Grid.Column="1"
-                             Classes="favicon"
-                             Source="{Binding Favicon}"
-                             RenderOptions.BitmapInterpolationMode="HighQuality"
-                             IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                      <!-- The halves. The second column's width is set in code —
+                           a star column keeps its share even when its content is
+                           collapsed, which is what left a gap beside the first
+                           title on ordinary tabs. -->
+                      <Grid Grid.Column="1"
+                            Name="TabHalves"
+                            ColumnDefinitions="*,Auto,Auto"
+                            Tag="{Binding IsSplit}"
+                            PropertyChanged="OnTabHalvesPropertyChanged">
 
-                      <!-- Placeholder until the site's icon arrives, or when it
-                           has none: a blank gap would make the strip jump. -->
-                      <Path Grid.Column="1"
-                            Classes="favicon-fallback"
-                            Width="13" Height="13"
-                            Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
-                            IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNull}}" />
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                          <Image Classes="favicon"
+                                 Source="{Binding Favicon}"
+                                 RenderOptions.BitmapInterpolationMode="HighQuality"
+                                 IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
-                      <!-- The split partner's icon, so a pair reads as one tab
-                           that visibly carries two pages. -->
-                      <StackPanel Grid.Column="2"
-                                  Orientation="Horizontal"
-                                  VerticalAlignment="Center"
-                                  IsVisible="{Binding IsSplit}">
-                        <Border Classes="split-divider" />
-                        <Image Classes="favicon"
-                               Source="{Binding PartnerFavicon}"
-                               RenderOptions.BitmapInterpolationMode="HighQuality"
-                               IsVisible="{Binding PartnerFavicon, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                        <Path Classes="favicon-fallback"
-                              Width="13" Height="13"
-                              Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
-                              IsVisible="{Binding PartnerFavicon, Converter={x:Static ObjectConverters.IsNull}}" />
-                      </StackPanel>
+                          <!-- Placeholder until the site's icon arrives, or when it
+                               has none: a blank gap would make the strip jump. -->
+                          <Path Classes="favicon-fallback"
+                                Width="13" Height="13"
+                                Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
+                                IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNull}}" />
 
-                      <!-- Squeezed down to a single character as tabs narrow, but
-                           never away entirely: the favicon, one letter and the
-                           close button are what the narrowest tab must keep. -->
-                      <controls:MarqueeTextBlock Grid.Column="3"
-                                                 Classes="tab-title"
-                                                 MinWidth="10"
-                                                 Text="{Binding Title}"
-                                                 IsScrollEnabled="{Binding IsActive}" />
+                          <!-- Squeezed to a single character as tabs narrow, but
+                               never away: favicon, one letter and the close button
+                               are what the narrowest tab keeps. -->
+                          <controls:MarqueeTextBlock Classes="tab-title"
+                                                     MinWidth="10"
+                                                     Text="{Binding Title}"
+                                                     IsScrollEnabled="{Binding IsActive}" />
+                        </StackPanel>
 
-                      <Button Grid.Column="4"
+                        <Border Grid.Column="1"
+                                Classes="split-divider"
+                                IsVisible="{Binding IsSplit}" />
+
+                        <StackPanel Grid.Column="2"
+                                    Orientation="Horizontal"
+                                    IsVisible="{Binding IsSplit}">
+                          <Image Classes="favicon"
+                                 Source="{Binding PartnerFavicon}"
+                                 RenderOptions.BitmapInterpolationMode="HighQuality"
+                                 IsVisible="{Binding PartnerFavicon, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                          <Path Classes="favicon-fallback"
+                                Width="13" Height="13"
+                                Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
+                                IsVisible="{Binding ShowsPartnerFallback}" />
+
+                          <!-- Scrolls on its own side, exactly as the primary
+                               title does, so a long partner name is readable. -->
+                          <controls:MarqueeTextBlock Classes="tab-title-partner"
+                                                     MinWidth="10"
+                                                     Text="{Binding PartnerTitle}"
+                                                     IsScrollEnabled="{Binding IsActive}" />
+                        </StackPanel>
+
+                      </Grid>
+
+                      <Button Grid.Column="2"
                               Classes="icon small"
                               ToolTip.Tip="Close tab"
                               Margin="6,0,0,0"
@@ -292,6 +316,9 @@
          split view is on. The third column's width is driven from code-behind,
          since ColumnDefinitions sit outside the visual tree and cannot bind.
          The two panels float above it, dismissed by clicking the scrim. -->
+    <!-- One toolbar for the window, above both panes -->
+    <views:BrowserToolbarView DockPanel.Dock="Top" />
+
     <Panel>
 
       <Grid Name="BrowserHost">
@@ -308,9 +335,31 @@
                     Background="{DynamicResource DividerBrush}"
                     IsVisible="{Binding Shell.IsSplit}" />
 
-      <ContentControl Grid.Column="2"
-                      Content="{Binding Shell.SplitBrowser}"
-                      IsVisible="{Binding Shell.IsSplit}" />
+      <!-- The second pane: the partner's page once chosen, and before that the
+           picker asking what to put there — as Chrome does, rather than a modal
+           floating over the whole window. -->
+      <Panel Grid.Column="2" IsVisible="{Binding Shell.IsSplit}">
+
+        <ContentControl Content="{Binding Shell.SplitBrowser}"
+                        IsVisible="{Binding !Shell.IsSplitPickerOpen}" />
+
+        <Panel Background="{DynamicResource SurfaceBaseBrush}"
+               IsVisible="{Binding Shell.IsSplitPickerOpen}">
+          <Button Classes="icon"
+                  HorizontalAlignment="Right"
+                  VerticalAlignment="Top"
+                  Margin="8"
+                  ToolTip.Tip="Cancel"
+                  Command="{Binding Shell.CloseSplitPickerCommand}">
+            <Path Classes="glyph" Data="M0,0 L10,10 M10,0 L0,10" />
+          </Button>
+
+          <views:TabListView DataContext="{Binding Shell.SplitPicker}"
+                             HorizontalAlignment="Center"
+                             VerticalAlignment="Center" />
+        </Panel>
+
+      </Panel>
       </Grid>
 
       <!-- Overflow panel: tabs that did not fit the strip -->
@@ -321,15 +370,6 @@
                            HorizontalAlignment="Right"
                            VerticalAlignment="Top"
                            Margin="0,8,12,0" />
-      </Panel>
-
-      <!-- Split picker: which tab to show in the second pane -->
-      <Panel Classes="scrim"
-             IsVisible="{Binding Shell.IsSplitPickerOpen}"
-             PointerPressed="OnScrimPressed">
-        <views:TabListView DataContext="{Binding Shell.SplitPicker}"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center" />
       </Panel>
 
     </Panel>

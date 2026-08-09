@@ -49,6 +49,32 @@ public sealed partial class TabItemViewModel(BrowserTab tab, IFaviconLoader? fav
     [ObservableProperty]
     private bool _isSplit;
 
+    /// <summary>The split partner's title, shown after its own favicon.</summary>
+    [ObservableProperty]
+    private string _partnerTitle = string.Empty;
+
+    /// <summary>True when the partner's placeholder glyph should stand in for a
+    /// missing icon — only meaningful while this tab is split.</summary>
+    public bool ShowsPartnerFallback => IsSplit && PartnerFavicon is null;
+
+    /// <summary>
+    /// Column widths for the tab's contents. The two titles share the space when
+    /// split; otherwise the partner's column takes none, so an ordinary tab does
+    /// not leave half its width blank.
+    /// </summary>
+    public string TitleColumns => IsSplit
+        ? "Auto,Auto,*,Auto,Auto,*,Auto"
+        : "Auto,Auto,*,Auto,Auto,Auto,Auto";
+
+    partial void OnIsSplitChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowsPartnerFallback));
+        OnPropertyChanged(nameof(TitleColumns));
+    }
+
+    partial void OnPartnerFaviconChanged(Bitmap? value) =>
+        OnPropertyChanged(nameof(ShowsPartnerFallback));
+
     /// <summary>
     /// Brush for the owning group's colour, or null when ungrouped.
     /// </summary>
@@ -64,11 +90,10 @@ public sealed partial class TabItemViewModel(BrowserTab tab, IFaviconLoader? fav
     {
         IsSplit = Tab.SplitPartnerId is not null;
 
-        // A split pair reads as one tab carrying two pages, so the label names
-        // both rather than hiding that the second one is there.
-        Title = IsSplit && partner is not null
-            ? $"{Tab.DisplayTitle}  |  {partner.DisplayTitle}"
-            : Tab.DisplayTitle;
+        // A split pair reads as "favicon name / favicon name": each half's icon
+        // sits directly before its own title.
+        Title = Tab.DisplayTitle;
+        PartnerTitle = partner?.DisplayTitle ?? string.Empty;
 
         IsLoading = Tab.LoadState == TabLoadState.Loading;
         GroupBrush = groupColor is null ? null : GroupBrushes.For(groupColor.Value);

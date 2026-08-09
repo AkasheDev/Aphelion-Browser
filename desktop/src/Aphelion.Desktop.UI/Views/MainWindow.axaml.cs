@@ -90,6 +90,33 @@ public partial class MainWindow : Window
             : new GridLength(0);
     }
 
+    /// <summary>
+    /// Gives the partner's half of a tab an equal share of the width, and none at
+    /// all when the tab is not split. A star column keeps its share even when its
+    /// content is collapsed, which would leave a gap beside the first title.
+    /// </summary>
+    /// <summary>
+    /// Applies the split layout whenever the tab's split state arrives or
+    /// changes. Tag carries IsSplit purely so this fires; DataContext covers the
+    /// container being recycled onto a different tab.
+    /// </summary>
+    private void OnTabHalvesPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    {
+        if (e.Property != TagProperty && e.Property != DataContextProperty)
+        {
+            return;
+        }
+
+        if (sender is not Grid { ColumnDefinitions.Count: 3 } halves)
+        {
+            return;
+        }
+
+        halves.ColumnDefinitions[2].Width = halves.DataContext is TabItemViewModel { IsSplit: true }
+            ? new GridLength(1, GridUnitType.Star)
+            : GridLength.Auto;
+    }
+
     /// <summary>Clicking the backdrop dismisses whichever panel is open.</summary>
     private void OnScrimPressed(object? sender, PointerPressedEventArgs e)
     {
