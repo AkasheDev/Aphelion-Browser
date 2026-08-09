@@ -12,8 +12,7 @@
         MinHeight="520"
         WindowStartupLocation="CenterScreen"
         Background="Transparent"
-        ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaTitleBarHeightHint="-1">
+        WindowDecorations="None">
 
   <!-- Brand-gradient border marks a running Aphelion window. ClipToBounds keeps the
        native web view from painting over it. -->
@@ -108,8 +107,26 @@
 
         </StackPanel>
 
-        <!-- Space reserved for the system caption buttons -->
-        <Panel Grid.Column="3" Width="140" />
+        <!-- Caption buttons. The window has no system decorations, so these are
+             ours to draw and wire. -->
+        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Stretch">
+
+          <Button Classes="caption"
+                  Content="&#x2013;"
+                  ToolTip.Tip="Minimize"
+                  Click="OnMinimizeClick" />
+
+          <Button Classes="caption"
+                  Content="&#x25A1;"
+                  ToolTip.Tip="Maximize"
+                  Click="OnMaximizeClick" />
+
+          <Button Classes="caption close"
+                  Content="&#x2715;"
+                  ToolTip.Tip="Close"
+                  Click="OnCloseClick" />
+
+        </StackPanel>
 
       </Grid>
 

@@ -81,6 +81,16 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnMinimizeClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+        WindowState = WindowState.Minimized;
+
+    private void OnMaximizeClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+        WindowState = WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+
+    private void OnCloseClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => Close();
+
     /// <summary>
     /// True when the visual is a button or sits inside one. FindAncestorOfType
     /// excludes the element itself, so a click landing directly on a Button would
