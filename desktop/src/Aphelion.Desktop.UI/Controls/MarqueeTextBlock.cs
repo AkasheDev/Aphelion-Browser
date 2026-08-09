@@ -70,6 +70,25 @@ public sealed class MarqueeTextBlock : TemplatedControl, IDisposable
         Restart();
     }
 
+    /// <summary>
+    /// Never asks for more width than it is offered.
+    /// </summary>
+    /// <remarks>
+    /// The inner TextBlock measures against the full length of the text, which
+    /// would let a long title push past the tab and over its neighbour. The
+    /// overflow is what scrolls, so the control itself must stay within bounds.
+    /// </remarks>
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var desired = base.MeasureOverride(availableSize);
+
+        return new Size(
+            double.IsInfinity(availableSize.Width)
+                ? desired.Width
+                : Math.Min(desired.Width, availableSize.Width),
+            desired.Height);
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);

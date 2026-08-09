@@ -98,16 +98,52 @@ public sealed partial class ShellViewModel : ViewModelBase
     [ObservableProperty]
     private TabItemViewModel? _activeTab;
 
-    /// <summary>The browser view for the active tab, shown in the content area.</summary>
+    /// <summary>The browser in the left pane.</summary>
     [ObservableProperty]
     private BrowserViewModel? _activeBrowser;
 
-    /// <summary>The browser shown beside the active one while split view is on.</summary>
+    /// <summary>The browser in the right pane while split view is on.</summary>
     [ObservableProperty]
     private BrowserViewModel? _splitBrowser;
 
     [ObservableProperty]
     private bool _isSplit;
+
+    /// <summary>
+    /// True when the right pane holds the focus. Chrome gives one pane of a split
+    /// the focus at a time: the toolbar drives that pane, and clicking the other
+    /// hands it over.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isRightPaneFocused;
+
+    /// <summary>
+    /// The browser the toolbar acts on: the focused pane, which is the left one
+    /// unless the user clicked into the right.
+    /// </summary>
+    public BrowserViewModel? FocusedBrowser =>
+        IsSplit && IsRightPaneFocused ? SplitBrowser : ActiveBrowser;
+
+    partial void OnIsRightPaneFocusedChanged(bool value) =>
+        OnPropertyChanged(nameof(FocusedBrowser));
+
+    partial void OnActiveBrowserChanged(BrowserViewModel? value) =>
+        OnPropertyChanged(nameof(FocusedBrowser));
+
+    partial void OnSplitBrowserChanged(BrowserViewModel? value) =>
+        OnPropertyChanged(nameof(FocusedBrowser));
+
+    partial void OnIsSplitChanged(bool value) =>
+        OnPropertyChanged(nameof(FocusedBrowser));
+
+    /// <summary>Moves the focus to a pane, as clicking into it does in Chrome.</summary>
+    public void FocusPane(bool right)
+    {
+        if (IsSplit)
+        {
+            IsRightPaneFocused = right;
+        }
+    }
 
     [ObservableProperty]
     private string _windowTitle = "Aphelion";
@@ -659,6 +695,12 @@ public sealed partial class ShellViewModel : ViewModelBase
         // The second pane is also open while the picker is choosing what goes in
         // it, which is where the picker appears.
         IsSplit = SplitBrowser is not null || IsSplitPickerOpen;
+
+        // With no right pane there is nothing for it to hold.
+        if (!IsSplit)
+        {
+            IsRightPaneFocused = false;
+        }
     }
 
     private void RefreshTabDisplay()

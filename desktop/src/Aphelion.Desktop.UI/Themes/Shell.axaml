@@ -341,6 +341,27 @@
     <Setter Property="Margin" Value="8,4" />
   </Style>
 
+  <!-- ===== Split panes =====
+
+       Only a split shows the focus border; a single pane has nothing to
+       distinguish itself from. -->
+
+  <Style Selector="Border.pane">
+    <Setter Property="BorderThickness" Value="0" />
+    <!-- The web view is a native control and will happily paint past its
+         bounds; without clipping the right pane spills over the window edge. -->
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <Style Selector="Border.pane.split">
+    <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="Border.pane.split.focused">
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandPrimaryBrush}" />
+  </Style>
+
   <!-- ===== Floating panels ===== -->
 
   <!-- Dimmed backdrop that also catches the click that dismisses the panel -->

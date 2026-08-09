@@ -34,6 +34,7 @@ public partial class MainWindow : Window
         // header is a Border, not a Button, because a Button would swallow the
         // press the drag handler needs.
         AddHandler(PointerReleasedEvent, OnPointerReleasedTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        HookPaneFocus();
     }
 
     private ShellViewModel? Shell => (DataContext as MainWindowViewModel)?.Shell;
@@ -91,30 +92,43 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Gives the partner's half of a tab an equal share of the width, and none at
-    /// all when the tab is not split. A star column keeps its share even when its
-    /// content is collapsed, which would leave a gap beside the first title.
+    /// Clicking a pane gives it the focus, so the toolbar acts on it. Wired as a
+    /// tunnelling handler on the window: a bubbling handler on the pane never
+    /// fires, because the native web view consumes the event before it rises.
     /// </summary>
-    /// <summary>
-    /// Applies the split layout whenever the tab's split state arrives or
-    /// changes. Tag carries IsSplit purely so this fires; DataContext covers the
-    /// container being recycled onto a different tab.
-    /// </summary>
-    private void OnTabHalvesPropertyChanged(object? sender, AvaloniaPropertyChangedEventArgs e)
+    private void HookPaneFocus() =>
+        AddHandler(
+            PointerPressedEvent,
+            (_, e) =>
+            {
+                if (Shell is not { IsSplit: true } shell || e.Source is not Visual source)
+                {
+                    return;
+                }
+
+                if (this.FindControl<Border>("RightPane") is { } right && IsWithin(source, right))
+                {
+                    shell.FocusPane(right: true);
+                }
+                else if (this.FindControl<Border>("LeftPane") is { } left && IsWithin(source, left))
+                {
+                    shell.FocusPane(right: false);
+                }
+            },
+            Avalonia.Interactivity.RoutingStrategies.Tunnel);
+
+    /// <summary>True when <paramref name="candidate"/> is, or sits inside, <paramref name="container"/>.</summary>
+    private static bool IsWithin(Visual candidate, Visual container)
     {
-        if (e.Property != TagProperty && e.Property != DataContextProperty)
+        for (var v = candidate; v is not null; v = v.GetVisualParent())
         {
-            return;
+            if (ReferenceEquals(v, container))
+            {
+                return true;
+            }
         }
 
-        if (sender is not Grid { ColumnDefinitions.Count: 3 } halves)
-        {
-            return;
-        }
-
-        halves.ColumnDefinitions[2].Width = halves.DataContext is TabItemViewModel { IsSplit: true }
-            ? new GridLength(1, GridUnitType.Star)
-            : GridLength.Auto;
+        return false;
     }
 
     /// <summary>Clicking the backdrop dismisses whichever panel is open.</summary>

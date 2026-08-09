@@ -121,17 +121,13 @@
                               IsVisible="{Binding IsGrouped}"
                               Background="{Binding GroupBrush}" />
 
-                      <!-- The halves. The second column's width is set in code —
-                           a star column keeps its share even when its content is
-                           collapsed, which is what left a gap beside the first
-                           title on ordinary tabs. -->
-                      <Grid Grid.Column="1"
-                            Name="TabHalves"
-                            ColumnDefinitions="*,Auto,Auto"
-                            Tag="{Binding IsSplit}"
-                            PropertyChanged="OnTabHalvesPropertyChanged">
+                      <!-- The halves. A custom panel, because a Grid cannot do
+                           this: Auto columns let a long title measure at full
+                           length and spill over its neighbour, while star columns
+                           keep their share even when collapsed and leave a gap. -->
+                      <controls:SplitTabPanel Grid.Column="1">
 
-                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <StackPanel Classes="half" Orientation="Horizontal">
                           <Image Classes="favicon"
                                  Source="{Binding Favicon}"
                                  RenderOptions.BitmapInterpolationMode="HighQuality"
@@ -153,11 +149,10 @@
                                                      IsScrollEnabled="{Binding IsActive}" />
                         </StackPanel>
 
-                        <Border Grid.Column="1"
-                                Classes="split-divider"
+                        <Border Classes="split-divider"
                                 IsVisible="{Binding IsSplit}" />
 
-                        <StackPanel Grid.Column="2"
+                        <StackPanel Classes="half"
                                     Orientation="Horizontal"
                                     IsVisible="{Binding IsSplit}">
                           <Image Classes="favicon"
@@ -178,7 +173,7 @@
                                                      IsScrollEnabled="{Binding IsActive}" />
                         </StackPanel>
 
-                      </Grid>
+                      </controls:SplitTabPanel>
 
                       <Button Grid.Column="2"
                               Classes="icon small"
@@ -328,7 +323,15 @@
         <ColumnDefinition Width="0" />
       </Grid.ColumnDefinitions>
 
-      <ContentControl Grid.Column="0" Content="{Binding Shell.ActiveBrowser}" />
+      <!-- Clicking a pane gives it the focus, and the toolbar follows it — the
+           inactive pane carries a lighter border, as in Chrome. -->
+      <Border Grid.Column="0"
+              Name="LeftPane"
+              Classes="pane"
+              Classes.focused="{Binding !Shell.IsRightPaneFocused}"
+              Classes.split="{Binding Shell.IsSplit}">
+        <ContentControl Content="{Binding Shell.ActiveBrowser}" />
+      </Border>
 
       <GridSplitter Grid.Column="1"
                     Width="4"
@@ -338,28 +341,35 @@
       <!-- The second pane: the partner's page once chosen, and before that the
            picker asking what to put there — as Chrome does, rather than a modal
            floating over the whole window. -->
-      <Panel Grid.Column="2" IsVisible="{Binding Shell.IsSplit}">
+      <Border Grid.Column="2"
+              Name="RightPane"
+              Classes="pane"
+              Classes.focused="{Binding Shell.IsRightPaneFocused}"
+              Classes.split="{Binding Shell.IsSplit}"
+              IsVisible="{Binding Shell.IsSplit}">
+        <Panel>
 
-        <ContentControl Content="{Binding Shell.SplitBrowser}"
-                        IsVisible="{Binding !Shell.IsSplitPickerOpen}" />
+          <ContentControl Content="{Binding Shell.SplitBrowser}"
+                          IsVisible="{Binding !Shell.IsSplitPickerOpen}" />
 
-        <Panel Background="{DynamicResource SurfaceBaseBrush}"
-               IsVisible="{Binding Shell.IsSplitPickerOpen}">
-          <Button Classes="icon"
-                  HorizontalAlignment="Right"
-                  VerticalAlignment="Top"
-                  Margin="8"
-                  ToolTip.Tip="Cancel"
-                  Command="{Binding Shell.CloseSplitPickerCommand}">
-            <Path Classes="glyph" Data="M0,0 L10,10 M10,0 L0,10" />
-          </Button>
+          <Panel Background="{DynamicResource SurfaceBaseBrush}"
+                 IsVisible="{Binding Shell.IsSplitPickerOpen}">
+            <Button Classes="icon"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="8"
+                    ToolTip.Tip="Cancel"
+                    Command="{Binding Shell.CloseSplitPickerCommand}">
+              <Path Classes="glyph" Data="M0,0 L10,10 M10,0 L0,10" />
+            </Button>
 
-          <views:TabListView DataContext="{Binding Shell.SplitPicker}"
-                             HorizontalAlignment="Center"
-                             VerticalAlignment="Center" />
+            <views:TabListView DataContext="{Binding Shell.SplitPicker}"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+          </Panel>
+
         </Panel>
-
-      </Panel>
+      </Border>
       </Grid>
 
       <!-- Overflow panel: tabs that did not fit the strip -->
