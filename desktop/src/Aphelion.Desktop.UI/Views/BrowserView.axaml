@@ -1,0 +1,88 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+             xmlns:web="using:Avalonia.Controls"
+             x:Class="Aphelion.Desktop.UI.Views.BrowserView"
+             x:DataType="vm:BrowserViewModel">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Toolbar -->
+    <Grid Grid.Row="0"
+          ColumnDefinitions="Auto,Auto,Auto,*"
+          Margin="8"
+          ColumnSpacing="4">
+
+      <Button Grid.Column="0"
+              Command="{Binding GoBackCommand}"
+              Content="&#x2190;"
+              ToolTip.Tip="Back"
+              Width="36" />
+
+      <Button Grid.Column="1"
+              Command="{Binding GoForwardCommand}"
+              Content="&#x2192;"
+              ToolTip.Tip="Forward"
+              Width="36" />
+
+      <Button Grid.Column="2"
+              Content="&#x21BB;"
+              ToolTip.Tip="Reload"
+              Width="36"
+              Command="{Binding ReloadCommand}"
+              IsVisible="{Binding !IsLoading}" />
+
+      <Button Grid.Column="2"
+              Content="&#x2715;"
+              ToolTip.Tip="Stop"
+              Width="36"
+              Command="{Binding StopLoadingCommand}"
+              IsVisible="{Binding IsLoading}" />
+
+      <TextBox Grid.Column="3"
+               Text="{Binding AddressText}"
+               PlaceholderText="Search or enter address"
+               VerticalContentAlignment="Center">
+        <TextBox.KeyBindings>
+          <KeyBinding Gesture="Enter" Command="{Binding NavigateCommand}" />
+        </TextBox.KeyBindings>
+      </TextBox>
+
+    </Grid>
+
+    <!-- Content -->
+    <Panel Grid.Row="1">
+
+      <web:NativeWebView Name="WebView"
+                         IsVisible="{Binding !IsBlank}" />
+
+      <!-- New tab page, shown until the first navigation -->
+      <StackPanel IsVisible="{Binding IsBlank}"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  Spacing="8">
+        <TextBlock Text="Aphelion"
+                   FontSize="40"
+                   FontWeight="SemiBold"
+                   HorizontalAlignment="Center"
+                   Foreground="{DynamicResource AphelionBrandPrimaryBrush}" />
+        <TextBlock Text="Search or enter an address to begin."
+                   FontSize="14"
+                   Opacity="0.7"
+                   HorizontalAlignment="Center" />
+      </StackPanel>
+
+    </Panel>
+
+    <!-- Status bar -->
+    <Border Grid.Row="2"
+            IsVisible="{Binding StatusText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+            Padding="8,4">
+      <TextBlock Text="{Binding StatusText}"
+                 FontSize="12"
+                 Opacity="0.7" />
+    </Border>
+
+  </Grid>
+
+</UserControl>

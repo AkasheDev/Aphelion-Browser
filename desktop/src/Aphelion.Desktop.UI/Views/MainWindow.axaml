@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+        xmlns:views="using:Aphelion.Desktop.UI.Views"
         x:Class="Aphelion.Desktop.UI.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
@@ -10,18 +11,6 @@
         MinHeight="480"
         WindowStartupLocation="CenterScreen">
 
-  <StackPanel HorizontalAlignment="Center"
-              VerticalAlignment="Center"
-              Spacing="12">
-    <TextBlock Text="{Binding Title}"
-               FontSize="40"
-               FontWeight="SemiBold"
-               HorizontalAlignment="Center"
-               Foreground="{DynamicResource AphelionBrandPrimaryBrush}" />
-    <TextBlock Text="{Binding Status}"
-               FontSize="14"
-               Opacity="0.7"
-               HorizontalAlignment="Center" />
-  </StackPanel>
+  <views:BrowserView DataContext="{Binding Browser}" />
 
 </Window>
