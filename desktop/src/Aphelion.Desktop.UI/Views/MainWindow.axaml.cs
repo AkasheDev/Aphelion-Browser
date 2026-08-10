@@ -131,12 +131,12 @@ public partial class MainWindow : Window
             return;
         }
 
-        var address = ShellViewModel.AddressOf(tab);
+        var transfer = shell.CaptureTransfer(tab);
         shell.DetachTab(tab);
         shell.CloseOverflowCommand.Execute(null);
 
         manager.TearOff(
-            address,
+            transfer,
             new PixelPoint(Position.X + 40, Position.Y + 40),
             new Size(Width, Height));
     }
@@ -217,22 +217,22 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The session index a tab dropped at this screen point should take. Group
-    /// chips occupy strip space but no session index, so only tabs are counted.
+    /// The visible tab that should follow an entry dropped at this screen point.
+    /// Identity remains correct when the strip omits overflow, collapsed group
+    /// members and hidden split partners; a visual integer index does not.
     /// </summary>
-    public int DropIndexForScreenPoint(PixelPoint screenPoint)
+    public TabItemViewModel? DropBeforeForScreenPoint(PixelPoint screenPoint)
     {
         if (this.FindControl<ItemsControl>("TabStrip") is not { } strip)
         {
-            return 0;
+            return null;
         }
 
         var local = this.PointToClient(screenPoint);
-        var index = 0;
 
         foreach (var container in strip.GetRealizedContainers())
         {
-            if (container.DataContext is not TabItemViewModel)
+            if (container.DataContext is not TabItemViewModel tab)
             {
                 continue;
             }
@@ -240,13 +240,11 @@ public partial class MainWindow : Window
             if (container.TranslatePoint(default, this) is { } origin &&
                 local.X < origin.X + container.Bounds.Width / 2)
             {
-                return index;
+                return tab;
             }
-
-            index++;
         }
 
-        return index;
+        return null;
     }
 
     /// <summary>

@@ -5,7 +5,8 @@ public sealed record SessionTabSnapshot(
     string? Address,
     string? GroupName,
     string? GroupColor,
-    bool GroupCollapsed);
+    bool GroupCollapsed,
+    int? SplitPartnerIndex = null);
 
 /// <summary>
 /// The open-tab state persisted between runs so the browser reopens where the

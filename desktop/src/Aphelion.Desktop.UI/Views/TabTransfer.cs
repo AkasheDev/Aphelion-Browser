@@ -46,18 +46,18 @@ internal static class TabTransfer
 
         if (target is not null)
         {
-            var index = target.DropIndexForScreenPoint(screenPoint);
+            var before = target.DropBeforeForScreenPoint(screenPoint);
             var group = target.GroupHintForScreenPoint(screenPoint);
 
             if (ReferenceEquals(target, owner))
             {
-                shell.DropTab(dragged, index, group);
+                shell.DropTab(dragged, before, group);
                 return true;
             }
 
-            var address = ShellViewModel.AddressOf(dragged);
+            var transfer = shell.CaptureTransfer(dragged);
             shell.DetachTab(dragged);
-            Adopt(target, address, index);
+            Adopt(target, transfer, before, group);
 
             // The last tab left with it, so the window it came from has nothing
             // to show.
@@ -77,7 +77,7 @@ internal static class TabTransfer
             return false;
         }
 
-        var torn = ShellViewModel.AddressOf(dragged);
+        var torn = shell.CaptureTransfer(dragged);
         shell.DetachTab(dragged);
 
         manager.TearOff(
@@ -88,11 +88,15 @@ internal static class TabTransfer
         return true;
     }
 
-    private static void Adopt(MainWindow target, PageAddress? address, int index)
+    private static void Adopt(
+        MainWindow target,
+        TabTransferSnapshot transfer,
+        TabItemViewModel? before,
+        TabGroupId? group)
     {
         if (target.DataContext is MainWindowViewModel { Shell: { } shell })
         {
-            shell.AdoptTab(address, index);
+            shell.AdoptTab(transfer, before, group);
         }
     }
 }

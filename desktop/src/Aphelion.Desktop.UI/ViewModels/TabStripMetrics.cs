@@ -51,4 +51,15 @@ public static class TabStripMetrics
     /// begins, and the panel still shrinks whatever it is given to fit.
     /// </summary>
     public const double ChipCost = 96;
+
+    /// <summary>
+    /// Estimates a chip from the text it actually contains. The panel owns the
+    /// exact font measurement; this keeps overflow decisions close enough that a
+    /// long group name cannot consume several tabs' unbudgeted space.
+    /// </summary>
+    public static double ChipCostFor(string? name)
+    {
+        var characters = string.IsNullOrEmpty(name) ? 5 : name.Length;
+        return Math.Clamp(30 + characters * 7d, 64, 220);
+    }
 }

@@ -222,6 +222,85 @@ public sealed class BrowsingSession
     }
 
     /// <summary>
+    /// Moves one visible tab entry before another. A split pair is one visible
+    /// entry, so both halves move and change group together.
+    /// </summary>
+    /// <remarks>
+    /// The UI must identify a drop by tab identity, not by an integer from the
+    /// rendered strip. Collapsed groups, overflow and hidden split partners mean a
+    /// visual index is not a session index.
+    /// </remarks>
+    public bool MoveVisibleTabBefore(TabId id, TabId? beforeId, TabGroupId? group)
+    {
+        var owner = VisibleOwner(id);
+
+        if (owner is null)
+        {
+            return false;
+        }
+
+        var block = SplitBlock(owner);
+        var before = beforeId is { } targetId ? VisibleOwner(targetId) : null;
+
+        if (before is not null && block.Contains(before))
+        {
+            return false;
+        }
+
+        var validGroup = group is { } groupId && _groups.ContainsKey(groupId)
+            ? groupId
+            : (TabGroupId?)null;
+
+        foreach (var member in block)
+        {
+            if (validGroup is { } destination)
+            {
+                member.JoinGroup(destination);
+            }
+            else
+            {
+                member.LeaveGroup();
+            }
+
+            _tabs.Remove(member);
+        }
+
+        var index = before is null ? _tabs.Count : _tabs.IndexOf(before);
+
+        if (index < 0)
+        {
+            index = _tabs.Count;
+        }
+
+        // An ungrouped entry may not split another group's contiguous run.
+        var beforeGroup = index > 0 ? _tabs[index - 1].GroupId : null;
+        var afterGroup = index < _tabs.Count ? _tabs[index].GroupId : null;
+
+        if (beforeGroup is { } run && beforeGroup == afterGroup && validGroup != run)
+        {
+            var start = index;
+
+            while (start > 0 && _tabs[start - 1].GroupId == run)
+            {
+                start--;
+            }
+
+            var end = index;
+
+            while (end < _tabs.Count && _tabs[end].GroupId == run)
+            {
+                end++;
+            }
+
+            index = index - start <= end - index ? start : end;
+        }
+
+        _tabs.InsertRange(index, block);
+        DiscardEmptyGroups();
+        return true;
+    }
+
+    /// <summary>
     /// Tabs the user should see listed: a split pair counts once, represented by
     /// its left half. Everything that presents tabs — the strip, the overflow
     /// panel, the split picker — works from this rather than <see cref="Tabs"/>.
@@ -330,20 +409,29 @@ public sealed class BrowsingSession
     /// </summary>
     public bool AddToGroup(TabId tabId, TabGroupId groupId)
     {
-        var tab = _tabs.Find(t => t.Id == tabId);
+        var tab = VisibleOwner(tabId);
 
         if (tab is null || !_groups.ContainsKey(groupId))
         {
             return false;
         }
 
-        tab.JoinGroup(groupId);
+        var block = SplitBlock(tab);
 
-        var lastIndex = _tabs.FindLastIndex(t => t.GroupId == groupId && t.Id != tabId);
-
-        if (lastIndex >= 0)
+        foreach (var member in block)
         {
-            MoveTab(tabId, lastIndex + 1);
+            member.JoinGroup(groupId);
+        }
+
+        if (_tabs.Exists(t => t.GroupId == groupId && !block.Contains(t)))
+        {
+            foreach (var member in block)
+            {
+                _tabs.Remove(member);
+            }
+
+            var lastIndex = _tabs.FindLastIndex(t => t.GroupId == groupId);
+            _tabs.InsertRange(lastIndex + 1, block);
         }
 
         return true;
@@ -351,16 +439,52 @@ public sealed class BrowsingSession
 
     public bool RemoveFromGroup(TabId tabId)
     {
-        var tab = _tabs.Find(t => t.Id == tabId);
+        var tab = VisibleOwner(tabId);
 
-        if (tab?.GroupId is null)
+        if (tab?.GroupId is not { } oldGroup)
         {
             return false;
         }
 
-        tab.LeaveGroup();
+        var block = SplitBlock(tab);
+        var originalIndex = _tabs.IndexOf(block[0]);
+
+        foreach (var member in block)
+        {
+            _tabs.Remove(member);
+            member.LeaveGroup();
+        }
+
+        // Removing an entry from the middle of a group must not leave the
+        // remaining members split into two runs. Place it just after that group,
+        // matching the position browsers use when a tab is ungrouped.
+        var lastMember = _tabs.FindLastIndex(t => t.GroupId == oldGroup);
+        var insertion = lastMember >= 0
+            ? lastMember + 1
+            : Math.Clamp(originalIndex, 0, _tabs.Count);
+        _tabs.InsertRange(insertion, block);
+
         DiscardEmptyGroups();
         return true;
+    }
+
+    private BrowserTab? VisibleOwner(TabId id)
+    {
+        var tab = _tabs.Find(t => t.Id == id);
+        return tab?.IsSplitPartner == true ? SplitOwnerOf(id) : tab;
+    }
+
+    private List<BrowserTab> SplitBlock(BrowserTab owner)
+    {
+        var block = new List<BrowserTab> { owner };
+
+        if (owner.SplitPartnerId is { } partnerId &&
+            _tabs.Find(t => t.Id == partnerId) is { } partner)
+        {
+            block.Add(partner);
+        }
+
+        return block;
     }
 
     /// <summary>Closes every tab in a group and discards the group.</summary>

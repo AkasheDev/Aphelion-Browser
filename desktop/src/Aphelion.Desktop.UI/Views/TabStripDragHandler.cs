@@ -1,5 +1,6 @@
 using System.Globalization;
 using Aphelion.Desktop.UI.ViewModels;
+using Aphelion.Desktop.Domain.ValueObjects;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -50,6 +51,9 @@ internal sealed class TabStripDragHandler
     private TabItemViewModel? _dragging;
     private Point _pressOrigin;
     private bool _isDragging;
+    private TabId? _lastBeforeId;
+    private TabGroupId? _lastGroup;
+    private bool _hasDropSignature;
 
     /// <summary>Where the dragged tab's container sat when the drag began, in strip space.</summary>
     private double _dragOriginX;
@@ -119,6 +123,9 @@ internal sealed class TabStripDragHandler
             }
 
             _isDragging = true;
+            _lastBeforeId = null;
+            _lastGroup = null;
+            _hasDropSignature = false;
             _dragOriginX = LeftOf(_dragging) ?? position.X;
 
             if (ContainerFor(_dragging) is { } lifted)
@@ -137,16 +144,18 @@ internal sealed class TabStripDragHandler
 
         if (!inTearZone)
         {
-            var target = TabIndexAt(position.X);
+            var beforeTab = TabBeforeAt(position.X);
             var group = GroupHintAt(position.X);
-            var current = shell.IndexOfTab(_dragging);
+            var beforeId = beforeTab?.Id;
 
-            if (target >= 0 && current >= 0 &&
-                (target != current || group != _dragging.Tab.GroupId))
+            if (!_hasDropSignature || beforeId != _lastBeforeId || group != _lastGroup)
             {
                 var before = CaptureLefts();
 
-                shell.DropTab(_dragging, target, group);
+                shell.DropTab(_dragging, beforeTab, group);
+                _lastBeforeId = beforeId;
+                _lastGroup = group;
+                _hasDropSignature = true;
 
                 // Layout has to settle before the new positions can be measured.
                 _strip.UpdateLayout();
@@ -249,44 +258,7 @@ internal sealed class TabStripDragHandler
         }
 
         var screenPoint = owner.PointToScreen(e.GetPosition(owner));
-        var address = ShellViewModel.AddressOf(dragged);
-
-        if (manager.WindowAcceptingDropAt(screenPoint, owner) is { } target)
-        {
-            var index = target.DropIndexForScreenPoint(screenPoint);
-            shell.DetachTab(dragged);
-            AdoptInto(target, address, index);
-
-            if (shell.StripItems.Count == 0)
-            {
-                owner.Close();
-            }
-
-            target.Activate();
-            return;
-        }
-
-        // A window with a single tab is already its own window; tearing it off
-        // would close this one and open an identical replacement.
-        if (shell.IsSingleTab)
-        {
-            return;
-        }
-
-        shell.DetachTab(dragged);
-
-        manager.TearOff(
-            address,
-            new PixelPoint(screenPoint.X - 120, screenPoint.Y - 20),
-            new Size(owner.Width, owner.Height));
-    }
-
-    private static void AdoptInto(MainWindow target, Domain.ValueObjects.PageAddress? address, int index)
-    {
-        if (target.DataContext is MainWindowViewModel { Shell: { } shell })
-        {
-            shell.AdoptTab(address, index);
-        }
+        TabTransfer.Complete(shell, manager, owner, dragged, screenPoint, allowSameWindow: false);
     }
 
     /// <summary>Records where every strip item currently sits, keyed by its view model.</summary>
@@ -346,7 +318,7 @@ internal sealed class TabStripDragHandler
         new TransformOperationsTransition
         {
             Property = Visual.RenderTransformProperty,
-            Duration = TimeSpan.FromMilliseconds(160),
+            Duration = TimeSpan.FromMilliseconds(210),
             Easing = new CubicEaseOut(),
         },
     ];
@@ -358,10 +330,10 @@ internal sealed class TabStripDragHandler
             return;
         }
 
-        container.RenderTransform = Math.Abs(x) < 0.5 && Math.Abs(y) < 0.5
-            ? NoOffset
-            : TransformOperations.Parse(
-                string.Create(CultureInfo.InvariantCulture, $"translate({x}px, {y}px)"));
+        container.RenderTransform = _isDragging
+            ? TransformOperations.Parse(
+                string.Create(CultureInfo.InvariantCulture, $"translate({x}px, {y}px) scale(1.025)"))
+            : NoOffset;
     }
 
     /// <summary>
@@ -423,19 +395,15 @@ internal sealed class TabStripDragHandler
     }
 
     /// <summary>
-    /// The session index the dragged tab should occupy for a pointer at
-    /// <paramref name="x"/>. Group chips occupy strip space but no session index,
-    /// so only tab containers are counted. A tab is displaced once the pointer
-    /// passes its midpoint, so tabs swap under the cursor rather than only when it
-    /// reaches their far edge.
+    /// The visible tab that should follow the dragged entry at <paramref name="x"/>.
+    /// Identity is used instead of an integer because the rendered strip omits
+    /// overflow tabs, collapsed members and hidden split partners.
     /// </summary>
-    private int TabIndexAt(double x)
+    private TabItemViewModel? TabBeforeAt(double x)
     {
-        var index = 0;
-
         foreach (var container in _strip.GetRealizedContainers())
         {
-            if (container.DataContext is not TabItemViewModel)
+            if (container.DataContext is not TabItemViewModel tab || ReferenceEquals(tab, _dragging))
             {
                 continue;
             }
@@ -443,12 +411,10 @@ internal sealed class TabStripDragHandler
             if (container.TranslatePoint(default, _strip) is { } origin &&
                 x < origin.X + container.Bounds.Width / 2)
             {
-                return index;
+                return tab;
             }
-
-            index++;
         }
 
-        return Math.Max(0, index - 1);
+        return null;
     }
 }

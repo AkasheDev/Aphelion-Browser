@@ -67,9 +67,19 @@ internal sealed class WindowManager(IServiceProvider services)
     /// <summary>
     /// Opens a torn-off tab in its own window, positioned under the pointer.
     /// </summary>
-    public void TearOff(PageAddress? address, PixelPoint screenPosition, Size size)
+    public void TearOff(TabTransferSnapshot transfer, PixelPoint screenPosition, Size size)
     {
-        var window = CreateWindow(address);
+        ArgumentNullException.ThrowIfNull(transfer);
+
+        var window = CreateWindow(transfer.PrimaryAddress);
+
+        if (window.DataContext is MainWindowViewModel { Shell: { } shell })
+        {
+            if (transfer.PartnerAddress is not null)
+            {
+                shell.SplitActiveWithAddress(transfer.PartnerAddress);
+            }
+        }
 
         window.Width = Math.Max(window.MinWidth, size.Width);
         window.Height = Math.Max(window.MinHeight, size.Height);

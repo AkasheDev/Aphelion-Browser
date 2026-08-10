@@ -11,9 +11,19 @@ namespace Aphelion.Desktop.UI.ViewModels;
 /// One tab in the title-bar strip. A view over <see cref="BrowserTab"/>; the tab
 /// itself remains the source of truth.
 /// </summary>
-public sealed partial class TabItemViewModel(BrowserTab tab, IFaviconLoader? favicons = null) : ViewModelBase
+public sealed partial class TabItemViewModel(
+    ShellViewModel owner,
+    BrowserTab tab,
+    IFaviconLoader? favicons = null) : ViewModelBase
 {
     private readonly IFaviconLoader? _favicons = favicons;
+
+    /// <summary>
+    /// Commands shared by the strip and detached popup menus. Avalonia context
+    /// menus live in their own popup tree, so ancestor/name bindings cannot reach
+    /// the shell reliably; the row carries its command owner explicitly.
+    /// </summary>
+    public ShellViewModel Owner { get; } = owner ?? throw new ArgumentNullException(nameof(owner));
 
     /// <summary>The icon address currently loaded, so it is fetched only once.</summary>
     private string? _loadedIconKey;
@@ -30,6 +40,12 @@ public sealed partial class TabItemViewModel(BrowserTab tab, IFaviconLoader? fav
 
     [ObservableProperty]
     private bool _isActive;
+
+    /// <summary>Whether the active tab can pair with this ordinary tab.</summary>
+    public bool CanSplitWithActive => !IsActive && !IsSplit;
+
+    partial void OnIsActiveChanged(bool value) =>
+        OnPropertyChanged(nameof(CanSplitWithActive));
 
     [ObservableProperty]
     private bool _isLoading;
@@ -70,6 +86,7 @@ public sealed partial class TabItemViewModel(BrowserTab tab, IFaviconLoader? fav
     {
         OnPropertyChanged(nameof(ShowsPartnerFallback));
         OnPropertyChanged(nameof(TitleColumns));
+        OnPropertyChanged(nameof(CanSplitWithActive));
     }
 
     partial void OnPartnerFaviconChanged(Bitmap? value) =>

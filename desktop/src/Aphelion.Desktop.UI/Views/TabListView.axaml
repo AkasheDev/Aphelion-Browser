@@ -20,6 +20,7 @@
                  colour, and both favicons when it is a split pair. -->
             <DataTemplate DataType="vm:TabItemViewModel">
               <Button Classes="panel-row"
+                      Classes.active="{Binding IsActive}"
                       Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).ChooseCommand}"
                       CommandParameter="{Binding}">
 
@@ -29,42 +30,42 @@
                 <Button.ContextMenu>
                   <ContextMenu>
                     <MenuItem Header="Add to new group"
-                              Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).Owner.GroupActiveTabCommand}"
+                              Command="{Binding Owner.GroupActiveTabCommand}"
                               CommandParameter="{Binding}"
                               IsEnabled="{Binding !IsGrouped}" />
                     <MenuItem Header="Remove from group"
-                              Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).Owner.UngroupTabCommand}"
+                              Command="{Binding Owner.UngroupTabCommand}"
                               CommandParameter="{Binding}"
                               IsEnabled="{Binding IsGrouped}" />
                     <Separator />
                     <MenuItem Header="Open in split view"
-                              Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).Owner.SplitWithTabCommand}"
+                              Command="{Binding Owner.SplitWithTabCommand}"
                               CommandParameter="{Binding}"
-                              IsEnabled="{Binding !IsActive}" />
+                              IsEnabled="{Binding CanSplitWithActive}" />
                     <MenuItem Header="Close left side"
-                              Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).Owner.CloseLeftSideCommand}"
+                              Command="{Binding Owner.CloseLeftSideCommand}"
                               CommandParameter="{Binding}"
                               IsEnabled="{Binding IsSplit}" />
                     <MenuItem Header="Close right side"
-                              Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).Owner.CloseRightSideCommand}"
+                              Command="{Binding Owner.CloseRightSideCommand}"
                               CommandParameter="{Binding}"
                               IsEnabled="{Binding IsSplit}" />
                     <MenuItem Header="Close split view"
-                              Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).Owner.CloseSplitCommand}"
+                              Command="{Binding Owner.CloseSplitCommand}"
                               CommandParameter="{Binding}"
                               IsEnabled="{Binding IsSplit}" />
                     <Separator />
                     <MenuItem Header="Move to new window"
-                              Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).Owner.MoveTabToNewWindowCommand}"
+                              Command="{Binding Owner.MoveTabToNewWindowCommand}"
                               CommandParameter="{Binding}" />
                     <Separator />
                     <MenuItem Header="Close tab"
-                              Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).Owner.CloseTabCommand}"
+                              Command="{Binding Owner.CloseTabCommand}"
                               CommandParameter="{Binding}" />
                   </ContextMenu>
                 </Button.ContextMenu>
 
-                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,*,Auto">
 
                   <Border Grid.Column="0"
                           Classes="group-marker"
@@ -104,7 +105,14 @@
                         Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
                         IsVisible="{Binding ShowsPartnerFallback}" />
 
-                  <Button Grid.Column="5"
+                  <TextBlock Grid.Column="5"
+                             Margin="7,0,0,0"
+                             Text="{Binding PartnerTitle}"
+                             VerticalAlignment="Center"
+                             TextTrimming="CharacterEllipsis"
+                             IsVisible="{Binding IsSplit}" />
+
+                  <Button Grid.Column="6"
                           Classes="icon small"
                           Margin="8,0,0,0"
                           ToolTip.Tip="Close tab"

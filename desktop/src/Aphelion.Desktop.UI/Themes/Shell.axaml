@@ -67,9 +67,14 @@
     <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+    <Setter Property="RenderTransform" Value="scale(1)" />
     <Setter Property="Transitions">
       <Transitions>
-        <BrushTransition Property="Background" Duration="0:0:0.12" />
+        <BrushTransition Property="Background" Duration="0:0:0.16" />
+        <BrushTransition Property="BorderBrush" Duration="0:0:0.16" />
+        <DoubleTransition Property="Opacity" Duration="0:0:0.14" />
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.16" />
       </Transitions>
     </Setter>
   </Style>
@@ -104,14 +109,15 @@
 
   <Style Selector="Border.tab:pointerover">
     <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+    <Setter Property="RenderTransform" Value="scale(1.012)" />
   </Style>
 
   <!-- The active tab is lifted out of the title bar with a lighter fill and a
        hairline border; without the border the two surfaces read as one block. -->
   <Style Selector="Border.tab.active">
     <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandAccentBrush}" />
+    <Setter Property="BorderThickness" Value="0,0,0,2" />
   </Style>
 
   <Style Selector="Border.tab controls|MarqueeTextBlock.tab-title">
@@ -359,11 +365,11 @@
 
   <Style Selector="Border.pane.split">
     <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderThickness" Value="0,2,0,0" />
   </Style>
 
   <Style Selector="Border.pane.split.focused">
-    <Setter Property="BorderBrush" Value="{DynamicResource BrandPrimaryBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandAccentBrush}" />
   </Style>
 
   <!-- ===== Floating panels ===== -->
@@ -406,6 +412,10 @@
 
   <Style Selector="Button.panel-row:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+  </Style>
+
+  <Style Selector="Button.panel-row.active /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
   </Style>
 
   <!-- ===== Status bar ===== -->

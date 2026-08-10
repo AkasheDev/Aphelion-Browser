@@ -93,37 +93,37 @@
                     <Border.ContextMenu>
                       <ContextMenu>
                         <MenuItem Header="Add to new group"
-                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).GroupActiveTabCommand}"
+                                  Command="{Binding Owner.GroupActiveTabCommand}"
                                   CommandParameter="{Binding}"
                                   IsEnabled="{Binding !IsGrouped}" />
                         <MenuItem Header="Remove from group"
-                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).UngroupTabCommand}"
+                                  Command="{Binding Owner.UngroupTabCommand}"
                                   CommandParameter="{Binding}"
                                   IsEnabled="{Binding IsGrouped}" />
                         <Separator />
                         <MenuItem Header="Open in split view"
-                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).SplitWithTabCommand}"
+                                  Command="{Binding Owner.SplitWithTabCommand}"
                                   CommandParameter="{Binding}"
-                                  IsEnabled="{Binding !IsActive}" />
+                                  IsEnabled="{Binding CanSplitWithActive}" />
                         <MenuItem Header="Close left side"
-                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseLeftSideCommand}"
+                                  Command="{Binding Owner.CloseLeftSideCommand}"
                                   CommandParameter="{Binding}"
                                   IsEnabled="{Binding IsSplit}" />
                         <MenuItem Header="Close right side"
-                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseRightSideCommand}"
+                                  Command="{Binding Owner.CloseRightSideCommand}"
                                   CommandParameter="{Binding}"
                                   IsEnabled="{Binding IsSplit}" />
                         <MenuItem Header="Close split view"
-                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseSplitCommand}"
+                                  Command="{Binding Owner.CloseSplitCommand}"
                                   CommandParameter="{Binding}"
                                   IsEnabled="{Binding IsSplit}" />
                         <Separator />
                         <MenuItem Header="Move to new window"
-                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).MoveTabToNewWindowCommand}"
+                                  Command="{Binding Owner.MoveTabToNewWindowCommand}"
                                   CommandParameter="{Binding}" />
                         <Separator />
                         <MenuItem Header="Close tab"
-                                  Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseTabCommand}"
+                                  Command="{Binding Owner.CloseTabCommand}"
                                   CommandParameter="{Binding}" />
                       </ContextMenu>
                     </Border.ContextMenu>
@@ -206,7 +206,7 @@
                               Classes="icon small"
                               ToolTip.Tip="Close tab"
                               Margin="6,0,0,0"
-                              Command="{Binding #TabStrip.((vm:ShellViewModel)DataContext).CloseTabCommand}"
+                              Command="{Binding Owner.CloseTabCommand}"
                               CommandParameter="{Binding}">
                         <Path Classes="glyph" Data="M0,0 L8,8 M8,0 L0,8" />
                       </Button>

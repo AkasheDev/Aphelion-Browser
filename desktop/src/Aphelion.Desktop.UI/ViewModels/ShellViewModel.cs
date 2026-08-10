@@ -153,10 +153,22 @@ public sealed partial class ShellViewModel : ViewModelBase
     private string _windowTitle = "Aphelion";
 
     /// <summary>True when this window has exactly one tab left.</summary>
-    public bool IsSingleTab => _session.Tabs.Count <= 1;
+    public bool IsSingleTab => _session.VisibleTabs.Count <= 1;
 
     /// <summary>The address of a tab, for handing to a new window when torn off.</summary>
     public static PageAddress? AddressOf(TabItemViewModel item) => item?.Tab.Address;
+
+    /// <summary>Captures both pages represented by one visible tab entry.</summary>
+    public TabTransferSnapshot CaptureTransfer(TabItemViewModel item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        var partner = item.Tab.SplitPartnerId is { } partnerId
+            ? _session.Tabs.FirstOrDefault(t => t.Id == partnerId)
+            : null;
+
+        return new TabTransferSnapshot(item.Tab.Address, partner?.Address);
+    }
 
     /// <summary>The tab's position in the session, which is the order the user sees.</summary>
     public int IndexOfTab(TabItemViewModel item)
@@ -211,22 +223,25 @@ public sealed partial class ShellViewModel : ViewModelBase
             return;
         }
 
+        // A pending split belongs to the tab that opened the picker. Switching
+        // tabs cancels that pending operation instead of trapping navigation
+        // behind an empty right pane.
+        IsSplitPickerOpen = false;
         SyncTabs();
     }
 
     /// <summary>
-    /// Drops a dragged tab at <paramref name="targetIndex"/>, joining
+    /// Drops a dragged tab before <paramref name="before"/>, joining
     /// <paramref name="group"/> when one is given. The group comes from the view:
     /// whatever tab or chip the pointer is over decides membership, which is how
     /// Chrome lets a tab join a single-member group — a neighbour-based rule can
     /// never fire there.
     /// </summary>
-    public void DropTab(TabItemViewModel item, int targetIndex, TabGroupId? group)
+    public void DropTab(TabItemViewModel item, TabItemViewModel? before, TabGroupId? group)
     {
         ArgumentNullException.ThrowIfNull(item);
 
-        var clamped = Math.Clamp(targetIndex, 0, Math.Max(0, _session.Tabs.Count - 1));
-        _session.MoveTabTo(item.Id, clamped, group);
+        _session.MoveVisibleTabBefore(item.Id, before?.Id, group);
         SyncTabs();
     }
 
@@ -321,7 +336,10 @@ public sealed partial class ShellViewModel : ViewModelBase
     [RelayCommand]
     private void SplitWithTab(TabItemViewModel? item)
     {
-        if (item is null || _session.ActiveTab is not { } active || active.Id == item.Id)
+        if (item is null ||
+            item.IsSplit ||
+            _session.ActiveTab is not { } active ||
+            active.Id == item.Id)
         {
             return;
         }
@@ -346,6 +364,7 @@ public sealed partial class ShellViewModel : ViewModelBase
 
         if (active.SplitPartnerId is not null)
         {
+            IsSplitPickerOpen = false;
             _session.Unsplit(active.Id);
             SyncTabs();
             return;
@@ -355,7 +374,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         // afterwards, with the picker sitting in that empty pane. The picker's
         // "New tab" row covers the case where there is nothing to choose.
         var candidates = _session.VisibleTabs
-            .Where(t => t.Id != active.Id && !IsHidden(t))
+            .Where(t => t.Id != active.Id && t.SplitPartnerId is null && !IsHidden(t))
             .ToList();
 
         SplitPicker.SetItems(candidates.Select(ItemFor));
@@ -434,7 +453,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         {
             if (group.IsCollapsed && _session.TabsInGroup(group.Id).Count > 0)
             {
-                budget -= TabStripMetrics.ChipCost;
+                budget -= TabStripMetrics.ChipCostFor(group.Name);
             }
         }
 
@@ -449,7 +468,7 @@ public sealed partial class ShellViewModel : ViewModelBase
 
             if (tab.GroupId is { } groupId && groupId != run)
             {
-                cost += TabStripMetrics.ChipCost;
+                cost += TabStripMetrics.ChipCostFor(_session.FindGroup(groupId)?.Name);
             }
 
             run = tab.GroupId;
@@ -539,23 +558,54 @@ public sealed partial class ShellViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(item);
 
+        var partnerId = item.Tab.SplitPartnerId;
+
         Detach(item.Id);
+
+        if (partnerId is { } partner)
+        {
+            Detach(partner);
+            _session.CloseTab(partner);
+        }
+
         _session.CloseTab(item.Id);
         SyncTabs();
     }
 
     /// <summary>Adds a tab received from another window and activates it.</summary>
-    public void AdoptTab(PageAddress? address, int targetIndex)
+    public void AdoptTab(
+        TabTransferSnapshot transfer,
+        TabItemViewModel? before = null,
+        TabGroupId? group = null)
     {
-        var tab = _session.OpenTab(address);
+        ArgumentNullException.ThrowIfNull(transfer);
+
+        var tab = _session.OpenTab(transfer.PrimaryAddress);
         Attach(tab);
-        _session.MoveTabTo(tab.Id, targetIndex, null);
+        _session.MoveVisibleTabBefore(tab.Id, before?.Id, group);
         _session.Activate(tab.Id);
+
+        BrowserTab? partner = null;
+
+        if (transfer.PartnerAddress is not null)
+        {
+            partner = _session.OpenTabNextTo(tab, transfer.PartnerAddress, activate: false);
+            Attach(partner);
+            _session.Split(tab.Id, partner.Id);
+        }
+
         SyncTabs();
 
-        if (address is not null && _browsers.TryGetValue(tab.Id, out var browser))
+        if (transfer.PrimaryAddress is not null && _browsers.TryGetValue(tab.Id, out var browser))
         {
-            browser.NavigateTo(address);
+            browser.NavigateTo(transfer.PrimaryAddress);
+        }
+
+        if (partner is not null &&
+            transfer.PartnerAddress is not null &&
+            _browsers.TryGetValue(partner.Id, out var partnerBrowser))
+        {
+            partnerBrowser.NavigateTo(transfer.PartnerAddress);
         }
     }
 
@@ -563,6 +613,23 @@ public sealed partial class ShellViewModel : ViewModelBase
     public void NavigateActiveTab(PageAddress address)
     {
         ActiveBrowser?.NavigateTo(address);
+    }
+
+    /// <summary>Reconstructs the second half of a transferred split entry.</summary>
+    public void SplitActiveWithAddress(PageAddress address)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        if (_session.ActiveTab is not { } active)
+        {
+            return;
+        }
+
+        var partner = _session.OpenTabNextTo(active, address, activate: false);
+        Attach(partner);
+        _session.Split(active.Id, partner.Id);
+        SyncTabs();
+        _browsers[partner.Id].NavigateTo(address);
     }
 
     /// <summary>The open-tab state to persist at shutdown.</summary>
@@ -585,7 +652,10 @@ public sealed partial class ShellViewModel : ViewModelBase
                 tab.Address?.ToString(),
                 group?.Name,
                 group?.Color.ToString(),
-                group?.IsCollapsed ?? false));
+                group?.IsCollapsed ?? false,
+                tab.SplitPartnerId is { } partnerId
+                    ? _session.Tabs.ToList().FindIndex(t => t.Id == partnerId)
+                    : null));
         }
 
         return new SessionSnapshot(tabs, activeIndex);
@@ -603,6 +673,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         }
 
         var groups = new Dictionary<string, TabGroup>();
+        var restored = new List<BrowserTab>();
 
         foreach (var saved in snapshot.Tabs)
         {
@@ -615,6 +686,7 @@ public sealed partial class ShellViewModel : ViewModelBase
             }
 
             var tab = _session.OpenTab(address, activate: false);
+            restored.Add(tab);
             Attach(tab);
 
             if (saved.GroupName is not null)
@@ -646,8 +718,18 @@ public sealed partial class ShellViewModel : ViewModelBase
             }
         }
 
+        for (var i = 0; i < snapshot.Tabs.Count; i++)
+        {
+            if (snapshot.Tabs[i].SplitPartnerIndex is { } partnerIndex &&
+                partnerIndex >= 0 &&
+                partnerIndex < restored.Count)
+            {
+                _session.Split(restored[i].Id, restored[partnerIndex].Id);
+            }
+        }
+
         var index = Math.Clamp(snapshot.ActiveIndex, 0, _session.Tabs.Count - 1);
-        _session.Activate(_session.Tabs[index].Id);
+        _session.Activate(restored[index].Id);
         SyncTabs();
         return true;
     }
@@ -740,17 +822,6 @@ public sealed partial class ShellViewModel : ViewModelBase
         var shown = listed.Take(fits).ToList();
         var overflowed = listed.Skip(fits).ToList();
 
-        // The active tab is always reachable in the strip, even if it sorts past
-        // the capacity — swap it in for the last visible one.
-        if (_session.ActiveTab is { } current &&
-            overflowed.Any(t => t.Id == current.Id) &&
-            shown.Count > 0)
-        {
-            overflowed.Remove(current);
-            overflowed.Insert(0, shown[^1]);
-            shown[^1] = current;
-        }
-
         var visibleIds = shown.Select(t => t.Id).ToHashSet();
 
         Overflow.SetItems(overflowed.Select(ItemFor));
@@ -777,6 +848,25 @@ public sealed partial class ShellViewModel : ViewModelBase
             // would drop the group from the strip entirely.
             if (tab.GroupId is { } groupId)
             {
+                var group = _session.FindGroup(groupId);
+
+                if (group?.IsCollapsed == true)
+                {
+                    if (seenGroups.Add(groupId))
+                    {
+                        desired.Add(HeaderFor(groupId));
+                    }
+
+                    continue;
+                }
+
+                // A non-collapsed group whose members are all in Other Tabs must
+                // not leave an orphan chip behind in the strip.
+                if (!visibleIds.Contains(tab.Id))
+                {
+                    continue;
+                }
+
                 if (run != groupId)
                 {
                     run = groupId;
@@ -790,10 +880,6 @@ public sealed partial class ShellViewModel : ViewModelBase
                     }
                 }
 
-                if (_session.FindGroup(groupId)?.IsCollapsed == true)
-                {
-                    continue;
-                }
             }
             else
             {
@@ -888,7 +974,7 @@ public sealed partial class ShellViewModel : ViewModelBase
     {
         if (!_tabItems.TryGetValue(tab.Id, out var item))
         {
-            item = new TabItemViewModel(tab, _favicons);
+            item = new TabItemViewModel(this, tab, _favicons);
             _tabItems[tab.Id] = item;
         }
 
