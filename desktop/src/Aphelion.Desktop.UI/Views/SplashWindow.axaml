@@ -4,42 +4,267 @@
         x:Class="Aphelion.Desktop.UI.Views.SplashWindow"
         x:DataType="vm:SplashViewModel"
         Title="Aphelion"
-        Width="400" Height="300"
+        Width="704" Height="484"
         WindowDecorations="None"
         CanResize="False"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterScreen"
-        Background="{DynamicResource SurfaceRaisedBrush}">
+        TransparencyLevelHint="Transparent"
+        Background="Transparent"
+        FontFamily="{DynamicResource UiFont}">
 
-  <Border BorderBrush="{DynamicResource DividerBrush}" BorderThickness="1">
-    <Grid RowDefinitions="*,Auto" Margin="36,32">
+  <!--
+    An aphelion is the point of an orbit farthest from the star it circles, so
+    the splash is that journey: the body sets out from the near side and arrives
+    at the far point exactly as startup finishes. The logo stands at the centre
+    as the star it is orbiting.
 
-      <StackPanel Grid.Row="0"
-                  VerticalAlignment="Center"
-                  HorizontalAlignment="Center"
-                  Spacing="14">
-        <Image Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
-               Width="104"
-               HorizontalAlignment="Center"
+    Everything here is local to this window on purpose. The splash is the one
+    surface with its own visual language, and putting its starfield and orbit
+    styles in the shared theme would offer the rest of the application vocabulary
+    it must never use.
+
+    The geometry — the ellipse, the swept arc, the body's position — lives in the
+    code-behind. XAML can describe a scene but not a point travelling an ellipse.
+  -->
+
+  <Window.Styles>
+
+    <!-- Stars twinkle on three cycles so the field never pulses as one. The
+         classes are handed out at random when the field is built. -->
+    <Style Selector="Ellipse.star">
+      <Setter Property="Fill" Value="#FFFFFF" />
+    </Style>
+
+    <Style Selector="Ellipse.twinkle-slow">
+      <Style.Animations>
+        <Animation Duration="0:0:7" IterationCount="Infinite" PlaybackDirection="Alternate">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="1.0" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.25" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <Style Selector="Ellipse.twinkle-mid">
+      <Style.Animations>
+        <Animation Duration="0:0:4.5" IterationCount="Infinite" PlaybackDirection="Alternate" Delay="0:0:1.1">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.9" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.15" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <Style Selector="Ellipse.twinkle-fast">
+      <Style.Animations>
+        <Animation Duration="0:0:2.8" IterationCount="Infinite" PlaybackDirection="Alternate" Delay="0:0:0.4">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.75" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.12" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <!-- The logo breathes, so a stalled startup still looks alive. -->
+    <Style Selector="Image.logo">
+      <Setter Property="RenderTransform">
+        <ScaleTransform ScaleX="1" ScaleY="1" />
+      </Setter>
+      <Style.Animations>
+        <Animation Duration="0:0:4.2" IterationCount="Infinite" PlaybackDirection="Alternate"
+                   Easing="SineEaseInOut">
+          <KeyFrame Cue="0%">
+            <Setter Property="ScaleTransform.ScaleX" Value="1.0" />
+            <Setter Property="ScaleTransform.ScaleY" Value="1.0" />
+          </KeyFrame>
+          <KeyFrame Cue="100%">
+            <Setter Property="ScaleTransform.ScaleX" Value="1.035" />
+            <Setter Property="ScaleTransform.ScaleY" Value="1.035" />
+          </KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <!-- The star's corona, breathing against the logo so the centre glows. -->
+    <Style Selector="Ellipse.corona">
+      <Style.Animations>
+        <Animation Duration="0:0:4.2" IterationCount="Infinite" PlaybackDirection="Alternate"
+                   Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.55" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.9" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <!-- The travelling body's halo, pulsing on its own shorter cycle. -->
+    <Style Selector="Ellipse.body-halo">
+      <Style.Animations>
+        <Animation Duration="0:0:1.9" IterationCount="Infinite" PlaybackDirection="Alternate"
+                   Easing="SineEaseInOut">
+          <KeyFrame Cue="0%"><Setter Property="Opacity" Value="0.45" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="Opacity" Value="0.95" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <!-- The whole field turns once every five minutes: far too slow to watch,
+         fast enough that the scene is never quite still. The stars are scattered
+         well beyond the frame so the rotation never sweeps an empty corner in. -->
+    <Style Selector="Canvas#Stars">
+      <Setter Property="RenderTransformOrigin" Value="50%,44%" />
+      <Style.Animations>
+        <Animation Duration="0:5:0" IterationCount="Infinite">
+          <KeyFrame Cue="0%"><Setter Property="RotateTransform.Angle" Value="0" /></KeyFrame>
+          <KeyFrame Cue="100%"><Setter Property="RotateTransform.Angle" Value="360" /></KeyFrame>
+        </Animation>
+      </Style.Animations>
+    </Style>
+
+    <Style Selector="TextBlock.wordmark">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="LetterSpacing" Value="7.5" />
+      <Setter Property="Foreground" Value="#E8E6FF" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBlock.status">
+      <Setter Property="FontSize" Value="11.5" />
+      <Setter Property="LetterSpacing" Value="0.6" />
+      <Setter Property="Foreground" Value="#7E7C9E" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+
+  </Window.Styles>
+
+  <!--
+    The margin has to hold the whole shadow. It reached well past a narrower one
+    before, and the window clipped it dead straight, ringing the rounded panel
+    with the square edge it was supposed to soften. The window grew by twice the
+    extra margin so the content area inside is unchanged and the orbit's geometry
+    still lands where it was measured for.
+  -->
+  <Border Name="Root"
+          Margin="40"
+          CornerRadius="18"
+          ClipToBounds="True"
+          Opacity="0"
+          BoxShadow="0 14 44 -10 #B8000000">
+
+    <!-- The window is shown before it is drawn, so it fades up rather than
+         appearing mid-paint. -->
+    <Border.Transitions>
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.45" Easing="CubicEaseOut" />
+      </Transitions>
+    </Border.Transitions>
+
+    <Panel>
+
+      <!-- Deep space. A near-black base with two nebula washes in the brand's
+           violet and cyan, laid in as soft radial gradients rather than blurred
+           shapes: the falloff costs nothing and looks the same everywhere. -->
+      <Panel Name="Backdrop" Background="#07070E" />
+
+      <Ellipse Width="760" Height="620"
+               HorizontalAlignment="Left" VerticalAlignment="Top"
+               Margin="-260,-280,0,0"
+               IsHitTestVisible="False">
+        <Ellipse.Fill>
+          <RadialGradientBrush>
+            <GradientStop Offset="0" Color="#33205F" />
+            <GradientStop Offset="0.5" Color="#1A1236" />
+            <GradientStop Offset="1" Color="#0007070E" />
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+      </Ellipse>
+
+      <Ellipse Width="700" Height="560"
+               HorizontalAlignment="Right" VerticalAlignment="Bottom"
+               Margin="0,0,-240,-260"
+               IsHitTestVisible="False">
+        <Ellipse.Fill>
+          <RadialGradientBrush>
+            <GradientStop Offset="0" Color="#0C4256" />
+            <GradientStop Offset="0.5" Color="#0A2030" />
+            <GradientStop Offset="1" Color="#0007070E" />
+          </RadialGradientBrush>
+        </Ellipse.Fill>
+      </Ellipse>
+
+      <!-- A vignette over the nebulae but under the stars: it deepens the corners
+           without dimming the stars there, and never touches the orbit, whose far
+           left is the one place the eye must be drawn to. -->
+      <Panel IsHitTestVisible="False">
+        <Panel.Background>
+          <RadialGradientBrush RadiusX="0.78" RadiusY="0.9">
+            <GradientStop Offset="0.35" Color="#0007070E" />
+            <GradientStop Offset="1" Color="#B307070E" />
+          </RadialGradientBrush>
+        </Panel.Background>
+      </Panel>
+
+      <!-- The starfield, built in code so the stars can be scattered rather than
+           hand-placed. It turns very slowly: too slow to watch, fast enough that
+           the scene is never quite still. -->
+      <Canvas Name="Stars" IsHitTestVisible="False" />
+
+      <!-- The orbital system. Track, swept arc and body are all drawn from the
+           code-behind against this canvas. -->
+      <Canvas Name="Orbit" IsHitTestVisible="False" />
+
+      <!-- The star at the centre of it all. Given an explicit size and centred
+           children, then placed by its top-left corner from the code-behind: an
+           earlier version hung the children off negative margins, which Avalonia
+           absorbs during measure, and the whole centre sat half its own size down
+           and to the right of the orbit it was supposed to anchor. -->
+      <Panel Name="Centre"
+             Width="260" Height="260"
+             HorizontalAlignment="Left" VerticalAlignment="Top">
+
+        <Ellipse Classes="corona"
+                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                 Width="260" Height="260">
+          <Ellipse.Fill>
+            <RadialGradientBrush>
+              <GradientStop Offset="0" Color="#8A7C5CFF" />
+              <GradientStop Offset="0.42" Color="#3D6A4FD8" />
+              <GradientStop Offset="1" Color="#006A4FD8" />
+            </RadialGradientBrush>
+          </Ellipse.Fill>
+        </Ellipse>
+
+        <Image Classes="logo"
+               Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
+               Width="104" Height="104"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               RenderTransformOrigin="50%,50%"
                RenderOptions.BitmapInterpolationMode="HighQuality" />
-        <TextBlock Text="Aphelion"
-                   FontSize="22"
-                   FontWeight="SemiBold"
-                   HorizontalAlignment="Center"
-                   Foreground="{DynamicResource ForegroundBrush}" />
+
+      </Panel>
+
+      <!-- Wordmark and status, held to the lower third so the orbit keeps the
+           centre of the frame. -->
+      <StackPanel VerticalAlignment="Bottom"
+                  HorizontalAlignment="Center"
+                  Margin="0,0,0,38"
+                  Spacing="13">
+
+        <!-- The trailing letter-space is trimmed by the padding: letter spacing
+             is applied after every glyph, including the last. -->
+        <TextBlock Classes="wordmark" Text="APHELION" Padding="7.5,0,0,0" />
+
+        <TextBlock Classes="status" Text="{Binding StatusText}" />
+
       </StackPanel>
 
-      <StackPanel Grid.Row="1" Spacing="10">
-        <ProgressBar Minimum="0" Maximum="100"
-                     Height="3"
-                     CornerRadius="2"
-                     Value="{Binding ProgressPercent}"
-                     Background="{DynamicResource SurfaceSunkenBrush}"
-                     Foreground="{DynamicResource BrandPrimaryBrush}" />
-        <TextBlock Classes="subtle" Text="{Binding StatusText}" FontSize="12" />
-      </StackPanel>
+      <!-- The edge, drawn last. A border paints its stroke beneath its children,
+           and the nebulae and vignette here run right to the edge, so a stroke on
+           the root was covered over in patches and the rim came out uneven. -->
+      <Border BorderThickness="1"
+              BorderBrush="#33305C"
+              CornerRadius="18"
+              IsHitTestVisible="False" />
 
-    </Grid>
+    </Panel>
   </Border>
 
 </Window>
