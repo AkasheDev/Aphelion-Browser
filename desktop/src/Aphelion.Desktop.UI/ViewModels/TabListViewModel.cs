@@ -22,18 +22,30 @@ public sealed partial class TabListViewModel : ViewModelBase
         string title,
         Action<TabItemViewModel> choose,
         Action? createNew = null,
-        Action<TabItemViewModel>? close = null)
+        Action<TabItemViewModel>? close = null,
+        ShellViewModel? owner = null)
     {
         Title = title;
         _choose = choose ?? throw new ArgumentNullException(nameof(choose));
         _createNew = createNew;
         _close = close;
+        Owner = owner;
     }
 
     private readonly Action? _createNew;
     private readonly Action<TabItemViewModel>? _close;
 
     public string Title { get; }
+
+    /// <summary>
+    /// The shell the rows belong to, so a row can offer everything a tab in the
+    /// strip offers — grouping, splitting, closing, dragging out. Null for a list
+    /// that only picks, such as the split picker.
+    /// </summary>
+    public ShellViewModel? Owner { get; }
+
+    /// <summary>Whether rows act as tabs rather than only as choices.</summary>
+    public bool CanManage => Owner is not null;
 
     /// <summary>Whether the list offers a "new tab" row alongside the existing tabs.</summary>
     public bool CanCreateNew => _createNew is not null;

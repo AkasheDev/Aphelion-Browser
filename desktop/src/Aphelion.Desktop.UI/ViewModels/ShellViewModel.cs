@@ -29,10 +29,10 @@ public sealed partial class ShellViewModel : ViewModelBase
     private readonly IFaviconLoader? _favicons;
 
     /// <summary>
-    /// How many tabs the strip can show at once, reported by the panel as it
-    /// lays out. Anything past this spills into the overflow panel.
+    /// How much room the strip has, reported by the panel as it lays out. What
+    /// does not fit spills into the overflow panel.
     /// </summary>
-    private int _visibleCapacity = int.MaxValue;
+    private double _stripRoom = double.PositiveInfinity;
 
     public ShellViewModel(
         Func<BrowserViewModel> browserFactory,
@@ -52,7 +52,8 @@ public sealed partial class ShellViewModel : ViewModelBase
                 ActivateTab(item);
                 IsOverflowOpen = false;
             },
-            close: CloseTab);
+            close: CloseTab,
+            owner: this);
 
         SplitPicker = new TabListViewModel(
             "Choose a tab to split with",
@@ -289,11 +290,15 @@ public sealed partial class ShellViewModel : ViewModelBase
         SyncTabs();
     }
 
-    /// <summary>Groups the active tab, creating a group if it has none.</summary>
+    /// <summary>
+    /// Groups a tab, creating a group if it has none. Acts on the tab the menu was
+    /// opened on, falling back to the active one for the toolbar button — a menu
+    /// opened on one tab must not group another.
+    /// </summary>
     [RelayCommand]
-    private void GroupActiveTab()
+    private void GroupActiveTab(TabItemViewModel? item)
     {
-        if (_session.ActiveTab is not { } tab)
+        if ((item?.Tab ?? _session.ActiveTab) is not { } tab)
         {
             return;
         }
@@ -390,21 +395,76 @@ public sealed partial class ShellViewModel : ViewModelBase
     private void CloseOverflow() => IsOverflowOpen = false;
 
     /// <summary>
-    /// Told by the strip how many tabs it can show. Anything beyond that is
-    /// listed in the overflow panel instead of being opened where the user
-    /// cannot reach it.
+    /// Told by the strip how much room it has. Whatever does not fit is listed in
+    /// the overflow panel instead of being opened where the user cannot reach it.
     /// </summary>
-    public void ReportStripCapacity(int capacity)
+    public void ReportStripRoom(double room)
     {
-        var clamped = Math.Max(1, capacity);
-
-        if (clamped == _visibleCapacity)
+        if (room <= 0 || Math.Abs(room - _stripRoom) < 1)
         {
             return;
         }
 
-        _visibleCapacity = clamped;
+        _stripRoom = room;
         SyncTabs();
+    }
+
+    /// <summary>
+    /// How many of <paramref name="listed"/> fit the strip, taking each tab at its
+    /// narrowest and allowing for the group chips that precede each run.
+    /// </summary>
+    /// <remarks>
+    /// Greedy from the left, and deliberately so: whether a tab fits depends only
+    /// on the tabs before it, all of which are shown. That makes the answer stable.
+    /// A rule that weighed the whole set — the previous one measured the strip's
+    /// current children — can change its mind about a tab because of a decision it
+    /// made about that same tab, and then oscillate forever.
+    /// </remarks>
+    private int FitCount(List<BrowserTab> listed)
+    {
+        if (double.IsInfinity(_stripRoom))
+        {
+            return listed.Count;
+        }
+
+        var budget = _stripRoom;
+
+        // A collapsed group is nothing but its chip, which still takes room.
+        foreach (var group in _session.Groups)
+        {
+            if (group.IsCollapsed && _session.TabsInGroup(group.Id).Count > 0)
+            {
+                budget -= TabStripMetrics.ChipCost;
+            }
+        }
+
+        var count = 0;
+        TabGroupId? run = null;
+
+        foreach (var tab in listed)
+        {
+            var cost = tab.SplitPartnerId is not null
+                ? TabStripMetrics.MinSplitTabWidth
+                : TabStripMetrics.MinTabWidth;
+
+            if (tab.GroupId is { } groupId && groupId != run)
+            {
+                cost += TabStripMetrics.ChipCost;
+            }
+
+            run = tab.GroupId;
+
+            // At least one tab is always shown, however narrow the window.
+            if (budget < cost && count > 0)
+            {
+                break;
+            }
+
+            budget -= cost;
+            count++;
+        }
+
+        return count;
     }
 
     /// <summary>
@@ -448,6 +508,26 @@ public sealed partial class ShellViewModel : ViewModelBase
         if (owner is not null && _session.Unsplit(owner.Id))
         {
             SyncTabs();
+        }
+    }
+
+    /// <summary>
+    /// Moves a tab into a window of its own, as dragging it off the strip does.
+    /// </summary>
+    /// <remarks>
+    /// Supplied by the window rather than done here: opening a window needs the
+    /// window manager and the current geometry, neither of which a view model may
+    /// know about. A window with one tab already is its own window, so the command
+    /// is disabled there rather than closing this one and opening its twin.
+    /// </remarks>
+    public Action<TabItemViewModel>? MoveToNewWindow { get; set; }
+
+    [RelayCommand]
+    private void MoveTabToNewWindow(TabItemViewModel? item)
+    {
+        if (item is not null && !IsSingleTab)
+        {
+            MoveToNewWindow?.Invoke(item);
         }
     }
 
@@ -656,8 +736,9 @@ public sealed partial class ShellViewModel : ViewModelBase
         // Only tabs that fit go in the strip; the rest are listed in the overflow
         // panel. Opening tabs the user cannot reach would strand them.
         var listed = _session.VisibleTabs.Where(t => !IsHidden(t)).ToList();
-        var shown = listed.Take(_visibleCapacity).ToList();
-        var overflowed = listed.Skip(_visibleCapacity).ToList();
+        var fits = FitCount(listed);
+        var shown = listed.Take(fits).ToList();
+        var overflowed = listed.Skip(fits).ToList();
 
         // The active tab is always reachable in the strip, even if it sorts past
         // the capacity — swap it in for the last visible one.

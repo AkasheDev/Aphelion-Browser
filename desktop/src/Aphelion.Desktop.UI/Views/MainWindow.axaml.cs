@@ -47,6 +47,10 @@ public partial class MainWindow : Window
         if (_hookedShell is not null)
         {
             _hookedShell.PropertyChanged += OnShellPropertyChanged;
+
+            // "Move to new window" needs the window manager and this window's
+            // geometry, so the window supplies it rather than the view model.
+            _hookedShell.MoveToNewWindow = MoveTabToNewWindow;
         }
 
         UpdateSplitLayout();
@@ -114,6 +118,27 @@ public partial class MainWindow : Window
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Opens a tab in a window of its own, placed just off this one so it does not
+    /// land exactly on top and look like nothing happened.
+    /// </summary>
+    private void MoveTabToNewWindow(TabItemViewModel tab)
+    {
+        if (Shell is not { } shell || shell.WindowManager is not WindowManager manager)
+        {
+            return;
+        }
+
+        var address = ShellViewModel.AddressOf(tab);
+        shell.DetachTab(tab);
+        shell.CloseOverflowCommand.Execute(null);
+
+        manager.TearOff(
+            address,
+            new PixelPoint(Position.X + 40, Position.Y + 40),
+            new Size(Width, Height));
     }
 
     /// <summary>Clicking the backdrop dismisses whichever panel is open.</summary>
@@ -222,6 +247,40 @@ public partial class MainWindow : Window
         }
 
         return index;
+    }
+
+    /// <summary>
+    /// The group a tab dropped at this screen point would join: the group of the
+    /// tab or chip directly under the pointer. A collapsed group refuses, since the
+    /// tab would vanish into it.
+    /// </summary>
+    public Domain.ValueObjects.TabGroupId? GroupHintForScreenPoint(PixelPoint screenPoint)
+    {
+        if (this.FindControl<ItemsControl>("TabStrip") is not { } strip)
+        {
+            return null;
+        }
+
+        var local = this.PointToClient(screenPoint);
+
+        foreach (var container in strip.GetRealizedContainers())
+        {
+            if (container.TranslatePoint(default, this) is not { } origin ||
+                local.X < origin.X ||
+                local.X >= origin.X + container.Bounds.Width)
+            {
+                continue;
+            }
+
+            return container.DataContext switch
+            {
+                TabItemViewModel tab => tab.Tab.GroupId,
+                GroupHeaderViewModel { IsCollapsed: false } chip => chip.Id,
+                _ => null,
+            };
+        }
+
+        return null;
     }
 
     /// <summary>Shows the insertion preview where a dropped tab would land.</summary>

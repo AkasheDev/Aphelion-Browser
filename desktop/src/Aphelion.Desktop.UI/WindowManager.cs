@@ -84,9 +84,14 @@ internal sealed class WindowManager(IServiceProvider services)
     /// and hides it everywhere else. Called continuously during a drag so the user
     /// sees where a cross-window drop would land before releasing.
     /// </summary>
-    public void UpdateDropPreview(PixelPoint screenPoint, MainWindow source)
+    /// <param name="exclude">
+    /// A window that cannot accept the drop. The strip passes its own window,
+    /// having already placed the tab live; a drag out of the overflow list passes
+    /// nothing, since dropping onto its own strip is the point.
+    /// </param>
+    public void UpdateDropPreview(PixelPoint screenPoint, MainWindow? exclude)
     {
-        var target = WindowAcceptingDropAt(screenPoint, source);
+        var target = WindowAcceptingDropAt(screenPoint, exclude);
 
         foreach (var window in _windows)
         {
