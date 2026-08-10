@@ -245,10 +245,12 @@ public sealed partial class ShellViewModel : ViewModelBase
 
         group.ToggleCollapsed();
 
-        // Collapsing the last visible run would leave the strip empty.
-        if (group.IsCollapsed && _session.Tabs.All(IsHidden))
+        // Collapsing the last visible run would leave the strip empty. Chrome
+        // opens a fresh tab rather than refusing the collapse, which would look
+        // like the chip simply not working.
+        if (group.IsCollapsed && _session.VisibleTabs.All(IsHidden))
         {
-            group.Expand();
+            Attach(_session.OpenTab());
         }
 
         SyncTabs();
@@ -614,6 +616,29 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// </remarks>
     private void SyncTabs()
     {
+        // Two invariants, enforced here rather than at each call site so no
+        // operation can leave the window unusable:
+        //
+        //   1. The session is never empty. A browser with no tabs shows nothing
+        //      and offers no way back.
+        //   2. At least one tab is visible. Every tab being inside collapsed
+        //      groups would leave the strip blank.
+        if (_session.IsEmpty)
+        {
+            Attach(_session.OpenTab());
+        }
+        else if (_session.VisibleTabs.Count > 0 && _session.VisibleTabs.All(IsHidden))
+        {
+            // Expand the group holding the active tab, or failing that the first
+            // group there is.
+            var reveal = _session.ActiveTab?.GroupId ?? _session.VisibleTabs[0].GroupId;
+
+            if (reveal is { } groupId)
+            {
+                _session.FindGroup(groupId)?.Expand();
+            }
+        }
+
         // A collapsed group hides its tabs; the active tab must stay visible.
         if (_session.ActiveTab is { } hiddenActive && IsHidden(hiddenActive))
         {
@@ -658,11 +683,14 @@ public sealed partial class ShellViewModel : ViewModelBase
 
         foreach (var tab in _session.Tabs)
         {
-            if (tab.IsSplitPartner || !visibleIds.Contains(tab.Id))
+            if (tab.IsSplitPartner)
             {
                 continue;
             }
 
+            // The chip is decided before the capacity filter: a collapsed group
+            // shows nothing but its chip, so filtering on its hidden tabs first
+            // would drop the group from the strip entirely.
             if (tab.GroupId is { } groupId)
             {
                 if (run != groupId)
@@ -686,6 +714,12 @@ public sealed partial class ShellViewModel : ViewModelBase
             else
             {
                 run = null;
+            }
+
+            // Tabs beyond the strip's capacity live in the overflow panel.
+            if (!visibleIds.Contains(tab.Id))
+            {
+                continue;
             }
 
             desired.Add(ItemFor(tab));
