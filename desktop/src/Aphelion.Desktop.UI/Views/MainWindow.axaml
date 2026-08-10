@@ -67,8 +67,12 @@
                which is what limits how many tabs fit. -->
           <Grid ColumnDefinitions="Auto,Auto" HorizontalAlignment="Left">
 
+            <!-- Bound to StripHost by name, not $parent[Panel]: the nearest Panel
+                 ancestor is the Grid right above, whose width comes from this
+                 strip — a cycle that settles at zero and leaves no tabs at all. -->
             <ItemsControl Grid.Column="0" Name="TabStrip" ItemsSource="{Binding StripItems}"
-                          MaxWidth="{Binding $parent[Panel].Bounds.Width}">
+                          MaxWidth="{Binding #StripHost.Bounds.Width,
+                                             Converter={x:Static vm:DoubleConverters.LessNewTabButton}}">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                   <controls:TabStripPanel />
