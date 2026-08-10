@@ -18,7 +18,12 @@
     <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
   </Style>
 
-  <!-- Scrolling tab title -->
+  <!-- Scrolling tab title.
+
+       No TextTrimming: an ellipsis needs about as much room as a character, so
+       in a narrow tab it is all that fits and the name reads as "…". The control
+       clips instead, which keeps the opening letters visible however tight the
+       tab gets. -->
   <Style Selector="controls|MarqueeTextBlock">
     <Setter Property="Template">
       <ControlTemplate>
@@ -28,8 +33,7 @@
                    FontFamily="{TemplateBinding FontFamily}"
                    Foreground="{TemplateBinding Foreground}"
                    VerticalAlignment="Center"
-                   HorizontalAlignment="Left"
-                   TextTrimming="CharacterEllipsis" />
+                   HorizontalAlignment="Left" />
       </ControlTemplate>
     </Setter>
   </Style>
