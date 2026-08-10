@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Threading;
 using Aphelion.Desktop.UI.ViewModels;
 
 namespace Aphelion.Desktop.UI.Controls;
@@ -18,17 +19,6 @@ namespace Aphelion.Desktop.UI.Controls;
 /// </remarks>
 public sealed class TabStripPanel : Panel
 {
-    /// <summary>
-    /// Called with how many tabs the strip can hold at its current width, so the
-    /// shell can list the remainder in the overflow panel.
-    /// </summary>
-    /// <remarks>
-    /// A static handler rather than an event on the instance: the panel is built
-    /// by the ItemsControl's template and does not exist when the window wires
-    /// itself up, so there is nothing to subscribe to at that point.
-    /// </remarks>
-    public static Action<int>? CapacityReporter { get; set; }
-
     private int _reportedCapacity = -1;
     /// <summary>Widest a tab is allowed to be, matching Chrome's comfortable size.</summary>
     public const double MaxTabWidth = 240;
@@ -129,7 +119,24 @@ public sealed class TabStripPanel : Panel
         if (capacity != _reportedCapacity)
         {
             _reportedCapacity = capacity;
-            CapacityReporter?.Invoke(capacity);
+
+            // Reported through the panel's own DataContext, which is the shell.
+            // An earlier version routed this through a static hook the window
+            // installed, but the first layout passes run before the window is
+            // opened, so the hook was still null when it mattered.
+            //
+            // Posted rather than called straight out: acting on it rebuilds the
+            // strip's items, and changing a collection in the middle of the
+            // layout pass reading it does not take effect.
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    if (DataContext is ShellViewModel shell)
+                    {
+                        shell.ReportStripCapacity(capacity);
+                    }
+                },
+                DispatcherPriority.Background);
         }
 
         var x = 0d;

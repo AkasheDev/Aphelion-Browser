@@ -16,25 +16,62 @@
       <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
         <ItemsControl ItemsSource="{Binding Page}">
           <ItemsControl.ItemTemplate>
+            <!-- A row carries the same marks as the tab it stands for: its group's
+                 colour, and both favicons when it is a split pair. -->
             <DataTemplate DataType="vm:TabItemViewModel">
               <Button Classes="panel-row"
                       Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).ChooseCommand}"
                       CommandParameter="{Binding}">
-                <Grid ColumnDefinitions="Auto,*">
-                  <Image Grid.Column="0"
+                <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
+
+                  <Border Grid.Column="0"
+                          Classes="group-marker"
+                          IsVisible="{Binding IsGrouped}"
+                          Background="{Binding GroupBrush}" />
+
+                  <Image Grid.Column="1"
                          Classes="favicon"
                          Source="{Binding Favicon}"
                          RenderOptions.BitmapInterpolationMode="HighQuality"
                          IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                  <Path Grid.Column="0"
+                  <Path Grid.Column="1"
                         Classes="favicon-fallback"
                         Width="13" Height="13"
                         Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
                         IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNull}}" />
-                  <TextBlock Grid.Column="1"
+
+                  <TextBlock Grid.Column="2"
                              Text="{Binding Title}"
                              VerticalAlignment="Center"
                              TextTrimming="CharacterEllipsis" />
+
+                  <Border Grid.Column="3"
+                          Classes="split-divider"
+                          IsVisible="{Binding IsSplit}" />
+
+                  <Image Grid.Column="4"
+                         Classes="favicon"
+                         Margin="0"
+                         Source="{Binding PartnerFavicon}"
+                         RenderOptions.BitmapInterpolationMode="HighQuality"
+                         IsVisible="{Binding PartnerFavicon, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                  <Path Grid.Column="4"
+                        Classes="favicon-fallback"
+                        Width="13" Height="13"
+                        Margin="0"
+                        Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
+                        IsVisible="{Binding ShowsPartnerFallback}" />
+
+                  <Button Grid.Column="5"
+                          Classes="icon small"
+                          Margin="8,0,0,0"
+                          ToolTip.Tip="Close tab"
+                          IsVisible="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).CanClose}"
+                          Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).CloseCommand}"
+                          CommandParameter="{Binding}">
+                    <Path Classes="glyph" Data="M0,0 L8,8 M8,0 L0,8" />
+                  </Button>
+
                 </Grid>
               </Button>
             </DataTemplate>

@@ -45,11 +45,14 @@ public sealed partial class ShellViewModel : ViewModelBase
         _sessionStore = sessionStore;
         _favicons = favicons;
 
-        Overflow = new TabListViewModel("Other tabs", item =>
-        {
-            ActivateTab(item);
-            IsOverflowOpen = false;
-        });
+        Overflow = new TabListViewModel(
+            "Other tabs",
+            item =>
+            {
+                ActivateTab(item);
+                IsOverflowOpen = false;
+            },
+            close: CloseTab);
 
         SplitPicker = new TabListViewModel(
             "Choose a tab to split with",

@@ -18,19 +18,31 @@ public sealed partial class TabListViewModel : ViewModelBase
     private readonly List<TabItemViewModel> _all = [];
     private readonly Action<TabItemViewModel> _choose;
 
-    public TabListViewModel(string title, Action<TabItemViewModel> choose, Action? createNew = null)
+    public TabListViewModel(
+        string title,
+        Action<TabItemViewModel> choose,
+        Action? createNew = null,
+        Action<TabItemViewModel>? close = null)
     {
         Title = title;
         _choose = choose ?? throw new ArgumentNullException(nameof(choose));
         _createNew = createNew;
+        _close = close;
     }
 
     private readonly Action? _createNew;
+    private readonly Action<TabItemViewModel>? _close;
 
     public string Title { get; }
 
     /// <summary>Whether the list offers a "new tab" row alongside the existing tabs.</summary>
     public bool CanCreateNew => _createNew is not null;
+
+    /// <summary>
+    /// Whether rows can be closed from here. The overflow panel allows it; the
+    /// split picker does not, since it is asking which tab to pair with.
+    /// </summary>
+    public bool CanClose => _close is not null;
 
     /// <summary>The rows on the current page.</summary>
     public ObservableCollection<TabItemViewModel> Page { get; } = [];
@@ -75,6 +87,15 @@ public sealed partial class TabListViewModel : ViewModelBase
 
     [RelayCommand]
     private void CreateNew() => _createNew?.Invoke();
+
+    [RelayCommand]
+    private void Close(TabItemViewModel? item)
+    {
+        if (item is not null)
+        {
+            _close?.Invoke(item);
+        }
+    }
 
     [RelayCommand]
     private void PreviousPage()
