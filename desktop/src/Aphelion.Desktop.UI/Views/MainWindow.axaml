@@ -85,6 +85,7 @@
                   <Border Classes="tab"
                           Classes.active="{Binding IsActive}"
                           Classes.split="{Binding IsSplit}"
+                          Classes.exiting="{Binding IsExiting}"
                           chrome:WindowDecorationProperties.ElementRole="User">
 
                     <!-- Menu items are always present and enabled or disabled
@@ -337,13 +338,14 @@
     <!-- Content: the active tab's page, and beside it the split partner's when
          split view is on. The third column's width is driven from code-behind,
          since ColumnDefinitions sit outside the visual tree and cannot bind.
-         The two panels float above it, dismissed by clicking the scrim. -->
+         Other Tabs reserves a drawer beside it because a native WebView cannot
+         be composited underneath an Avalonia overlay. -->
     <!-- One toolbar for the window, above both panes -->
     <views:BrowserToolbarView DockPanel.Dock="Top" />
 
-    <Panel>
+    <Grid ColumnDefinitions="*,Auto">
 
-      <Grid Name="BrowserHost">
+      <Grid Grid.Column="0" Name="BrowserHost">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
@@ -391,6 +393,8 @@
             </Button>
 
             <views:TabListView DataContext="{Binding Shell.SplitPicker}"
+                               Width="320"
+                               MaxHeight="520"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center" />
           </Panel>
@@ -399,17 +403,19 @@
       </Border>
       </Grid>
 
-      <!-- Overflow panel: tabs that did not fit the strip -->
-      <Panel Classes="scrim"
-             IsVisible="{Binding Shell.IsOverflowOpen}"
-             PointerPressed="OnScrimPressed">
+      <!-- Native web surfaces cannot sit underneath Avalonia overlays. Reserving
+           a real drawer column keeps the active page live and visible instead of
+           replacing it with an empty backdrop while Other Tabs is open. -->
+      <Border Grid.Column="1"
+              Classes="drawer-host"
+              Width="344"
+              IsVisible="{Binding Shell.IsOverflowOpen}">
         <views:TabListView DataContext="{Binding Shell.Overflow}"
-                           HorizontalAlignment="Right"
-                           VerticalAlignment="Top"
-                           Margin="0,8,12,0" />
-      </Panel>
+                           HorizontalAlignment="Stretch"
+                           VerticalAlignment="Stretch" />
+      </Border>
 
-    </Panel>
+    </Grid>
 
   </DockPanel>
 

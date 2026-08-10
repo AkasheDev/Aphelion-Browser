@@ -47,6 +47,9 @@ public sealed partial class TabListViewModel : ViewModelBase
     /// <summary>Whether rows act as tabs rather than only as choices.</summary>
     public bool CanManage => Owner is not null;
 
+    /// <summary>Whether this list fills the persistent Other Tabs drawer.</summary>
+    public bool IsDrawer => Owner is not null;
+
     /// <summary>Whether the list offers a "new tab" row alongside the existing tabs.</summary>
     public bool CanCreateNew => _createNew is not null;
 
@@ -78,11 +81,24 @@ public sealed partial class TabListViewModel : ViewModelBase
 
     public bool CanGoNext => PageIndex < PageCount - 1;
 
+    /// <summary>
+    /// The first item on the following page, used as the identity boundary when a
+    /// row is dropped below the current page.
+    /// </summary>
+    public TabItemViewModel? ItemAfterCurrentPage
+    {
+        get
+        {
+            var index = (PageIndex + 1) * PageSize;
+            return index < _all.Count ? _all[index] : null;
+        }
+    }
+
     /// <summary>Replaces the contents, keeping the current page where possible.</summary>
     public void SetItems(IEnumerable<TabItemViewModel> items)
     {
         _all.Clear();
-        _all.AddRange(items);
+        _all.AddRange(items.DistinctBy(item => item.Id));
 
         PageIndex = Math.Clamp(PageIndex, 0, PageCount - 1);
         RefreshPage();
@@ -131,11 +147,51 @@ public sealed partial class TabListViewModel : ViewModelBase
 
     private void RefreshPage()
     {
-        Page.Clear();
+        var desired = _all
+            .Skip(PageIndex * PageSize)
+            .Take(PageSize)
+            .ToList();
 
-        foreach (var item in _all.Skip(PageIndex * PageSize).Take(PageSize))
+        // Self-heal any stale duplicate occurrence left by an interrupted routed
+        // gesture or an older build. A tab identity may appear at most once on a
+        // page even if a caller accidentally supplied the same row twice.
+        var seen = new HashSet<Aphelion.Desktop.Domain.ValueObjects.TabId>();
+
+        for (var i = 0; i < Page.Count;)
         {
-            Page.Add(item);
+            if (seen.Add(Page[i].Id))
+            {
+                i++;
+            }
+            else
+            {
+                Page.RemoveAt(i);
+            }
+        }
+
+        // Preserve row instances and their routed gesture while the shell syncs.
+        // Clearing and rebuilding during a pointer release leaves stale visuals
+        // on the active event route and is perceived as duplicated rows.
+        for (var i = Page.Count - 1; i >= 0; i--)
+        {
+            if (!desired.Contains(Page[i]))
+            {
+                Page.RemoveAt(i);
+            }
+        }
+
+        for (var i = 0; i < desired.Count; i++)
+        {
+            var current = Page.IndexOf(desired[i]);
+
+            if (current < 0)
+            {
+                Page.Insert(i, desired[i]);
+            }
+            else if (current != i)
+            {
+                Page.Move(current, i);
+            }
         }
 
         OnPropertyChanged(nameof(PageCount));
@@ -144,6 +200,7 @@ public sealed partial class TabListViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(CanGoPrevious));
         OnPropertyChanged(nameof(CanGoNext));
+        OnPropertyChanged(nameof(ItemAfterCurrentPage));
         PreviousPageCommand.NotifyCanExecuteChanged();
         NextPageCommand.NotifyCanExecuteChanged();
     }

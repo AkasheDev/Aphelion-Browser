@@ -21,6 +21,8 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
     private BrowserTab _tab = new(TabId.New());
     private IBrowserEngineSession? _session;
+    private int _sessionGeneration;
+    private PageAddress? _lastStartedAddress;
 
     public BrowserViewModel(NavigateFromAddressBar navigateFromAddressBar)
     {
@@ -100,18 +102,37 @@ public sealed partial class BrowserViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(session);
 
-        if (_session is not null)
+        if (ReferenceEquals(_session, session))
         {
-            _session.NavigationStarted -= OnNavigationStarted;
-            _session.NavigationCompleted -= OnNavigationCompleted;
+            return;
         }
 
+        DetachCurrentSession();
         _session = session;
+        _sessionGeneration++;
         _session.NavigationStarted += OnNavigationStarted;
         _session.NavigationCompleted += OnNavigationCompleted;
 
         RefreshHistoryState();
         ResumePendingNavigation();
+    }
+
+    /// <summary>
+    /// Releases the engine surface when its view is reused for another tab.
+    /// Delayed script results from that surface are invalidated at the same time,
+    /// so one tab can never inherit another page's title or favicon.
+    /// </summary>
+    public void DetachSession(IBrowserEngineSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        if (!ReferenceEquals(_session, session))
+        {
+            return;
+        }
+
+        DetachCurrentSession();
+        RefreshHistoryState();
     }
 
     [RelayCommand]
@@ -150,10 +171,16 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
     private void OnNavigationStarted(object? sender, EngineNavigationStartedEventArgs e)
     {
+        if (!ReferenceEquals(sender, _session))
+        {
+            return;
+        }
+
         // Navigation can also start from inside the page — a link click, a redirect.
         // Mirror it into the tab so the address bar tracks where we actually are.
         if (PageAddress.TryCreate(e.RequestedUrl, out var address) && address is not null)
         {
+            _lastStartedAddress = address;
             _tab.BeginNavigation(address);
         }
 
@@ -162,6 +189,31 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
     private async void OnNavigationCompleted(object? sender, EngineNavigationCompletedEventArgs e)
     {
+        if (!ReferenceEquals(sender, _session))
+        {
+            return;
+        }
+
+        // Native controls can report their initial/previous document while a
+        // blank tab is taking ownership of the surface. A blank domain tab has no
+        // navigation to complete and must never inherit that document's identity.
+        if (_tab.Address is null)
+        {
+            RefreshHistoryState();
+            return;
+        }
+
+        PageAddress.TryCreate(e.RequestedUrl, out var completedAddress);
+        completedAddress ??= e.RequestedUrl is null ? _lastStartedAddress : null;
+
+        if (completedAddress is null ||
+            !completedAddress.Equals(_tab.Address))
+        {
+            return;
+        }
+
+        _lastStartedAddress = null;
+
         if (e.IsSuccess)
         {
             _tab.CompleteNavigation(title: null);
@@ -190,41 +242,64 @@ public sealed partial class BrowserViewModel : ViewModelBase
     /// </remarks>
     private async Task ReadPageIdentityAsync()
     {
-        if (_session is null)
+        var session = _session;
+
+        if (session is null)
         {
             return;
         }
 
+        var generation = _sessionGeneration;
         var navigated = _tab.Address;
+
+        if (navigated is null)
+        {
+            return;
+        }
 
         // A literal separator rather than a newline: the result comes back as a
         // JSON string, where a newline arrives escaped and would not split.
-        var result = await _session.EvaluateAsync(
+        var result = await session.EvaluateAsync(
             """
             (function () {
               var icon = document.querySelector("link[rel~='icon']");
               var href = icon ? new URL(icon.getAttribute('href'), document.baseURI).href
                               : new URL('/favicon.ico', document.baseURI).href;
-              return document.title + '|@|' + href;
+              return location.href + '|@|' + document.title + '|@|' + href;
             })()
             """);
 
         // The user may have navigated again while the script ran; a late result
         // would relabel the wrong page.
-        if (result is null || _tab.Address != navigated)
+        if (result is null ||
+            generation != _sessionGeneration ||
+            !ReferenceEquals(session, _session) ||
+            _tab.Address != navigated)
         {
             return;
         }
 
         var parts = result.Trim().Trim('"').Split("|@|", StringSplitOptions.None);
 
-        if (parts.Length > 0 && !string.IsNullOrWhiteSpace(parts[0]))
+        // The native surface may have been reused quickly enough that a script
+        // ran against a different document on the same control. Session identity
+        // alone cannot detect that; the document URL must match too.
+        if (parts.Length < 2 ||
+            !Uri.TryCreate(parts[0].Trim(), UriKind.Absolute, out var documentUri) ||
+            !PageAddress.TryCreate(documentUri, out var documentAddress) ||
+            documentAddress is null ||
+            !documentAddress.Equals(navigated))
         {
-            _tab.UpdateTitle(parts[0].Trim());
+            return;
         }
 
-        if (parts.Length > 1 &&
-            Uri.TryCreate(parts[1].Trim(), UriKind.Absolute, out var iconUri) &&
+        if (!string.IsNullOrWhiteSpace(parts[1]))
+        {
+            _tab.UpdateTitle(parts[1].Trim());
+        }
+
+        if (parts.Length > 2 &&
+            Uri.TryCreate(parts[2].Trim(), UriKind.Absolute, out var iconUri) &&
             PageAddress.TryCreate(iconUri, out var icon))
         {
             _tab.UpdateFavicon(icon);
@@ -265,5 +340,19 @@ public sealed partial class BrowserViewModel : ViewModelBase
     {
         CanGoBack = _session?.CanGoBack ?? false;
         CanGoForward = _session?.CanGoForward ?? false;
+    }
+
+    private void DetachCurrentSession()
+    {
+        if (_session is null)
+        {
+            return;
+        }
+
+        _session.NavigationStarted -= OnNavigationStarted;
+        _session.NavigationCompleted -= OnNavigationCompleted;
+        _session = null;
+        _lastStartedAddress = null;
+        _sessionGeneration++;
     }
 }

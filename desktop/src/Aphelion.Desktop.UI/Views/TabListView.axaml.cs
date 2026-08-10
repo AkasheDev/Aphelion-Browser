@@ -33,6 +33,31 @@ public partial class TabListView : UserControl
         }
     }
 
+    private void OnRowKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is not (Key.Enter or Key.Space) ||
+            (e.Source is Visual source &&
+             source.FindAncestorOfType<Button>(includeSelf: true) is not null) ||
+            sender is not Border { DataContext: TabItemViewModel tab } ||
+            DataContext is not TabListViewModel list)
+        {
+            return;
+        }
+
+        list.ChooseCommand.Execute(tab);
+        e.Handled = true;
+    }
+
+    private void OnCloseClicked(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (sender is Button { DataContext: TabItemViewModel tab } &&
+            DataContext is TabListViewModel { CanClose: true } list)
+        {
+            list.CloseCommand.Execute(tab);
+            e.Handled = true;
+        }
+    }
+
     private void OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (!e.GetCurrentPoint(this).Properties.IsMiddleButtonPressed ||
@@ -42,8 +67,16 @@ public partial class TabListView : UserControl
             return;
         }
 
-        // Rows are Buttons carrying the tab as their DataContext.
-        var row = source.FindAncestorOfType<Button>(includeSelf: true);
+        Border? row = null;
+
+        for (Visual? visual = source; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is Border candidate && candidate.Classes.Contains("panel-row"))
+            {
+                row = candidate;
+                break;
+            }
+        }
 
         if (row?.DataContext is TabItemViewModel tab)
         {

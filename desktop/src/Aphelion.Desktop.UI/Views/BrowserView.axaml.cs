@@ -7,12 +7,20 @@ namespace Aphelion.Desktop.UI.Views;
 public partial class BrowserView : UserControl, IDisposable
 {
     private NativeWebViewSession? _session;
+    private BrowserViewModel? _attachedViewModel;
 
     public BrowserView() => InitializeComponent();
 
     protected override void OnDataContextChanged(EventArgs e)
     {
+        ReleaseSession();
         base.OnDataContextChanged(e);
+        AttachSession();
+    }
+
+    protected override void OnLoaded(Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        base.OnLoaded(e);
         AttachSession();
     }
 
@@ -24,8 +32,7 @@ public partial class BrowserView : UserControl, IDisposable
 
     public void Dispose()
     {
-        _session?.Dispose();
-        _session = null;
+        ReleaseSession();
         GC.SuppressFinalize(this);
     }
 
@@ -35,7 +42,8 @@ public partial class BrowserView : UserControl, IDisposable
     /// </summary>
     private void AttachSession()
     {
-        if (DataContext is not BrowserViewModel viewModel)
+        if (DataContext is not BrowserViewModel viewModel ||
+            _session is not null && ReferenceEquals(_attachedViewModel, viewModel))
         {
             return;
         }
@@ -47,9 +55,29 @@ public partial class BrowserView : UserControl, IDisposable
             return;
         }
 
-        _session?.Dispose();
-        _session = new NativeWebViewSession(webView);
+        ReleaseSession();
 
-        viewModel.AttachSession(_session);
+        var session = new NativeWebViewSession(webView);
+        _session = session;
+        _attachedViewModel = viewModel;
+
+        viewModel.AttachSession(session);
+    }
+
+    private void ReleaseSession()
+    {
+        var session = _session;
+        var viewModel = _attachedViewModel;
+
+        _session = null;
+        _attachedViewModel = null;
+
+        if (session is null)
+        {
+            return;
+        }
+
+        viewModel?.DetachSession(session);
+        session.Dispose();
     }
 }

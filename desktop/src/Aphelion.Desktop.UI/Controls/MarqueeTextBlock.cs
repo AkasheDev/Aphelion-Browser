@@ -80,13 +80,37 @@ public sealed class MarqueeTextBlock : TemplatedControl, IDisposable
     /// </remarks>
     protected override Size MeasureOverride(Size availableSize)
     {
-        var desired = base.MeasureOverride(availableSize);
+        if (_text is null)
+        {
+            return base.MeasureOverride(availableSize);
+        }
+
+        _text.Measure(new Size(double.PositiveInfinity, availableSize.Height));
 
         return new Size(
             double.IsInfinity(availableSize.Width)
-                ? desired.Width
-                : Math.Min(desired.Width, availableSize.Width),
-            desired.Height);
+                ? _text.DesiredSize.Width
+                : Math.Min(_text.DesiredSize.Width, availableSize.Width),
+            _text.DesiredSize.Height);
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        if (_text is not null)
+        {
+            // The viewport stays at the tab width, but the text itself must be
+            // arranged at its complete natural width. Arranging it at the
+            // viewport width clips the text layout before translating it, so the
+            // animation moves while no continuation can ever enter the viewport.
+            _text.Measure(new Size(double.PositiveInfinity, finalSize.Height));
+            _text.Arrange(new Rect(
+                0,
+                0,
+                _text.DesiredSize.Width,
+                finalSize.Height));
+        }
+
+        return finalSize;
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -183,11 +207,21 @@ public sealed class MarqueeTextBlock : TemplatedControl, IDisposable
         double to,
         TimeSpan duration,
         Easing easing,
-        CancellationToken token) =>
-        new Animation
+        CancellationToken token)
+    {
+        var transform = text.RenderTransform as TranslateTransform;
+
+        if (transform is null)
+        {
+            transform = new TranslateTransform();
+            text.RenderTransform = transform;
+        }
+
+        return new Animation
         {
             Duration = duration,
             Easing = easing,
+            FillMode = FillMode.Forward,
             Children =
             {
                 new KeyFrame
@@ -201,5 +235,6 @@ public sealed class MarqueeTextBlock : TemplatedControl, IDisposable
                     Setters = { new Setter(TranslateTransform.XProperty, to) },
                 },
             },
-        }.RunAsync(text, token);
+        }.RunAsync(transform, token);
+    }
 }

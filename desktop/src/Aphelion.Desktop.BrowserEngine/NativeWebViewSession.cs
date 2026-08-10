@@ -51,9 +51,15 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
 
     public async Task<string?> EvaluateAsync(string script)
     {
+        if (_disposed)
+        {
+            return null;
+        }
+
         try
         {
-            return await _webView.InvokeScript(script).ConfigureAwait(true);
+            var result = await _webView.InvokeScript(script).ConfigureAwait(true);
+            return _disposed ? null : result;
         }
         catch (Exception)
         {
@@ -70,7 +76,10 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     private void OnNavigationCompleted(object? sender, WebViewNavigationCompletedEventArgs e) =>
         NavigationCompleted?.Invoke(
             this,
-            new EngineNavigationCompletedEventArgs(e.IsSuccess, e.IsSuccess ? null : "Navigation failed."));
+            new EngineNavigationCompletedEventArgs(
+                e.IsSuccess,
+                e.IsSuccess ? null : "Navigation failed.",
+                e.Request));
 
     public void Dispose()
     {

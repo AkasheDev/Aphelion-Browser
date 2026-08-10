@@ -131,28 +131,17 @@ public partial class MainWindow : Window
             return;
         }
 
-        var transfer = shell.CaptureTransfer(tab);
-        shell.DetachTab(tab);
+        if (!shell.TryExtractTransfer(tab, out var transfer, out _) || transfer is null)
+        {
+            return;
+        }
+
         shell.CloseOverflowCommand.Execute(null);
 
         manager.TearOff(
             transfer,
             new PixelPoint(Position.X + 40, Position.Y + 40),
             new Size(Width, Height));
-    }
-
-    /// <summary>Clicking the backdrop dismisses whichever panel is open.</summary>
-    private void OnScrimPressed(object? sender, PointerPressedEventArgs e)
-    {
-        // Only the backdrop itself; a click inside the panel must not close it.
-        if (!ReferenceEquals(e.Source, sender) || Shell is not { } shell)
-        {
-            return;
-        }
-
-        shell.CloseOverflowCommand.Execute(null);
-        shell.CloseSplitPickerCommand.Execute(null);
-        e.Handled = true;
     }
 
     private void OnMinimizeRequested(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
@@ -190,7 +179,20 @@ public partial class MainWindow : Window
             return;
         }
 
-        var header = source as Border ?? source.FindAncestorOfType<Border>();
+        // Only a title-bar tab may use this window-level activation path. Popup
+        // rows also carry TabItemViewModel as their DataContext; treating those
+        // borders as strip headers activates a split candidate before its picker
+        // command runs and closes Other Tabs before its drag can complete.
+        Border? header = null;
+
+        for (Visual? visual = source; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is Border candidate && candidate.Classes.Contains("tab"))
+            {
+                header = candidate;
+                break;
+            }
+        }
 
         if (header?.DataContext is TabItemViewModel tab)
         {

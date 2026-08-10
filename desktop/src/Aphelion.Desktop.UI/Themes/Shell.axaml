@@ -66,6 +66,8 @@
     <Setter Property="ClipToBounds" Value="True" />
     <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
     <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="1" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="RenderTransformOrigin" Value="50%,50%" />
     <Setter Property="RenderTransform" Value="scale(1)" />
@@ -77,6 +79,14 @@
         <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.16" />
       </Transitions>
     </Setter>
+  </Style>
+
+  <!-- The same pose is used at both ends: a new tab starts here and eases to
+       normal; a closing tab eases here before the collection removes it. -->
+  <Style Selector="Border.tab.exiting">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="RenderTransform" Value="translate(0px, 3px) scale(0.96)" />
+    <Setter Property="IsHitTestVisible" Value="False" />
   </Style>
 
   <!-- Group chips -->
@@ -112,12 +122,12 @@
     <Setter Property="RenderTransform" Value="scale(1.012)" />
   </Style>
 
-  <!-- The active tab is lifted out of the title bar with a lighter fill and a
-       hairline border; without the border the two surfaces read as one block. -->
+  <!-- Keep the active surface fill and add a complete outline; a bottom-only
+       accent looked unrelated to the rounded title-bar language. -->
   <Style Selector="Border.tab.active">
     <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BrandAccentBrush}" />
-    <Setter Property="BorderThickness" Value="0,0,0,2" />
+    <Setter Property="BorderThickness" Value="1" />
   </Style>
 
   <Style Selector="Border.tab controls|MarqueeTextBlock.tab-title">
@@ -153,6 +163,10 @@
   <Style Selector="Border.tab.split">
     <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
     <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="Border.tab.active.split">
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandAccentBrush}" />
   </Style>
 
   <!-- The partner's title, styled like the primary one -->
@@ -374,9 +388,10 @@
 
   <!-- ===== Floating panels ===== -->
 
-  <!-- Dimmed backdrop that also catches the click that dismisses the panel -->
-  <Style Selector="Panel.scrim">
-    <Setter Property="Background" Value="#66000000" />
+  <Style Selector="Border.drawer-host">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+    <Setter Property="BorderThickness" Value="1,0,0,0" />
   </Style>
 
   <Style Selector="Border.panel">
@@ -385,7 +400,12 @@
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
     <Setter Property="Padding" Value="12" />
-    <Setter Property="MaxHeight" Value="520" />
+  </Style>
+
+  <Style Selector="Border.panel.drawer">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
   </Style>
 
   <Style Selector="TextBlock.panel-title">
@@ -406,6 +426,29 @@
     <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}" />
   </Style>
 
+  <Style Selector="Border.panel-row">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="Padding" Value="8,7" />
+    <Setter Property="Margin" Value="0,1" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}" />
+    <Setter Property="RenderTransformOrigin" Value="50%,50%" />
+    <Setter Property="RenderTransform" Value="scale(1)" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.14" />
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.16" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Border.panel-row.exiting">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="RenderTransform" Value="translate(0px, 3px) scale(0.96)" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
   <Style Selector="Button.panel-row /template/ ContentPresenter">
     <Setter Property="Background" Value="Transparent" />
   </Style>
@@ -415,6 +458,14 @@
   </Style>
 
   <Style Selector="Button.panel-row.active /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+  </Style>
+
+  <Style Selector="Border.panel-row:pointerover">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+  </Style>
+
+  <Style Selector="Border.panel-row.active">
     <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
   </Style>
 

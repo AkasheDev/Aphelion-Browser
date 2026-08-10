@@ -53,9 +53,19 @@ public sealed class EngineNavigationStartedEventArgs(Uri? requestedUrl) : EventA
     public Uri? RequestedUrl { get; } = requestedUrl;
 }
 
-public sealed class EngineNavigationCompletedEventArgs(bool isSuccess, string? failureReason) : EventArgs
+public sealed class EngineNavigationCompletedEventArgs(
+    bool isSuccess,
+    string? failureReason,
+    Uri? requestedUrl = null) : EventArgs
 {
     public bool IsSuccess { get; } = isSuccess;
 
     public string? FailureReason { get; } = failureReason;
+
+    /// <summary>
+    /// Document address reported by the engine for this completion. Correlating
+    /// it with the domain tab prevents a reused native surface from completing a
+    /// previous tab's navigation on its new owner.
+    /// </summary>
+    public Uri? RequestedUrl { get; } = requestedUrl;
 }

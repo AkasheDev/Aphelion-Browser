@@ -272,6 +272,28 @@ public sealed class BrowsingSession
             index = _tabs.Count;
         }
 
+        // Keeping a tab in an existing group also keeps that group contiguous.
+        // A pure reorder may target a row outside the group; clamp that placement
+        // to the nearest edge instead of splitting one group into two runs.
+        if (validGroup is { } destinationGroup)
+        {
+            var start = _tabs.FindIndex(t => t.GroupId == destinationGroup);
+
+            if (start >= 0)
+            {
+                var end = _tabs.FindLastIndex(t => t.GroupId == destinationGroup) + 1;
+
+                if (index < start)
+                {
+                    index = start;
+                }
+                else if (index > end)
+                {
+                    index = end;
+                }
+            }
+        }
+
         // An ungrouped entry may not split another group's contiguous run.
         var beforeGroup = index > 0 ? _tabs[index - 1].GroupId : null;
         var afterGroup = index < _tabs.Count ? _tabs[index].GroupId : null;
@@ -298,6 +320,16 @@ public sealed class BrowsingSession
         _tabs.InsertRange(index, block);
         DiscardEmptyGroups();
         return true;
+    }
+
+    /// <summary>
+    /// Reorders one visible entry without changing its group membership. Split
+    /// pairs remain one atomic block and grouped entries stay inside their run.
+    /// </summary>
+    public bool ReorderVisibleTabBefore(TabId id, TabId? beforeId)
+    {
+        var owner = VisibleOwner(id);
+        return owner is not null && MoveVisibleTabBefore(id, beforeId, owner.GroupId);
     }
 
     /// <summary>

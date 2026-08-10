@@ -73,7 +73,8 @@ public sealed class BrowserTab
     /// otherwise the page's own title, falling back to the host while it loads.
     /// </summary>
     public string DisplayTitle =>
-        !string.IsNullOrWhiteSpace(SearchTerm) ? SearchTerm!
+        IsBlank ? "New tab"
+        : !string.IsNullOrWhiteSpace(SearchTerm) ? SearchTerm!
         : !string.IsNullOrWhiteSpace(Title) ? Title
         : Address is not null ? Address.DisplayHost
         : "New tab";
@@ -116,13 +117,14 @@ public sealed class BrowserTab
 
     public void UpdateTitle(string? title)
     {
-        if (!string.IsNullOrWhiteSpace(title))
+        if (Address is not null && !string.IsNullOrWhiteSpace(title))
         {
             Title = title;
         }
     }
 
-    public void UpdateFavicon(PageAddress? address) => FaviconAddress = address;
+    public void UpdateFavicon(PageAddress? address) =>
+        FaviconAddress = Address is null ? null : address;
 
     /// <summary>Pairs this tab with <paramref name="partner"/> as the left half.</summary>
     public void SplitWith(TabId partner) => SplitPartnerId = partner;

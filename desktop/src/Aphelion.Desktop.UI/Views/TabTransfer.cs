@@ -55,13 +55,17 @@ internal static class TabTransfer
                 return true;
             }
 
-            var transfer = shell.CaptureTransfer(dragged);
-            shell.DetachTab(dragged);
+            if (!shell.TryExtractTransfer(dragged, out var transfer, out var sourceIsEmpty) ||
+                transfer is null)
+            {
+                return false;
+            }
+
             Adopt(target, transfer, before, group);
 
             // The last tab left with it, so the window it came from has nothing
             // to show.
-            if (shell.StripItems.Count == 0)
+            if (sourceIsEmpty)
             {
                 owner.Close();
             }
@@ -77,8 +81,10 @@ internal static class TabTransfer
             return false;
         }
 
-        var torn = shell.CaptureTransfer(dragged);
-        shell.DetachTab(dragged);
+        if (!shell.TryExtractTransfer(dragged, out var torn, out _) || torn is null)
+        {
+            return false;
+        }
 
         manager.TearOff(
             torn,

@@ -3,6 +3,7 @@ using Aphelion.Desktop.Application.Dtos;
 using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Domain.Entities;
 using Aphelion.Desktop.Domain.ValueObjects;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -20,6 +21,8 @@ namespace Aphelion.Desktop.UI.ViewModels;
 /// </remarks>
 public sealed partial class ShellViewModel : ViewModelBase
 {
+    private static readonly TimeSpan TabTransitionDuration = TimeSpan.FromMilliseconds(170);
+
     private readonly BrowsingSession _session = new();
     private readonly Func<BrowserViewModel> _browserFactory;
     private readonly Dictionary<TabId, BrowserViewModel> _browsers = [];
@@ -27,6 +30,8 @@ public sealed partial class ShellViewModel : ViewModelBase
     private readonly Dictionary<TabGroupId, GroupHeaderViewModel> _headers = [];
     private readonly ISessionStore? _sessionStore;
     private readonly IFaviconLoader? _favicons;
+    private readonly HashSet<TabId> _closingTabs = [];
+    private readonly HashSet<TabGroupId> _transitioningGroups = [];
 
     /// <summary>
     /// How much room the strip has, reported by the panel as it lays out. What
@@ -52,7 +57,7 @@ public sealed partial class ShellViewModel : ViewModelBase
                 ActivateTab(item);
                 IsOverflowOpen = false;
             },
-            close: CloseTab,
+            close: item => CloseTabCommand.Execute(item),
             owner: this);
 
         SplitPicker = new TabListViewModel(
@@ -158,18 +163,6 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// <summary>The address of a tab, for handing to a new window when torn off.</summary>
     public static PageAddress? AddressOf(TabItemViewModel item) => item?.Tab.Address;
 
-    /// <summary>Captures both pages represented by one visible tab entry.</summary>
-    public TabTransferSnapshot CaptureTransfer(TabItemViewModel item)
-    {
-        ArgumentNullException.ThrowIfNull(item);
-
-        var partner = item.Tab.SplitPartnerId is { } partnerId
-            ? _session.Tabs.FirstOrDefault(t => t.Id == partnerId)
-            : null;
-
-        return new TabTransferSnapshot(item.Tab.Address, partner?.Address);
-    }
-
     /// <summary>The tab's position in the session, which is the order the user sees.</summary>
     public int IndexOfTab(TabItemViewModel item)
     {
@@ -191,28 +184,70 @@ public sealed partial class ShellViewModel : ViewModelBase
     {
         var tab = _session.OpenTab();
         Attach(tab);
+        var item = ItemFor(tab);
+        item.IsExiting = true;
         SyncTabs();
+        RevealAfterRender(item);
     }
 
-    [RelayCommand]
-    private void CloseTab(TabItemViewModel? item)
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task CloseTab(TabItemViewModel? item)
     {
-        if (item is null)
+        if (item is null ||
+            !IsCurrent(item) ||
+            item.Tab.GroupId is { } groupId && _transitioningGroups.Contains(groupId) ||
+            !_closingTabs.Add(item.Id))
         {
             return;
         }
 
-        Detach(item.Id);
-        _session.CloseTab(item.Id);
-
-        // Closing the last tab opens a fresh one rather than leaving an empty
-        // window: a browser with no tabs has nothing to show and no way back.
-        if (_session.IsEmpty)
+        try
         {
-            Attach(_session.OpenTab());
-        }
+            if (HasRenderedSurface(item))
+            {
+                item.IsExiting = true;
+                await Task.Delay(TabTransitionDuration).ConfigureAwait(true);
+            }
 
-        SyncTabs();
+            // A delayed close may race a transfer or a group operation. Identity,
+            // not merely the id, proves this is still the same tab in this window.
+            if (!IsCurrent(item) || !_session.CloseTab(item.Id))
+            {
+                return;
+            }
+
+            Detach(item.Id);
+
+            TabItemViewModel? replacement = null;
+
+            // Closing the last tab opens a fresh one rather than leaving an empty
+            // window: a browser with no tabs has nothing to show and no way back.
+            if (_session.IsEmpty)
+            {
+                var tab = _session.OpenTab();
+                Attach(tab);
+                replacement = ItemFor(tab);
+                replacement.IsExiting = true;
+            }
+
+            SyncTabs();
+
+            if (replacement is not null)
+            {
+                RevealAfterRender(replacement);
+            }
+        }
+        finally
+        {
+            _closingTabs.Remove(item.Id);
+
+            // When the operation was aborted, restore the still-live row. A
+            // successfully removed view model has already been pruned.
+            if (IsCurrent(item))
+            {
+                item.IsExiting = false;
+            }
+        }
     }
 
     [RelayCommand]
@@ -245,6 +280,15 @@ public sealed partial class ShellViewModel : ViewModelBase
         SyncTabs();
     }
 
+    /// <summary>Reorders an Other Tabs row without implicitly regrouping it.</summary>
+    public void ReorderTab(TabItemViewModel item, TabItemViewModel? before)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        _session.ReorderVisibleTabBefore(item.Id, before?.Id);
+        SyncTabs();
+    }
+
     /// <summary>Drops a dragged group so its run starts at <paramref name="targetIndex"/>.</summary>
     public void DropGroup(TabGroupId groupId, int targetIndex)
     {
@@ -252,27 +296,105 @@ public sealed partial class ShellViewModel : ViewModelBase
         SyncTabs();
     }
 
-    [RelayCommand]
-    private void ToggleGroupCollapsed(TabGroupId groupId)
+    [RelayCommand(AllowConcurrentExecutions = true)]
+    private async Task ToggleGroupCollapsed(TabGroupId groupId)
     {
-        var group = _session.FindGroup(groupId);
-
-        if (group is null)
+        if (!_transitioningGroups.Add(groupId))
         {
             return;
         }
 
-        group.ToggleCollapsed();
-
-        // Collapsing the last visible run would leave the strip empty. Chrome
-        // opens a fresh tab rather than refusing the collapse, which would look
-        // like the chip simply not working.
-        if (group.IsCollapsed && _session.VisibleTabs.All(IsHidden))
+        try
         {
-            Attach(_session.OpenTab());
-        }
+            var group = _session.FindGroup(groupId);
 
-        SyncTabs();
+            if (group is null)
+            {
+                return;
+            }
+
+            var members = _session.VisibleTabs
+                .Where(tab => tab.GroupId == groupId)
+                .Select(ItemFor)
+                .ToArray();
+
+            if (members.Any(item => _closingTabs.Contains(item.Id)))
+            {
+                return;
+            }
+
+            // Expansion inserts the members in their closed pose. Releasing the
+            // pose on the render pass produces the reverse of the collapse.
+            if (group.IsCollapsed)
+            {
+                foreach (var member in members)
+                {
+                    member.IsExiting = true;
+                }
+
+                group.Expand();
+                SyncTabs();
+                RevealAfterRender(members);
+                return;
+            }
+
+            foreach (var member in members)
+            {
+                member.IsExiting = true;
+            }
+
+            if (members.Any(HasRenderedSurface))
+            {
+                await Task.Delay(TabTransitionDuration).ConfigureAwait(true);
+            }
+
+            // The group may have been removed by a transfer while the visual
+            // transition was running. Never toggle a replacement by accident.
+            group = _session.FindGroup(groupId);
+
+            if (group is null || group.IsCollapsed)
+            {
+                foreach (var member in members)
+                {
+                    member.IsExiting = false;
+                }
+
+                return;
+            }
+
+            group.Collapse();
+
+            TabItemViewModel? replacement = null;
+
+            // Collapsing the last visible run would leave the strip empty. Chrome
+            // opens a fresh tab rather than refusing the collapse.
+            if (_session.VisibleTabs.All(IsHidden))
+            {
+                var tab = _session.OpenTab();
+                Attach(tab);
+                replacement = ItemFor(tab);
+                replacement.IsExiting = true;
+            }
+
+            SyncTabs();
+
+            // A tab moved out of the group during the delay remains visible and
+            // must not inherit the group's hidden pose.
+            foreach (var member in members.Where(member =>
+                         !IsCurrent(member) || member.Tab.GroupId != groupId))
+            {
+                member.IsExiting = false;
+            }
+
+            if (replacement is not null)
+            {
+                RevealAfterRender(replacement);
+            }
+        }
+        finally
+        {
+            _transitioningGroups.Remove(groupId);
+        }
     }
 
     [RelayCommand]
@@ -551,25 +673,56 @@ public sealed partial class ShellViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Removes a tab because it moved to another window. Unlike closing, this never
-    /// opens a replacement tab: the caller is responsible for where the tab went.
+    /// Atomically validates and removes a visible entry for transfer. A stale row
+    /// cannot be extracted twice, so a repeated routed event cannot clone a tab in
+    /// the destination window.
     /// </summary>
-    public void DetachTab(TabItemViewModel item)
+    public bool TryExtractTransfer(
+        TabItemViewModel item,
+        out TabTransferSnapshot? transfer,
+        out bool sourceIsEmpty)
     {
         ArgumentNullException.ThrowIfNull(item);
 
+        transfer = null;
+        sourceIsEmpty = false;
+
+        if (!_tabItems.TryGetValue(item.Id, out var current) ||
+            !ReferenceEquals(current, item) ||
+            !_session.VisibleTabs.Any(tab => ReferenceEquals(tab, item.Tab)))
+        {
+            return false;
+        }
+
         var partnerId = item.Tab.SplitPartnerId;
+        var partner = partnerId is { } id
+            ? _session.Tabs.FirstOrDefault(tab => tab.Id == id)
+            : null;
+
+        transfer = new TabTransferSnapshot(item.Tab.Address, partner?.Address);
 
         Detach(item.Id);
 
-        if (partnerId is { } partner)
+        if (partnerId is { } partnerTabId)
         {
-            Detach(partner);
-            _session.CloseTab(partner);
+            Detach(partnerTabId);
+            _session.CloseTab(partnerTabId);
         }
 
-        _session.CloseTab(item.Id);
+        if (!_session.CloseTab(item.Id))
+        {
+            transfer = null;
+            return false;
+        }
+
+        if (_session.IsEmpty)
+        {
+            sourceIsEmpty = true;
+            return true;
+        }
+
         SyncTabs();
+        return true;
     }
 
     /// <summary>Adds a tab received from another window and activates it.</summary>
@@ -585,28 +738,14 @@ public sealed partial class ShellViewModel : ViewModelBase
         _session.MoveVisibleTabBefore(tab.Id, before?.Id, group);
         _session.Activate(tab.Id);
 
-        BrowserTab? partner = null;
-
         if (transfer.PartnerAddress is not null)
         {
-            partner = _session.OpenTabNextTo(tab, transfer.PartnerAddress, activate: false);
+            var partner = _session.OpenTabNextTo(tab, transfer.PartnerAddress, activate: false);
             Attach(partner);
             _session.Split(tab.Id, partner.Id);
         }
 
         SyncTabs();
-
-        if (transfer.PrimaryAddress is not null && _browsers.TryGetValue(tab.Id, out var browser))
-        {
-            browser.NavigateTo(transfer.PrimaryAddress);
-        }
-
-        if (partner is not null &&
-            transfer.PartnerAddress is not null &&
-            _browsers.TryGetValue(partner.Id, out var partnerBrowser))
-        {
-            partnerBrowser.NavigateTo(transfer.PartnerAddress);
-        }
     }
 
     /// <summary>Navigates the active tab, used when a new window opens on an address.</summary>
@@ -629,7 +768,6 @@ public sealed partial class ShellViewModel : ViewModelBase
         Attach(partner);
         _session.Split(active.Id, partner.Id);
         SyncTabs();
-        _browsers[partner.Id].NavigateTo(address);
     }
 
     /// <summary>The open-tab state to persist at shutdown.</summary>
@@ -817,7 +955,10 @@ public sealed partial class ShellViewModel : ViewModelBase
 
         // Only tabs that fit go in the strip; the rest are listed in the overflow
         // panel. Opening tabs the user cannot reach would strand them.
-        var listed = _session.VisibleTabs.Where(t => !IsHidden(t)).ToList();
+        var listed = _session.VisibleTabs
+            .Where(tab => !IsHidden(tab))
+            .DistinctBy(tab => tab.Id)
+            .ToList();
         var fits = FitCount(listed);
         var shown = listed.Take(fits).ToList();
         var overflowed = listed.Skip(fits).ToList();
@@ -893,6 +1034,31 @@ public sealed partial class ShellViewModel : ViewModelBase
             }
 
             desired.Add(ItemFor(tab));
+        }
+
+        // A reconcile must also repair duplicate occurrences seeded by a stale
+        // visual event from an older build. Contains/IndexOf alone would preserve
+        // the extra copy forever because both occurrences are still "desired".
+        var existingTabs = new HashSet<TabId>();
+        var existingGroups = new HashSet<TabGroupId>();
+
+        for (var i = 0; i < StripItems.Count;)
+        {
+            var isFirst = StripItems[i] switch
+            {
+                TabItemViewModel tab => existingTabs.Add(tab.Id),
+                GroupHeaderViewModel group => existingGroups.Add(group.Id),
+                _ => true,
+            };
+
+            if (isFirst)
+            {
+                i++;
+            }
+            else
+            {
+                StripItems.RemoveAt(i);
+            }
         }
 
         for (var i = StripItems.Count - 1; i >= 0; i--)
@@ -1000,7 +1166,7 @@ public sealed partial class ShellViewModel : ViewModelBase
                 _session.FindGroup(id)?.Recolor(color);
                 SyncTabs();
             },
-            toggle: () => ToggleGroupCollapsed(id),
+            toggle: () => ToggleGroupCollapsedCommand.Execute(id),
             ungroup: () =>
             {
                 foreach (var tab in _session.TabsInGroup(id))
@@ -1031,4 +1197,36 @@ public sealed partial class ShellViewModel : ViewModelBase
 
     private GroupColor? GroupColorOf(BrowserTab tab) =>
         tab.GroupId is { } id ? _session.FindGroup(id)?.Color : null;
+
+    /// <summary>Whether this exact row still belongs to this window.</summary>
+    private bool IsCurrent(TabItemViewModel item) =>
+        _tabItems.TryGetValue(item.Id, out var current) &&
+        ReferenceEquals(current, item) &&
+        _session.VisibleTabs.Any(tab => ReferenceEquals(tab, item.Tab));
+
+    /// <summary>Whether delaying a mutation can produce an animation the user sees.</summary>
+    private bool HasRenderedSurface(TabItemViewModel item) =>
+        StripItems.Contains(item) ||
+        IsOverflowOpen && Overflow.Page.Contains(item);
+
+    /// <summary>
+    /// Clears the closed pose after the new controls have entered the visual tree.
+    /// Posting at render priority is essential: clearing it in the same layout
+    /// pass would skip the transition entirely.
+    /// </summary>
+    private void RevealAfterRender(params TabItemViewModel[] items)
+    {
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                foreach (var item in items)
+                {
+                    if (IsCurrent(item))
+                    {
+                        item.IsExiting = false;
+                    }
+                }
+            },
+            DispatcherPriority.Render);
+    }
 }

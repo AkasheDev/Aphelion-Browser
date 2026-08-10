@@ -7,18 +7,12 @@ using Avalonia.VisualTree;
 namespace Aphelion.Desktop.UI.Views;
 
 /// <summary>
-/// Dragging a tab out of the overflow list: onto this window's strip to bring it
-/// back within reach, onto another window's strip, or onto empty desktop to give
-/// it a window of its own.
+/// Dragging a tab in the overflow list: reorder it in the list, put it on a tab
+/// strip, move it to another window, or tear it into a window of its own.
 /// </summary>
 /// <remarks>
-/// The pointer is captured on the row, so the drag keeps reporting after it leaves
-/// the panel — without that, the moment the pointer crossed the panel's edge the
-/// events would stop and the drop could never be placed.
-/// <para>
-/// The list does not reorder. Rows are only dragged out of it; where a tab belongs
-/// in the order is decided on the strip, where the order is actually visible.
-/// </para>
+/// The pointer is captured on the stable list root, so the drag keeps reporting
+/// after it leaves the panel and survives a row collection reconciliation.
 /// </remarks>
 internal sealed class TabListDragHandler
 {
@@ -32,6 +26,7 @@ internal sealed class TabListDragHandler
     private Control? _row;
     private Point _pressOrigin;
     private bool _isDragging;
+    private IPointer? _capturedPointer;
 
     public TabListDragHandler(Control root, Func<TabListViewModel?> list)
     {
@@ -44,9 +39,6 @@ internal sealed class TabListDragHandler
         _root.AddHandler(InputElement.KeyDownEvent, OnKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
     }
 
-    /// <summary>True while a row is actually being dragged, not merely pressed.</summary>
-    public bool IsDragging => _isDragging;
-
     private ShellViewModel? Shell => _list()?.Owner;
 
     private WindowManager? Manager => Shell?.WindowManager as WindowManager;
@@ -58,30 +50,28 @@ internal sealed class TabListDragHandler
         _isDragging = false;
 
         if (!e.GetCurrentPoint(_root).Properties.IsLeftButtonPressed ||
-            Shell is null ||
             e.Source is not Visual source)
         {
             return;
         }
 
-        // The row is itself a Button, so the usual "ignore presses on buttons"
-        // rule cannot apply. The nearest button is either the row or something
-        // inside it — the close button — and only the row is draggable.
-        if (source.FindAncestorOfType<Button>(includeSelf: true) is not { } button ||
-            !button.Classes.Contains("panel-row") ||
-            button.DataContext is not TabItemViewModel tab)
+        // A close/menu button inside a row owns its gesture; only the row surface
+        // begins a drag.
+        if (source.FindAncestorOfType<Button>(includeSelf: true) is not null ||
+            RowFrom(source) is not { } row ||
+            row.DataContext is not TabItemViewModel tab)
         {
             return;
         }
 
         _dragging = tab;
-        _row = button;
+        _row = row;
         _pressOrigin = e.GetPosition(_root);
     }
 
     private void OnPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (_dragging is null)
+        if (_dragging is null || Shell is null)
         {
             return;
         }
@@ -100,7 +90,8 @@ internal sealed class TabListDragHandler
 
             // Without the capture the drag would end at the panel's edge, which is
             // the one place it must survive.
-            e.Pointer.Capture(_row);
+            e.Pointer.Capture(_root);
+            _capturedPointer = e.Pointer;
         }
 
         var outside = !IsInsidePanel(position);
@@ -126,25 +117,46 @@ internal sealed class TabListDragHandler
 
     private void OnPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        var dragged = _dragging;
+        var pressed = _dragging;
+        var pressedRow = _row;
         var wasDragging = _isDragging;
         var position = e.GetPosition(_root);
+        var releasedRow = RowFrom(e.Source as Visual);
+        var releasedOverButton = e.Source is Visual source &&
+                                 source.FindAncestorOfType<Button>(includeSelf: true) is not null;
 
-        Reset(e.Pointer);
-
-        if (dragged is null || !wasDragging)
+        if (pressed is null)
         {
             return;
         }
 
-        // A drag that ends is never also a click: the row underneath the pointer
-        // must not be activated because the tab was let go over it.
+        Reset();
+
+        if (!wasDragging)
+        {
+            if (!releasedOverButton && ReferenceEquals(releasedRow, pressedRow))
+            {
+                _list()?.ChooseCommand.Execute(pressed);
+                e.Handled = true;
+            }
+
+            return;
+        }
+
+        // Dragging and choosing are mutually exclusive outcomes.
         e.Handled = true;
 
-        // Released without ever leaving the panel: the user changed their mind, or
-        // simply pressed a little unsteadily. Nothing moves.
+        // Inside the panel, vertical placement changes the real session order.
+        // The identity-based domain move keeps this correct even though only the
+        // overflow subset is currently rendered.
         if (IsInsidePanel(position))
         {
+            if (Shell is { } localShell)
+            {
+                var before = DropBefore(position, pressed);
+                localShell.ReorderTab(pressed, before);
+            }
+
             return;
         }
 
@@ -161,7 +173,7 @@ internal sealed class TabListDragHandler
         // purpose — closing it also reveals where the tab went.
         shell.CloseOverflowCommand.Execute(null);
 
-        TabTransfer.Complete(shell, manager, owner, dragged, screenPoint, allowSameWindow: true);
+        TabTransfer.Complete(shell, manager, owner, pressed, screenPoint, allowSameWindow: true);
     }
 
     /// <summary>Escape abandons the drag, leaving the tab where it was.</summary>
@@ -169,19 +181,20 @@ internal sealed class TabListDragHandler
     {
         if (e.Key == Key.Escape && _isDragging)
         {
-            Reset(pointer: null);
+            Reset();
             e.Handled = true;
         }
     }
 
-    private void Reset(IPointer? pointer)
+    private void Reset()
     {
         if (_row is not null)
         {
-            _row.Opacity = 1.0;
+            _row.ClearValue(Visual.OpacityProperty);
         }
 
-        pointer?.Capture(null);
+        _capturedPointer?.Capture(null);
+        _capturedPointer = null;
         Manager?.ClearDropPreview();
 
         _dragging = null;
@@ -193,4 +206,36 @@ internal sealed class TabListDragHandler
     private bool IsInsidePanel(Point position) =>
         position.X >= 0 && position.X <= _root.Bounds.Width &&
         position.Y >= 0 && position.Y <= _root.Bounds.Height;
+
+    private static Border? RowFrom(Visual? source)
+    {
+        for (var visual = source; visual is not null; visual = visual.GetVisualParent())
+        {
+            if (visual is Border row && row.Classes.Contains("panel-row"))
+            {
+                return row;
+            }
+        }
+
+        return null;
+    }
+
+    private TabItemViewModel? DropBefore(Point position, TabItemViewModel dragged)
+    {
+        foreach (var row in _root.GetVisualDescendants()
+                     .OfType<Border>()
+                     .Where(row => row.Classes.Contains("panel-row") &&
+                                   row.DataContext is TabItemViewModel &&
+                                   !ReferenceEquals(row.DataContext, dragged))
+                     .OrderBy(row => row.TranslatePoint(default, _root)?.Y ?? double.MaxValue))
+        {
+            if (row.TranslatePoint(default, _root) is { } origin &&
+                position.Y < origin.Y + row.Bounds.Height / 2)
+            {
+                return (TabItemViewModel)row.DataContext!;
+            }
+        }
+
+        return _list()?.ItemAfterCurrentPage;
+    }
 }

@@ -6,7 +6,8 @@
 
   <!-- Shared by the overflow panel and the split picker: same list, same paging,
        different title and different action on choosing a row. -->
-  <Border Classes="panel" Width="320">
+  <Border Classes="panel"
+          Classes.drawer="{Binding IsDrawer}">
     <Grid RowDefinitions="Auto,*,Auto">
 
       <TextBlock Grid.Row="0"
@@ -19,15 +20,16 @@
             <!-- A row carries the same marks as the tab it stands for: its group's
                  colour, and both favicons when it is a split pair. -->
             <DataTemplate DataType="vm:TabItemViewModel">
-              <Button Classes="panel-row"
+              <Border Classes="panel-row"
                       Classes.active="{Binding IsActive}"
-                      Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).ChooseCommand}"
-                      CommandParameter="{Binding}">
+                      Classes.exiting="{Binding IsExiting}"
+                      Focusable="True"
+                      KeyDown="OnRowKeyDown">
 
                 <!-- The same menu the strip offers, on the same commands: a tab
                      listed here is still a tab. Suppressed for a list that only
                      picks — see ContextRequested in the code-behind. -->
-                <Button.ContextMenu>
+                <Border.ContextMenu>
                   <ContextMenu>
                     <MenuItem Header="Add to new group"
                               Command="{Binding Owner.GroupActiveTabCommand}"
@@ -63,7 +65,7 @@
                               Command="{Binding Owner.CloseTabCommand}"
                               CommandParameter="{Binding}" />
                   </ContextMenu>
-                </Button.ContextMenu>
+                </Border.ContextMenu>
 
                 <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto,*,Auto">
 
@@ -117,13 +119,12 @@
                           Margin="8,0,0,0"
                           ToolTip.Tip="Close tab"
                           IsVisible="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).CanClose}"
-                          Command="{Binding $parent[ItemsControl].((vm:TabListViewModel)DataContext).CloseCommand}"
-                          CommandParameter="{Binding}">
+                          Click="OnCloseClicked">
                     <Path Classes="glyph" Data="M0,0 L8,8 M8,0 L0,8" />
                   </Button>
 
                 </Grid>
-              </Button>
+              </Border>
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>

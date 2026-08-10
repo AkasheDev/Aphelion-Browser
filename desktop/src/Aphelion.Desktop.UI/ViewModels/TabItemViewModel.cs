@@ -41,6 +41,14 @@ public sealed partial class TabItemViewModel(
     [ObservableProperty]
     private bool _isActive;
 
+    /// <summary>
+    /// Places the rendered tab in its closed pose. Existing tabs transition into
+    /// this pose before removal; newly inserted tabs start here and transition
+    /// back out of it, making close the exact reverse of open.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isExiting;
+
     /// <summary>Whether the active tab can pair with this ordinary tab.</summary>
     public bool CanSplitWithActive => !IsActive && !IsSplit;
 
