@@ -20,11 +20,14 @@
 
     <Panel Background="{DynamicResource SurfaceBaseBrush}">
 
-      <web:NativeWebView Name="WebView" IsVisible="{Binding !IsBlank}" />
+      <web:NativeWebView Name="WebView" IsVisible="{Binding ShouldShowWebView}" />
 
       <Panel IsVisible="{Binding IsBlank}">
         <views:NewTabPage DataContext="{Binding NewTab}" />
       </Panel>
+
+      <views:NavigationErrorPage DataContext="{Binding ErrorPage}"
+                                 IsVisible="{Binding IsVisible}" />
 
     </Panel>
 

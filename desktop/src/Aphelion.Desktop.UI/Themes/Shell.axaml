@@ -327,6 +327,29 @@
     <Setter Property="Opacity" Value="0.96" />
   </Style>
 
+  <!-- The logo remains just the logo; a blurred duplicate behind it follows its
+       own silhouette and gives it a restrained presence against the star field. -->
+  <Style Selector="Grid.newtab-logo-mark">
+    <Setter Property="Width" Value="88" />
+    <Setter Property="Height" Value="88" />
+  </Style>
+
+  <Style Selector="Image.newtab-logo-glow">
+    <Setter Property="Width" Value="88" />
+    <Setter Property="Height" Value="88" />
+    <Setter Property="Opacity" Value="0.48" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Effect"><BlurEffect Radius="13" /></Setter>
+  </Style>
+
+  <Style Selector="Image.newtab-logo-image">
+    <Setter Property="Width" Value="76" />
+    <Setter Property="Height" Value="76" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
   <Style Selector="TextBlock.newtab-greeting-headline">
     <Setter Property="FontSize" Value="31" />
     <Setter Property="FontWeight" Value="SemiBold" />
@@ -370,6 +393,10 @@
     <Setter Property="BorderBrush" Value="{DynamicResource NewTabVioletBrush}" />
   </Style>
 
+  <Style Selector="Border.newtab-search.suggestions-open">
+    <Setter Property="CornerRadius" Value="29,29,0,0" />
+  </Style>
+
   <Style Selector="Button.newtab-engine-trigger">
     <Setter Property="Width" Value="42" />
     <Setter Property="Height" Value="42" />
@@ -406,6 +433,28 @@
   </Style>
 
   <Style Selector="Button.newtab-engine-option:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+  </Style>
+
+  <Style Selector="Border.newtab-suggestions">
+    <Setter Property="Padding" Value="6,5,6,6" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="CornerRadius" Value="0,0,18,18" />
+    <Setter Property="Background" Value="{DynamicResource NewTabBackdropBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource NewTabGlassBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1,0,1,1" />
+  </Style>
+
+  <Style Selector="Button.newtab-suggestion">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Padding" Value="13,10" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="9" />
+  </Style>
+
+  <Style Selector="Button.newtab-suggestion:pointerover /template/ ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
   </Style>
 
@@ -711,7 +760,90 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
   </Style>
 
-  <!-- ===== Status bar ===== -->
+  <!-- ===== Navigation progress and status ===== -->
+
+  <Style Selector="ProgressBar.navigation-progress">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="MaxHeight" Value="1" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Value" Duration="0:0:0.14" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Foreground">
+      <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+        <GradientStop Offset="0" Color="{DynamicResource BrandPrimary}" />
+        <GradientStop Offset="1" Color="{DynamicResource BrandAccent}" />
+      </LinearGradientBrush>
+    </Setter>
+  </Style>
+
+  <!-- ===== Local navigation error page ===== -->
+
+  <Style Selector="Border.navigation-error-icon">
+    <Setter Property="Width" Value="72" />
+    <Setter Property="Height" Value="72" />
+    <Setter Property="CornerRadius" Value="36" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="TextBlock.navigation-error-headline">
+    <Setter Property="FontSize" Value="27" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="-0.35" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.navigation-error-message">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <Style Selector="Border.navigation-error-hint">
+    <Setter Property="Padding" Value="16,11" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="Border.navigation-error-hint TextBlock">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <Style Selector="Button.navigation-error-retry, Button.navigation-error-new-tab">
+    <Setter Property="Padding" Value="17,9" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+
+  <Style Selector="Button.navigation-error-retry">
+    <Setter Property="Background" Value="{DynamicResource BrandPrimaryBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundOnAccentBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="Button.navigation-error-retry:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BrandAccentBrush}" />
+  </Style>
+
+  <Style Selector="Button.navigation-error-new-tab">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="Button.navigation-error-new-tab:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+  </Style>
 
   <Style Selector="Border.statusbar">
     <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />

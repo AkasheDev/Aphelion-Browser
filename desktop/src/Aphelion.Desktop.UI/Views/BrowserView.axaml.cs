@@ -78,6 +78,9 @@ public partial class BrowserView : UserControl, IDisposable
         }
 
         viewModel?.DetachSession(session);
+        // A native web view can continue media playback after it leaves the
+        // Avalonia visual tree. Explicitly blank it before releasing handlers.
+        session.Close();
         session.Dispose();
     }
 }

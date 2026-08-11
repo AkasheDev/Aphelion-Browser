@@ -28,6 +28,7 @@ internal static class CompositionRoot
         services.AddSingleton<INewTabShortcutStore, JsonNewTabShortcutStore>();
         services.AddSingleton<IFaviconLoader, FaviconLoader>();
         services.AddSingleton<ICurrentWeatherProvider, OpenMeteoCurrentWeatherProvider>();
+        services.AddSingleton<ISearchSuggestionProvider, SearchEngineSuggestionProvider>();
         services.AddSingleton<ISearchEnginePreferenceStore, JsonSearchEnginePreferenceStore>();
         services.AddSingleton<ConfigurableSearchQueryBuilder>();
         services.AddSingleton<ISearchQueryBuilder>(sp =>

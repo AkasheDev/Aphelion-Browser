@@ -75,63 +75,90 @@
 
     <StackPanel Width="820" Margin="32" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="28">
       <StackPanel Spacing="18">
+        <Grid Classes="newtab-logo-mark" HorizontalAlignment="Center" IsHitTestVisible="False"
+              RenderTransform="translate(0px,-16px)">
+          <Image Classes="newtab-logo-glow"
+                 Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
+                 RenderOptions.BitmapInterpolationMode="HighQuality" />
+          <Image Classes="newtab-logo-image"
+                 Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
+                 RenderOptions.BitmapInterpolationMode="HighQuality" />
+        </Grid>
         <StackPanel Classes="newtab-greeting" Orientation="Horizontal" Spacing="9" HorizontalAlignment="Center">
           <TextBlock Classes="newtab-greeting-headline" Text="{Binding Ambient.GreetingHeadline}" />
           <TextBlock Classes="newtab-greeting-prompt" Text="{Binding Ambient.GreetingPrompt}" />
         </StackPanel>
-        <Border Classes="newtab-search">
-          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="5">
-            <Grid>
-              <Button Name="SearchEngineButton"
-                      Classes="newtab-engine-trigger"
-                      Command="{Binding SearchEngines.ToggleCommand}"
-                      ToolTip.Tip="Choose search engine">
-                <ContentControl Content="{Binding SearchEngines.Selected}"
-                                ContentTemplate="{StaticResource SelectedSearchEngineLogoTemplate}" />
+        <Grid Name="NewTabSearchAnchor" Height="58" ClipToBounds="False">
+          <Border Name="NewTabSearchSurface"
+                  Classes="newtab-search"
+                  Classes.suggestions-open="{Binding Search.HasSuggestions}">
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="5">
+              <Grid>
+                <Button Name="SearchEngineButton"
+                        Classes="newtab-engine-trigger"
+                        Command="{Binding SearchEngines.ToggleCommand}"
+                        ToolTip.Tip="Choose search engine">
+                  <ContentControl Content="{Binding SearchEngines.Selected}"
+                                  ContentTemplate="{StaticResource SelectedSearchEngineLogoTemplate}" />
+                </Button>
+                <Popup IsOpen="{Binding SearchEngines.IsOpen, Mode=TwoWay}"
+                       PlacementTarget="{Binding ElementName=SearchEngineButton}"
+                       Placement="Bottom"
+                       VerticalOffset="8"
+                       IsLightDismissEnabled="True">
+                  <Border Classes="newtab-engine-picker">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="SEARCH WITH" FontSize="10" FontWeight="SemiBold" LetterSpacing="1.1"
+                                 Foreground="{DynamicResource NewTabMutedBrush}" Margin="8,4,8,5" />
+                      <ItemsControl ItemsSource="{Binding SearchEngines.Options}">
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:SearchEngineOptionViewModel">
+                            <Button Classes="newtab-engine-option" Click="OnSearchEngineSelected">
+                              <StackPanel Orientation="Horizontal" Spacing="10">
+                                <ContentControl Content="{Binding}" ContentTemplate="{StaticResource SearchEngineLogoTemplate}" />
+                                <TextBlock Text="{Binding Name}" FontSize="12.5" FontWeight="Medium"
+                                           Foreground="{DynamicResource NewTabForegroundBrush}" VerticalAlignment="Center" />
+                              </StackPanel>
+                            </Button>
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </Border>
+                </Popup>
+              </Grid>
+              <TextBox Name="SearchBox" Grid.Column="1" Classes="newtab-search-box" Text="{Binding Search.SearchText}" PlaceholderText="Search the web or enter an address">
+                <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding Search.SearchCommand}" /></TextBox.KeyBindings>
+              </TextBox>
+              <Button Grid.Column="2" Classes="newtab-search-submit" Command="{Binding Search.SearchCommand}" ToolTip.Tip="Search">
+                <Path Width="16" Height="16" Stretch="Uniform" Stroke="{DynamicResource NewTabForegroundBrush}" StrokeThickness="1.7" Data="M2,8 H14 M9,3 L14,8 L9,13" />
               </Button>
-              <Popup IsOpen="{Binding SearchEngines.IsOpen, Mode=TwoWay}"
-                     PlacementTarget="{Binding ElementName=SearchEngineButton}"
-                     Placement="Bottom"
-                     VerticalOffset="8"
-                     IsLightDismissEnabled="True">
-                <Border Classes="newtab-engine-picker">
-                  <StackPanel Spacing="4">
-                    <TextBlock Text="SEARCH WITH"
-                               FontSize="10"
-                               FontWeight="SemiBold"
-                               LetterSpacing="1.1"
-                               Foreground="{DynamicResource NewTabMutedBrush}"
-                               Margin="8,4,8,5" />
-                    <ItemsControl ItemsSource="{Binding SearchEngines.Options}">
-                      <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:SearchEngineOptionViewModel">
-                          <Button Classes="newtab-engine-option"
-                                  Click="OnSearchEngineSelected">
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                              <ContentControl Content="{Binding}"
-                                              ContentTemplate="{StaticResource SearchEngineLogoTemplate}" />
-                              <TextBlock Text="{Binding Name}"
-                                         FontSize="12.5"
-                                         FontWeight="Medium"
-                                         Foreground="{DynamicResource NewTabForegroundBrush}"
-                                         VerticalAlignment="Center" />
-                            </StackPanel>
-                          </Button>
-                        </DataTemplate>
-                      </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                  </StackPanel>
-                </Border>
-              </Popup>
             </Grid>
-            <TextBox Name="SearchBox" Grid.Column="1" Classes="newtab-search-box" Text="{Binding SearchText}" PlaceholderText="Search the web or enter an address">
-              <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" /></TextBox.KeyBindings>
-            </TextBox>
-            <Button Grid.Column="2" Classes="newtab-search-submit" Command="{Binding SearchCommand}" ToolTip.Tip="Search">
-              <Path Width="16" Height="16" Stretch="Uniform" Stroke="{DynamicResource NewTabForegroundBrush}" StrokeThickness="1.7" Data="M2,8 H14 M9,3 L14,8 L9,13" />
-            </Button>
-          </Grid>
-        </Border>
+          </Border>
+          <Popup IsOpen="{Binding Search.HasSuggestions}"
+                 Placement="Bottom"
+                 PlacementTarget="{Binding ElementName=NewTabSearchAnchor}">
+            <Border Classes="newtab-suggestions"
+                    Width="{Binding Bounds.Width, ElementName=NewTabSearchSurface}">
+              <ItemsControl ItemsSource="{Binding Search.Suggestions}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="x:String">
+                    <Button Classes="newtab-suggestion" Click="OnSearchSuggestionSelected">
+                      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="11">
+                        <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource NewTabMutedBrush}"
+                              StrokeThickness="1.5" VerticalAlignment="Center"
+                              Data="M6.2,1 A5.2,5.2 0 1 0 6.2,11.4 A5.2,5.2 0 1 0 6.2,1 M10.1,10.1 L14,14" />
+                        <TextBlock Grid.Column="1" Text="{Binding}" FontSize="13" FontWeight="Medium"
+                                   Foreground="{DynamicResource NewTabForegroundBrush}" TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center" />
+                      </Grid>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+          </Popup>
+        </Grid>
       </StackPanel>
 
       <ItemsControl ItemsSource="{Binding ShortcutTiles}" HorizontalAlignment="Center">

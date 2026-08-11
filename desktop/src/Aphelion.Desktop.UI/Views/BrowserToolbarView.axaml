@@ -11,46 +11,49 @@
 
     Navigation binds to the active browser; split and grouping act on the window.
   -->
-  <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*"
-        Margin="6,6,10,6"
-        ColumnSpacing="2"
+  <Grid RowDefinitions="Auto,1"
         Background="{DynamicResource SurfaceBaseBrush}"
         DataContext="{Binding}">
 
-    <Button Grid.Column="0" Classes="icon" ToolTip.Tip="Back"
+    <Grid Grid.Row="0"
+          ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*"
+          Margin="6,6,10,6"
+          ColumnSpacing="2">
+
+      <Button Grid.Column="0" Classes="icon" ToolTip.Tip="Back"
             Command="{Binding Shell.FocusedBrowser.GoBackCommand}">
       <Path Classes="glyph" Data="M8,1 L3,6.5 L8,12" />
-    </Button>
+      </Button>
 
-    <Button Grid.Column="1" Classes="icon" ToolTip.Tip="Forward"
+      <Button Grid.Column="1" Classes="icon" ToolTip.Tip="Forward"
             Command="{Binding Shell.FocusedBrowser.GoForwardCommand}">
       <Path Classes="glyph" Data="M4,1 L9,6.5 L4,12" />
-    </Button>
+      </Button>
 
-    <Button Grid.Column="2" Classes="icon" ToolTip.Tip="Reload"
+      <Button Grid.Column="2" Classes="icon" ToolTip.Tip="Reload"
             Command="{Binding Shell.FocusedBrowser.ReloadCommand}"
             IsVisible="{Binding !Shell.FocusedBrowser.IsLoading}">
       <Path Classes="glyph"
             Data="M12,6.5 A5.5,5.5 0 1 1 10.1,2.3 M12.3,0 V3.2 H9.1" />
-    </Button>
+      </Button>
 
-    <Button Grid.Column="2" Classes="icon" ToolTip.Tip="Stop"
+      <Button Grid.Column="2" Classes="icon" ToolTip.Tip="Stop"
             Command="{Binding Shell.FocusedBrowser.StopLoadingCommand}"
             IsVisible="{Binding Shell.FocusedBrowser.IsLoading}">
       <Path Classes="glyph" Data="M2,2 L11,11 M11,2 L2,11" />
-    </Button>
+      </Button>
 
-    <Button Grid.Column="3" Classes="icon" ToolTip.Tip="Split view"
+      <Button Grid.Column="3" Classes="icon" ToolTip.Tip="Split view"
             Command="{Binding Shell.ToggleSplitCommand}">
       <Path Classes="glyph" Data="M1,1 H12 V12 H1 Z M6.5,1 V12" />
-    </Button>
+      </Button>
 
-    <Button Grid.Column="4" Classes="icon" ToolTip.Tip="Group or ungroup this tab"
+      <Button Grid.Column="4" Classes="icon" ToolTip.Tip="Group or ungroup this tab"
             Command="{Binding Shell.GroupActiveTabCommand}">
       <Path Classes="glyph" Data="M0.5,2.5 H12.5 V10.5 H0.5 Z M4.5,2.5 V10.5" />
-    </Button>
+      </Button>
 
-    <TextBox Grid.Column="5"
+      <TextBox Grid.Column="5"
              Classes="address"
              Margin="8,0,0,0"
              Text="{Binding Shell.FocusedBrowser.AddressText}"
@@ -58,7 +61,18 @@
       <TextBox.KeyBindings>
         <KeyBinding Gesture="Enter" Command="{Binding Shell.FocusedBrowser.NavigateCommand}" />
       </TextBox.KeyBindings>
-    </TextBox>
+      </TextBox>
+
+    </Grid>
+
+    <!-- Kept directly under the navigation strip; a future bookmark bar can
+         move this single row below itself without changing loading behavior. -->
+    <ProgressBar Grid.Row="1"
+                 Classes="navigation-progress"
+                 Minimum="0"
+                 Maximum="100"
+                 Value="{Binding Shell.FocusedBrowser.LoadingProgress}"
+                 IsVisible="{Binding Shell.FocusedBrowser.IsLoadingProgressVisible}" />
 
   </Grid>
 

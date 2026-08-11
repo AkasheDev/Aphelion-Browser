@@ -2,6 +2,7 @@ using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Application.UseCases;
 using Aphelion.Desktop.Domain.Entities;
 using Aphelion.Desktop.Domain.ValueObjects;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -21,26 +22,40 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
     private BrowserTab _tab = new(TabId.New());
     private IBrowserEngineSession? _session;
+    private readonly DispatcherTimer _loadingProgressTimer;
     private int _sessionGeneration;
+    private int _progressGeneration;
     private PageAddress? _lastStartedAddress;
 
     public BrowserViewModel(
         NavigateFromAddressBar navigateFromAddressBar,
         NewTabShortcutHub? shortcutHub = null,
         NewTabAmbientViewModel? ambient = null,
-        SearchEngineSelectorViewModel? searchEngines = null)
+        SearchEngineSelectorViewModel? searchEngines = null,
+        ISearchSuggestionProvider? suggestions = null)
     {
         _navigateFromAddressBar = navigateFromAddressBar
             ?? throw new ArgumentNullException(nameof(navigateFromAddressBar));
+        _loadingProgressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
+        _loadingProgressTimer.Tick += OnLoadingProgressTick;
+        ErrorPage = new NavigationErrorPageViewModel(RetryNavigation, ReturnToNewTab);
+        ErrorPage.PropertyChanged += OnErrorPagePropertyChanged;
         NewTab = new NewTabPageViewModel(
             shortcutHub,
             ambient,
             searchEngines,
+            suggestions,
             NavigateFromNewTab,
             NavigateTo);
     }
 
     public NewTabPageViewModel NewTab { get; }
+
+    /// <summary>Local error surface shown instead of an engine-specific failure page.</summary>
+    public NavigationErrorPageViewModel ErrorPage { get; }
+
+    /// <summary>Whether the native surface should remain visible behind browser UI.</summary>
+    public bool ShouldShowWebView => !IsBlank && !ErrorPage.IsVisible;
 
     /// <summary>
     /// Binds this view model to the tab it drives. The shell owns tab lifetime, so
@@ -64,6 +79,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(address);
 
+        ErrorPage.Hide();
         _tab.BeginNavigation(address);
         _session?.Navigate(address);
         SyncFromTab();
@@ -111,6 +127,14 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _isLoading;
+
+    /// <summary>Simulated, monotonic navigation progress from 0 to 100.</summary>
+    [ObservableProperty]
+    private double _loadingProgress;
+
+    /// <summary>Remains visible briefly at 100 so completion never looks abrupt.</summary>
+    [ObservableProperty]
+    private bool _isLoadingProgressVisible;
 
     [ObservableProperty]
     private bool _isBlank = true;
@@ -343,8 +367,29 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
     private void SyncFromTab()
     {
+        var wasLoading = IsLoading;
         IsLoading = _tab.LoadState == TabLoadState.Loading;
         IsBlank = _tab.IsBlank;
+        OnPropertyChanged(nameof(ShouldShowWebView));
+
+        if (IsLoading)
+        {
+            ErrorPage.Hide();
+
+            if (!wasLoading)
+            {
+                BeginLoadingProgress();
+            }
+        }
+        else if (wasLoading)
+        {
+            CompleteLoadingProgress();
+        }
+
+        if (_tab.LoadState == TabLoadState.Failed)
+        {
+            ErrorPage.Present(_tab.Address, _tab.FailureReason);
+        }
 
         // Do not overwrite the address bar while the user is typing into it: only
         // follow the tab when a navigation is in flight or has just landed.
@@ -355,8 +400,13 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
         StatusText = _tab.LoadState switch
         {
-            TabLoadState.Loading => "Loading…",
-            TabLoadState.Failed => _tab.FailureReason ?? "Navigation failed.",
+            // Loading is represented by the chrome progress indicator. Keeping
+            // this empty prevents a second, disconnected status bar at the page
+            // bottom while preserving failure feedback below.
+            TabLoadState.Loading => string.Empty,
+            // The local error page owns failure copy as well, so native failure
+            // text never reappears below the content area.
+            TabLoadState.Failed => string.Empty,
             _ => string.Empty,
         };
 
@@ -383,5 +433,75 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _session = null;
         _lastStartedAddress = null;
         _sessionGeneration++;
+        ResetLoadingProgress();
+    }
+
+    private void BeginLoadingProgress()
+    {
+        _progressGeneration++;
+        _loadingProgressTimer.Start();
+        LoadingProgress = 9;
+        IsLoadingProgressVisible = true;
+    }
+
+    private void OnLoadingProgressTick(object? sender, EventArgs e)
+    {
+        // Native WebViews do not expose portable byte-level progress. Move
+        // quickly at first then asymptotically approach completion, reserving
+        // the final portion for the real completed-navigation event.
+        LoadingProgress = Math.Min(
+            92,
+            LoadingProgress + Math.Max(0.35, (92 - LoadingProgress) * 0.08));
+    }
+
+    private void CompleteLoadingProgress()
+    {
+        _loadingProgressTimer.Stop();
+        LoadingProgress = 100;
+        var generation = ++_progressGeneration;
+        _ = HideCompletedProgressAsync(generation);
+    }
+
+    private async Task HideCompletedProgressAsync(int generation)
+    {
+        await Task.Delay(TimeSpan.FromMilliseconds(180)).ConfigureAwait(true);
+
+        if (generation == _progressGeneration && !IsLoading)
+        {
+            IsLoadingProgressVisible = false;
+            LoadingProgress = 0;
+        }
+    }
+
+    private void ResetLoadingProgress()
+    {
+        _progressGeneration++;
+        _loadingProgressTimer.Stop();
+        IsLoadingProgressVisible = false;
+        LoadingProgress = 0;
+    }
+
+    private void RetryNavigation()
+    {
+        if (_tab.Address is { } address)
+        {
+            NavigateTo(address);
+        }
+    }
+
+    private void ReturnToNewTab()
+    {
+        _session?.StopLoading();
+        _tab.ResetToBlank();
+        ErrorPage.Hide();
+        SyncFromTab();
+    }
+
+    private void OnErrorPagePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(NavigationErrorPageViewModel.IsVisible))
+        {
+            OnPropertyChanged(nameof(ShouldShowWebView));
+        }
     }
 }

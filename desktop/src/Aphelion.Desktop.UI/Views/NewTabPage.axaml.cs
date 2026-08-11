@@ -77,6 +77,15 @@ public partial class NewTabPage : UserControl
         }
     }
 
+    private void OnSearchSuggestionSelected(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is NewTabPageViewModel { Search: { } search }
+            && sender is Control { DataContext: string suggestion })
+        {
+            search.UseSuggestionCommand.Execute(suggestion);
+        }
+    }
+
     private void ExecuteShortcutCommand(
         object? sender,
         Action<NewTabPageViewModel, NewTabShortcutViewModel> execute)

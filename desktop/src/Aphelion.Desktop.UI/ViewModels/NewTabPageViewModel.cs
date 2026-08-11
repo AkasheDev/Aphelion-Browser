@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Domain.Entities;
 using Aphelion.Desktop.Domain.ValueObjects;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -12,31 +13,30 @@ public sealed partial class NewTabPageViewModel : ViewModelBase
     private static readonly ObservableCollection<object> EmptyTiles = [];
 
     private readonly NewTabShortcutHub? _shortcuts;
-    private readonly Func<string, bool> _search;
     private readonly Action<PageAddress> _navigate;
 
     public NewTabPageViewModel(
         NewTabShortcutHub? shortcuts,
         NewTabAmbientViewModel? ambient,
         SearchEngineSelectorViewModel? searchEngines,
+        ISearchSuggestionProvider? suggestions,
         Func<string, bool> search,
         Action<PageAddress> navigate)
     {
         _shortcuts = shortcuts;
-        _search = search ?? throw new ArgumentNullException(nameof(search));
         _navigate = navigate ?? throw new ArgumentNullException(nameof(navigate));
         Ambient = ambient;
         SearchEngines = searchEngines;
+        Search = new NewTabSearchBoxViewModel(suggestions, searchEngines, search);
     }
 
     public NewTabAmbientViewModel? Ambient { get; }
 
     public SearchEngineSelectorViewModel? SearchEngines { get; }
 
-    public ObservableCollection<object> ShortcutTiles => _shortcuts?.Tiles ?? EmptyTiles;
+    public NewTabSearchBoxViewModel Search { get; }
 
-    [ObservableProperty]
-    private string _searchText = string.Empty;
+    public ObservableCollection<object> ShortcutTiles => _shortcuts?.Tiles ?? EmptyTiles;
 
     [ObservableProperty]
     private bool _isEditorOpen;
@@ -58,15 +58,6 @@ public sealed partial class NewTabPageViewModel : ViewModelBase
     public string EditorHeading => EditingShortcut is null ? "Add shortcut" : "Edit shortcut";
 
     public bool HasEditorError => !string.IsNullOrWhiteSpace(EditorError);
-
-    [RelayCommand]
-    private void Search()
-    {
-        if (_search(SearchText))
-        {
-            SearchText = string.Empty;
-        }
-    }
 
     [RelayCommand]
     private void OpenShortcut(NewTabShortcutViewModel? shortcut)

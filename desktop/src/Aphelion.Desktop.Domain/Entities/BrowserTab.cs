@@ -115,6 +115,17 @@ public sealed class BrowserTab
         FailureReason = string.IsNullOrWhiteSpace(reason) ? "Navigation failed." : reason;
     }
 
+    /// <summary>Returns this tab to the local New Tab experience.</summary>
+    public void ResetToBlank()
+    {
+        Address = null;
+        Title = string.Empty;
+        FaviconAddress = null;
+        SearchTerm = null;
+        LoadState = TabLoadState.Idle;
+        FailureReason = null;
+    }
+
     public void UpdateTitle(string? title)
     {
         if (Address is not null && !string.IsNullOrWhiteSpace(title))

@@ -81,6 +81,31 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
                 e.IsSuccess ? null : "Navigation failed.",
                 e.Request));
 
+    /// <summary>
+    /// Stops the document and replaces it with an inert page before this native
+    /// surface leaves its tab. Removing a hosted native control alone is not a
+    /// reliable media-lifecycle signal on every platform, so this explicitly
+    /// tears down active audio and video playback first.
+    /// </summary>
+    public void Close()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            _webView.Stop();
+            _webView.Navigate(new Uri("about:blank"));
+        }
+        catch (Exception)
+        {
+            // The host can already be gone while a window is closing. Either
+            // operation is best effort; event handlers are still released below.
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)
