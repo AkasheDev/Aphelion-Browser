@@ -8,7 +8,7 @@
        different title and different action on choosing a row. -->
   <Border Classes="panel"
           Classes.drawer="{Binding IsDrawer}">
-    <Grid RowDefinitions="Auto,*,Auto">
+    <Grid RowDefinitions="Auto,*,Auto,Auto">
 
       <TextBlock Grid.Row="0"
                  Classes="panel-title"
@@ -138,10 +138,14 @@
                  IsVisible="{Binding IsEmpty}" />
 
       <!-- Offered by the split picker so the user can always choose a second
-           page, even when no other tab is open. -->
-      <Button Grid.Row="1"
+           page, even when no other tab is open.
+
+           It has a row to itself. Sharing the list's row and sitting at the
+           bottom of it put the two on top of one another as soon as the list was
+           long enough to reach down that far. -->
+      <Button Grid.Row="2"
               Classes="panel-row"
-              VerticalAlignment="Bottom"
+              Margin="0,6,0,0"
               IsVisible="{Binding CanCreateNew}"
               Command="{Binding CreateNewCommand}">
         <Grid ColumnDefinitions="Auto,*">
@@ -157,7 +161,7 @@
       </Button>
 
       <!-- Paging, hidden when everything fits on one page -->
-      <Grid Grid.Row="2"
+      <Grid Grid.Row="3"
             ColumnDefinitions="Auto,*,Auto"
             Margin="0,8,0,0"
             IsVisible="{Binding HasPages}">

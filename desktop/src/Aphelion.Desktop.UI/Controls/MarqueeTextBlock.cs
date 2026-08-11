@@ -1,11 +1,9 @@
 using Avalonia;
-using Avalonia.Animation;
-using Avalonia.Animation.Easings;
+using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Styling;
 
 namespace Aphelion.Desktop.UI.Controls;
 
@@ -178,21 +176,24 @@ public sealed class MarqueeTextBlock : TemplatedControl, IDisposable
     /// </summary>
     private static async Task RunAsync(TextBlock text, double overflow, CancellationToken token)
     {
-        var reveal = TimeSpan.FromSeconds(overflow / RevealSpeed);
-        var back = TimeSpan.FromSeconds(overflow / ReturnSpeed);
+        var transform = new TranslateTransform();
+        text.RenderTransform = transform;
+
+        var reveal = overflow / RevealSpeed;
+        var back = overflow / ReturnSpeed;
 
         try
         {
             while (!token.IsCancellationRequested)
             {
                 await Task.Delay(StartPause, token).ConfigureAwait(true);
-                await Slide(text, 0, -overflow, reveal, new LinearEasing(), token).ConfigureAwait(true);
+                await Slide(transform, 0, -overflow, reveal, Linear, token).ConfigureAwait(true);
 
                 await Task.Delay(EndPause, token).ConfigureAwait(true);
 
                 // Eased on the way back so the snap decelerates into place rather
                 // than stopping dead.
-                await Slide(text, -overflow, 0, back, new CubicEaseOut(), token).ConfigureAwait(true);
+                await Slide(transform, -overflow, 0, back, EaseOut, token).ConfigureAwait(true);
             }
         }
         catch (OperationCanceledException)
@@ -201,40 +202,45 @@ public sealed class MarqueeTextBlock : TemplatedControl, IDisposable
         }
     }
 
-    private static Task Slide(
-        TextBlock text,
+    /// <summary>
+    /// Walks <paramref name="transform"/> from one offset to another over the given
+    /// number of seconds, a frame at a time.
+    /// </summary>
+    /// <remarks>
+    /// Stepped here rather than handed to Avalonia's animation system. An
+    /// animation is driven by its target's clock, and the target here is a bare
+    /// <see cref="TranslateTransform"/> — an object with no place in the visual
+    /// tree and so no clock to advance it. It reported itself as running and never
+    /// moved a pixel, which is the worst way for something to fail.
+    /// </remarks>
+    private static async Task Slide(
+        TranslateTransform transform,
         double from,
         double to,
-        TimeSpan duration,
-        Easing easing,
+        double seconds,
+        Func<double, double> easing,
         CancellationToken token)
     {
-        var transform = text.RenderTransform as TranslateTransform;
+        var started = Stopwatch.StartNew();
 
-        if (transform is null)
+        while (true)
         {
-            transform = new TranslateTransform();
-            text.RenderTransform = transform;
-        }
+            token.ThrowIfCancellationRequested();
 
-        return new Animation
-        {
-            Duration = duration,
-            Easing = easing,
-            FillMode = FillMode.Forward,
-            Children =
+            var progress = seconds <= 0 ? 1 : Math.Clamp(started.Elapsed.TotalSeconds / seconds, 0, 1);
+            transform.X = from + ((to - from) * easing(progress));
+
+            if (progress >= 1)
             {
-                new KeyFrame
-                {
-                    Cue = new Cue(0d),
-                    Setters = { new Setter(TranslateTransform.XProperty, from) },
-                },
-                new KeyFrame
-                {
-                    Cue = new Cue(1d),
-                    Setters = { new Setter(TranslateTransform.XProperty, to) },
-                },
-            },
-        }.RunAsync(transform, token);
+                return;
+            }
+
+            await Task.Delay(16, token).ConfigureAwait(true);
+        }
     }
+
+    private static double Linear(double progress) => progress;
+
+    /// <summary>Decelerating, so the return settles rather than stopping dead.</summary>
+    private static double EaseOut(double progress) => 1 - Math.Pow(1 - progress, 3);
 }

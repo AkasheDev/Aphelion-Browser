@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using Aphelion.Desktop.Application.Dtos;
 using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Domain.Entities;
@@ -38,6 +39,9 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// does not fit spills into the overflow panel.
     /// </summary>
     private double _stripRoom = double.PositiveInfinity;
+
+    /// <summary>The session as last written out, so an unchanged one is not rewritten.</summary>
+    private string? _lastPersisted;
 
     public ShellViewModel(
         Func<BrowserViewModel> browserFactory,
@@ -103,6 +107,19 @@ public sealed partial class ShellViewModel : ViewModelBase
 
     /// <summary>Tabs and group chips, in the order the strip draws them.</summary>
     public ObservableCollection<object> StripItems { get; } = [];
+
+    /// <summary>
+    /// Every open tab's browser, in the order the tabs sit in.
+    /// </summary>
+    /// <remarks>
+    /// The window keeps a view alive for each of these for as long as the tab is
+    /// open, and only changes which are visible. A web view is a native window: it
+    /// is destroyed the moment it leaves the visual tree, taking the loaded page,
+    /// the scroll position and any typed-in form with it. Showing the active tab
+    /// through a single host meant every switch away and back reloaded the site
+    /// from scratch.
+    /// </remarks>
+    public ObservableCollection<BrowserViewModel> Browsers { get; } = [];
 
     [ObservableProperty]
     private TabItemViewModel? _activeTab;
@@ -895,6 +912,46 @@ public sealed partial class ShellViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Brings <see cref="Browsers"/> in line with the open tabs, reconciling in
+    /// place so a browser that is merely moving position keeps its view — and
+    /// therefore its loaded page — rather than being dropped and rebuilt.
+    /// </summary>
+    private void SyncBrowsers()
+    {
+        var desired = new List<BrowserViewModel>();
+
+        foreach (var tab in _session.Tabs)
+        {
+            if (_browsers.TryGetValue(tab.Id, out var browser))
+            {
+                desired.Add(browser);
+            }
+        }
+
+        for (var i = Browsers.Count - 1; i >= 0; i--)
+        {
+            if (!desired.Contains(Browsers[i]))
+            {
+                Browsers.RemoveAt(i);
+            }
+        }
+
+        for (var i = 0; i < desired.Count; i++)
+        {
+            var index = Browsers.IndexOf(desired[i]);
+
+            if (index < 0)
+            {
+                Browsers.Insert(i, desired[i]);
+            }
+            else if (index != i)
+            {
+                Browsers.Move(index, i);
+            }
+        }
+    }
+
     private void OnBrowserPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         // A tab's title and loading state change as pages load, so the strip has to
@@ -1084,6 +1141,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         }
 
         PruneCaches();
+        SyncBrowsers();
         RefreshTabDisplay();
 
         ActiveTab = _session.ActiveTab is { } active
@@ -1105,6 +1163,46 @@ public sealed partial class ShellViewModel : ViewModelBase
         {
             IsRightPaneFocused = false;
         }
+    }
+
+    /// <summary>
+    /// Writes the session out whenever it has actually changed.
+    /// </summary>
+    /// <remarks>
+    /// It used to be saved once, from the application's shutdown handler. Anything
+    /// that ended the process without raising that event — a crash, a kill, or a
+    /// close that the lifetime turns straight into a shutdown — lost every tab
+    /// opened since the last time it did fire, which is why a restart could come
+    /// back with a session from days earlier or with nothing at all.
+    /// <para>
+    /// Saving on change instead means there is no moment whose loss costs
+    /// anything. The comparison is what makes it cheap: this runs on every layout
+    /// pass that resizes the strip, and only an actual difference reaches the
+    /// disk.
+    /// </para>
+    /// </remarks>
+    private void PersistSession()
+    {
+        if (_sessionStore is null)
+        {
+            return;
+        }
+
+        var snapshot = CaptureSnapshot();
+
+        var key = string.Join(
+            '\n',
+            snapshot.Tabs
+                .Select(t => $"{t.Address}|{t.GroupName}|{t.GroupColor}|{t.GroupCollapsed}")
+                .Prepend(snapshot.ActiveIndex.ToString(CultureInfo.InvariantCulture)));
+
+        if (key == _lastPersisted)
+        {
+            return;
+        }
+
+        _lastPersisted = key;
+        _sessionStore.Save(snapshot);
     }
 
     private void RefreshTabDisplay()
@@ -1134,6 +1232,10 @@ public sealed partial class ShellViewModel : ViewModelBase
         WindowTitle = _session.ActiveTab is { } active
             ? $"{active.DisplayTitle} — Aphelion"
             : "Aphelion";
+
+        // Reached from both SyncTabs and a browser reporting a change, so a tab
+        // opening, moving, closing or navigating all persist.
+        PersistSession();
     }
 
     private TabItemViewModel ItemFor(BrowserTab tab)

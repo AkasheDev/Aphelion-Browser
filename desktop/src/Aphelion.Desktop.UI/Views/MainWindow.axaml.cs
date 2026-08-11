@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.ComponentModel;
 using Aphelion.Desktop.UI.ViewModels;
 using Avalonia;
@@ -12,6 +13,9 @@ public partial class MainWindow : Window
 {
     private TabStripDragHandler? _tabDrag;
     private ShellViewModel? _hookedShell;
+
+    /// <summary>One live browser view per open tab, kept in the visual tree.</summary>
+    private readonly Dictionary<BrowserViewModel, BrowserView> _pool = [];
 
     public MainWindow()
     {
@@ -40,6 +44,7 @@ public partial class MainWindow : Window
         if (_hookedShell is not null)
         {
             _hookedShell.PropertyChanged -= OnShellPropertyChanged;
+            _hookedShell.Browsers.CollectionChanged -= OnBrowsersChanged;
         }
 
         _hookedShell = Shell;
@@ -48,12 +53,15 @@ public partial class MainWindow : Window
         {
             _hookedShell.PropertyChanged += OnShellPropertyChanged;
 
+            _hookedShell.Browsers.CollectionChanged += OnBrowsersChanged;
+
             // "Move to new window" needs the window manager and this window's
             // geometry, so the window supplies it rather than the view model.
             _hookedShell.MoveToNewWindow = MoveTabToNewWindow;
         }
 
         UpdateSplitLayout();
+        UpdateBrowserPool();
     }
 
     private void OnShellPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -61,6 +69,70 @@ public partial class MainWindow : Window
         if (e.PropertyName == nameof(ShellViewModel.IsSplit))
         {
             UpdateSplitLayout();
+        }
+
+        if (e.PropertyName is nameof(ShellViewModel.ActiveBrowser)
+            or nameof(ShellViewModel.SplitBrowser)
+            or nameof(ShellViewModel.IsSplit))
+        {
+            UpdateBrowserPool();
+        }
+    }
+
+    private void OnBrowsersChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
+        UpdateBrowserPool();
+
+    /// <summary>
+    /// Keeps one live view per open tab as a child of the browser host, and moves
+    /// the two that are on screen into their columns.
+    /// </summary>
+    /// <remarks>
+    /// Done here rather than with an ItemsControl because the views have to be
+    /// children of the very grid whose columns the splitter drives; an items panel
+    /// of its own would need those column widths mirrored into it, and the mirror
+    /// would not follow a drag.
+    /// <para>
+    /// Views are inserted beneath the pane frames so the frames' accent edges and
+    /// the split picker still draw over them. They are inset by the accent's
+    /// thickness while split, because a native web view covers whatever Avalonia
+    /// draws underneath it — including that edge.
+    /// </para>
+    /// </remarks>
+    private void UpdateBrowserPool()
+    {
+        if (this.FindControl<Grid>("BrowserHost") is not { } host || Shell is not { } shell)
+        {
+            return;
+        }
+
+        foreach (var (model, view) in _pool.ToList())
+        {
+            if (!shell.Browsers.Contains(model))
+            {
+                host.Children.Remove(view);
+                view.Dispose();
+                _pool.Remove(model);
+            }
+        }
+
+        var inset = shell.IsSplit ? new Thickness(0, 0, 0, 2) : default;
+
+        foreach (var model in shell.Browsers)
+        {
+            if (!_pool.TryGetValue(model, out var view))
+            {
+                view = new BrowserView { DataContext = model };
+                _pool[model] = view;
+
+                // Beneath the frames, which are added in the XAML.
+                host.Children.Insert(0, view);
+            }
+
+            var right = ReferenceEquals(model, shell.SplitBrowser);
+
+            Grid.SetColumn(view, right ? 2 : 0);
+            view.IsVisible = right || ReferenceEquals(model, shell.ActiveBrowser);
+            view.Margin = inset;
         }
     }
 

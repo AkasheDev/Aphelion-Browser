@@ -16,8 +16,17 @@ namespace Aphelion.Desktop.UI.ViewModels;
 /// </remarks>
 public static class TabStripMetrics
 {
-    /// <summary>Widest a tab is allowed to be, matching Chrome's comfortable size.</summary>
-    public const double MaxTabWidth = 240;
+    /// <summary>
+    /// Widest a tab is allowed to be.
+    /// </summary>
+    /// <remarks>
+    /// Chrome's ceiling is 240, and a lone tab sitting at it is mostly empty space
+    /// around the words "New tab" — which is exactly how a freshly opened window
+    /// looks, since one tab always gets the full ceiling. 200 is about the width
+    /// tabs settle at once five or six are open, which is the proportion that
+    /// reads correctly.
+    /// </remarks>
+    public const double MaxTabWidth = 200;
 
     /// <summary>
     /// Narrowest an ordinary tab may become, sized so the favicon, the first
