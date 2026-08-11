@@ -33,6 +33,7 @@
     <KeyBinding Gesture="Ctrl+T" Command="{Binding Shell.NewTabCommand}" />
     <KeyBinding Gesture="Ctrl+W" Command="{Binding Shell.CloseTabCommand}"
                 CommandParameter="{Binding Shell.ActiveTab}" />
+    <KeyBinding Gesture="Escape" Command="{Binding Shell.FocusedBrowser.CancelAddressEditingCommand}" />
   </Window.KeyBindings>
 
   <DockPanel>
@@ -341,7 +342,7 @@
          Other Tabs reserves a drawer beside it because a native WebView cannot
          be composited underneath an Avalonia overlay. -->
     <!-- One toolbar for the window, above both panes -->
-    <views:BrowserToolbarView DockPanel.Dock="Top" />
+    <views:BrowserToolbarView Name="BrowserToolbar" DockPanel.Dock="Top" />
 
     <Grid ColumnDefinitions="*,Auto">
 

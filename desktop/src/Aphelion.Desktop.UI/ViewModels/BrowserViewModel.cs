@@ -202,6 +202,12 @@ public sealed partial class BrowserViewModel : ViewModelBase
         }
     }
 
+    [RelayCommand]
+    private void CancelAddressEditing()
+    {
+        AddressText = _tab.Address?.ToString() ?? string.Empty;
+    }
+
     [RelayCommand(CanExecute = nameof(CanGoBack))]
     private void GoBack() => _session?.GoBack();
 
@@ -504,4 +510,5 @@ public sealed partial class BrowserViewModel : ViewModelBase
             OnPropertyChanged(nameof(ShouldShowWebView));
         }
     }
+
 }

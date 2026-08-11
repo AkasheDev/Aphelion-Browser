@@ -32,6 +32,7 @@ public partial class MainWindow : Window
         // header is a Border, not a Button, because a Button would swallow the
         // press the drag handler needs.
         AddHandler(PointerReleasedEvent, OnPointerReleasedTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        AddHandler(KeyDownEvent, OnNavigationShortcutTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
         HookPaneFocus();
     }
 
@@ -177,6 +178,41 @@ public partial class MainWindow : Window
                 }
             },
             Avalonia.Interactivity.RoutingStrategies.Tunnel);
+
+    /// <summary>
+    /// Mirrors the browser-standard Alt+arrow navigation gestures. This is
+    /// handled at the window tunnel because a hosted native web view may consume
+    /// its key event before regular Avalonia key bindings can see it.
+    /// </summary>
+    private void OnNavigationShortcutTunnel(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.L)
+        {
+            this.FindControl<BrowserToolbarView>("BrowserToolbar")?.FocusAddress();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.KeyModifiers != KeyModifiers.Alt || Shell?.FocusedBrowser is not { } browser)
+        {
+            return;
+        }
+
+        var command = e.Key switch
+        {
+            Key.Left => browser.GoBackCommand,
+            Key.Right => browser.GoForwardCommand,
+            _ => null,
+        };
+
+        if (command?.CanExecute(null) != true)
+        {
+            return;
+        }
+
+        command.Execute(null);
+        e.Handled = true;
+    }
 
     /// <summary>True when <paramref name="candidate"/> is, or sits inside, <paramref name="container"/>.</summary>
     private static bool IsWithin(Visual candidate, Visual container)
