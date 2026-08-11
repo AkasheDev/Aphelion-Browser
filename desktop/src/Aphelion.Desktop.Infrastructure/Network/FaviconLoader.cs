@@ -16,8 +16,31 @@ public sealed class FaviconLoader : IFaviconLoader, IDisposable
     /// <summary>A favicon far larger than this is not a favicon.</summary>
     private const int MaxBytes = 512 * 1024;
 
+    /// <summary>
+    /// How the loader identifies itself when fetching an icon.
+    /// </summary>
+    /// <remarks>
+    /// Not optional. Wikipedia and Stack Overflow, among others, answer a request
+    /// carrying no user agent with 403, and their icons simply never arrived — the
+    /// tab fell back to its glyph and the cause looked like a decoding problem
+    /// rather than a refused request. It is deliberately shaped like a browser's,
+    /// because that is what this is, and an unfamiliar agent invites the same
+    /// treatment as none at all.
+    /// </remarks>
+    private const string UserAgent =
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Aphelion/1.0";
+
     private readonly ConcurrentDictionary<string, byte[]?> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(8) };
+
+    public FaviconLoader()
+    {
+        _http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", UserAgent);
+        _http.DefaultRequestHeaders.TryAddWithoutValidation(
+            "Accept",
+            "image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5");
+    }
 
     public async Task<byte[]?> LoadAsync(Uri address, CancellationToken cancellationToken = default)
     {

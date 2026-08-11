@@ -126,7 +126,7 @@
        accent looked unrelated to the rounded title-bar language. -->
   <Style Selector="Border.tab.active">
     <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource BrandAccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandPrimaryBrush}" />
     <Setter Property="BorderThickness" Value="1" />
   </Style>
 
@@ -166,7 +166,7 @@
   </Style>
 
   <Style Selector="Border.tab.active.split">
-    <Setter Property="BorderBrush" Value="{DynamicResource BrandAccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandPrimaryBrush}" />
   </Style>
 
   <!-- The partner's title, styled like the primary one -->
@@ -377,13 +377,54 @@
     <Setter Property="ClipToBounds" Value="True" />
   </Style>
 
+  <!-- The accent sits under the pane, not over it: above, it butted into the
+       toolbar and read as part of the chrome rather than as a mark on the pane. -->
   <Style Selector="Border.pane.split">
     <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
-    <Setter Property="BorderThickness" Value="0,2,0,0" />
+    <Setter Property="BorderThickness" Value="0,0,0,2" />
   </Style>
 
   <Style Selector="Border.pane.split.focused">
-    <Setter Property="BorderBrush" Value="{DynamicResource BrandAccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandPrimaryBrush}" />
+  </Style>
+
+  <!--
+    The divider between the two panes. What is seen is a hairline; what is grabbed
+    is the transparent column around it, because a one-pixel target cannot be hit
+    with a mouse. The usual trick of overhanging the neighbours with a negative
+    margin is not available here: each pane holds a native web view with a window
+    of its own, and it takes the pointer inside its bounds whatever Avalonia's z
+    order says.
+  -->
+  <Style Selector="GridSplitter.pane-splitter">
+    <Setter Property="Width" Value="6" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Panel Background="Transparent">
+          <Border Name="PART_Line"
+                  Width="1"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Stretch"
+                  Background="{DynamicResource DividerBrush}">
+            <Border.Transitions>
+              <Transitions>
+                <BrushTransition Property="Background" Duration="0:0:0.12" />
+              </Transitions>
+            </Border.Transitions>
+          </Border>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <!-- Lit while it is about to be dragged, and while it is being dragged. -->
+  <Style Selector="GridSplitter.pane-splitter:pointerover /template/ Border#PART_Line">
+    <Setter Property="Background" Value="{DynamicResource BrandPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="GridSplitter.pane-splitter:pressed /template/ Border#PART_Line">
+    <Setter Property="Background" Value="{DynamicResource BrandPrimaryBrush}" />
   </Style>
 
   <!-- ===== Floating panels ===== -->

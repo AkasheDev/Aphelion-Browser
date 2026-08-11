@@ -362,9 +362,10 @@
         <ContentControl Content="{Binding Shell.ActiveBrowser}" />
       </Border>
 
+      <!-- Width and background come from the style; setting them here would win
+           over it, and the hover colour would never appear. -->
       <GridSplitter Grid.Column="1"
-                    Width="4"
-                    Background="{DynamicResource DividerBrush}"
+                    Classes="pane-splitter"
                     IsVisible="{Binding Shell.IsSplit}" />
 
       <!-- The second pane: the partner's page once chosen, and before that the
