@@ -186,6 +186,20 @@ public partial class MainWindow : Window
     /// </summary>
     private void OnNavigationShortcutTunnel(object? sender, KeyEventArgs e)
     {
+        if (e.Key == Key.N && (e.KeyModifiers == KeyModifiers.Control || e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)))
+        {
+            if (Shell?.WindowManager is WindowManager manager)
+            {
+                var window = e.KeyModifiers.HasFlag(KeyModifiers.Shift)
+                    ? manager.CreatePrivateWindow()
+                    : manager.CreateWindow();
+                window.Show();
+                e.Handled = true;
+            }
+
+            return;
+        }
+
         if (e.KeyModifiers == KeyModifiers.Control && e.Key == Key.L)
         {
             this.FindControl<BrowserToolbarView>("BrowserToolbar")?.FocusAddress();

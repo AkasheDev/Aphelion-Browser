@@ -3,6 +3,7 @@ using Aphelion.Desktop.Application.UseCases;
 using Aphelion.Desktop.Infrastructure.Network;
 using Aphelion.Desktop.Infrastructure.Storage;
 using Aphelion.Desktop.UI.ViewModels;
+using Aphelion.Desktop.UI.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aphelion.Desktop.UI;
@@ -31,6 +32,7 @@ internal static class CompositionRoot
         services.AddSingleton<ISearchSuggestionProvider, SearchEngineSuggestionProvider>();
         services.AddSingleton<ISearchEnginePreferenceStore, JsonSearchEnginePreferenceStore>();
         services.AddSingleton<ISiteZoomStore, JsonSiteZoomStore>();
+        services.AddSingleton<ITabSoundPlayer, LibVlcTabSoundPlayer>();
         services.AddSingleton<ConfigurableSearchQueryBuilder>();
         services.AddSingleton<ISearchQueryBuilder>(sp =>
             sp.GetRequiredService<ConfigurableSearchQueryBuilder>());
@@ -62,7 +64,8 @@ internal static class CompositionRoot
             sp.GetRequiredService<Func<BrowserViewModel>>(),
             sp.GetRequiredService<WindowManager>(),
             sp.GetRequiredService<ISessionStore>(),
-            sp.GetRequiredService<IFaviconLoader>()));
+            sp.GetRequiredService<IFaviconLoader>(),
+            sp.GetRequiredService<ITabSoundPlayer>()));
         services.AddSingleton<SplashViewModel>();
         services.AddSingleton<MainWindowViewModel>();
 

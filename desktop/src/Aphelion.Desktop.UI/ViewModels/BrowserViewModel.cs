@@ -20,6 +20,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
 {
     private readonly NavigateFromAddressBar _navigateFromAddressBar;
     private readonly ManageSiteZoom? _siteZoom;
+    private readonly bool _isPrivate;
 
     private BrowserTab _tab = new(TabId.New());
     private IBrowserEngineSession? _session;
@@ -34,11 +35,13 @@ public sealed partial class BrowserViewModel : ViewModelBase
         NewTabAmbientViewModel? ambient = null,
         SearchEngineSelectorViewModel? searchEngines = null,
         ISearchSuggestionProvider? suggestions = null,
-        ManageSiteZoom? siteZoom = null)
+        ManageSiteZoom? siteZoom = null,
+        bool isPrivate = false)
     {
         _navigateFromAddressBar = navigateFromAddressBar
             ?? throw new ArgumentNullException(nameof(navigateFromAddressBar));
         _siteZoom = siteZoom;
+        _isPrivate = isPrivate;
         _loadingProgressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
         _loadingProgressTimer.Tick += OnLoadingProgressTick;
         ErrorPage = new NavigationErrorPageViewModel(RetryNavigation, ReturnToNewTab);
@@ -49,10 +52,13 @@ public sealed partial class BrowserViewModel : ViewModelBase
             searchEngines,
             suggestions,
             NavigateFromNewTab,
-            NavigateTo);
+            NavigateTo,
+            isPrivate);
     }
 
     public NewTabPageViewModel NewTab { get; }
+
+    public bool IsPrivate => _isPrivate;
 
     /// <summary>Local error surface shown instead of an engine-specific failure page.</summary>
     public NavigationErrorPageViewModel ErrorPage { get; }

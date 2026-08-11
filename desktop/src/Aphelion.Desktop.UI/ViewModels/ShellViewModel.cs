@@ -31,6 +31,7 @@ public sealed partial class ShellViewModel : ViewModelBase
     private readonly Dictionary<TabGroupId, GroupHeaderViewModel> _headers = [];
     private readonly ISessionStore? _sessionStore;
     private readonly IFaviconLoader? _favicons;
+    private readonly ITabSoundPlayer? _tabSounds;
     private readonly HashSet<TabId> _closingTabs = [];
     private readonly HashSet<TabGroupId> _transitioningGroups = [];
 
@@ -47,12 +48,14 @@ public sealed partial class ShellViewModel : ViewModelBase
         Func<BrowserViewModel> browserFactory,
         object? windowManager = null,
         ISessionStore? sessionStore = null,
-        IFaviconLoader? favicons = null)
+        IFaviconLoader? favicons = null,
+        ITabSoundPlayer? tabSounds = null)
     {
         _browserFactory = browserFactory ?? throw new ArgumentNullException(nameof(browserFactory));
         WindowManager = windowManager;
         _sessionStore = sessionStore;
         _favicons = favicons;
+        _tabSounds = tabSounds;
 
         Overflow = new TabListViewModel(
             "Other tabs",
@@ -200,6 +203,7 @@ public sealed partial class ShellViewModel : ViewModelBase
     private void NewTab()
     {
         var tab = _session.OpenTab();
+        _tabSounds?.PlayTabOpened();
         Attach(tab);
         var item = ItemFor(tab);
         item.IsExiting = true;
@@ -233,6 +237,7 @@ public sealed partial class ShellViewModel : ViewModelBase
                 return;
             }
 
+            _tabSounds?.PlayTabClosed();
             Detach(item.Id);
 
             TabItemViewModel? replacement = null;

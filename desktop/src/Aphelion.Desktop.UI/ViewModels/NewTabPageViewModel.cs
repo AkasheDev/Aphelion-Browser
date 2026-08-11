@@ -21,13 +21,15 @@ public sealed partial class NewTabPageViewModel : ViewModelBase
         SearchEngineSelectorViewModel? searchEngines,
         ISearchSuggestionProvider? suggestions,
         Func<string, bool> search,
-        Action<PageAddress> navigate)
+        Action<PageAddress> navigate,
+        bool isPrivate = false)
     {
         _shortcuts = shortcuts;
         _navigate = navigate ?? throw new ArgumentNullException(nameof(navigate));
         Ambient = ambient;
         SearchEngines = searchEngines;
         Search = new NewTabSearchBoxViewModel(suggestions, searchEngines, search);
+        IsPrivate = isPrivate;
     }
 
     public NewTabAmbientViewModel? Ambient { get; }
@@ -36,7 +38,9 @@ public sealed partial class NewTabPageViewModel : ViewModelBase
 
     public NewTabSearchBoxViewModel Search { get; }
 
-    public ObservableCollection<object> ShortcutTiles => _shortcuts?.Tiles ?? EmptyTiles;
+    public bool IsPrivate { get; }
+
+    public ObservableCollection<object> ShortcutTiles => IsPrivate ? EmptyTiles : _shortcuts?.Tiles ?? EmptyTiles;
 
     [ObservableProperty]
     private bool _isEditorOpen;

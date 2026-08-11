@@ -1,6 +1,7 @@
 using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Domain.ValueObjects;
 using Avalonia.Controls;
+using System.Reflection;
 
 namespace Aphelion.Desktop.BrowserEngine;
 
@@ -50,6 +51,12 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         }
 
         _zoomFactor = Math.Clamp(factor, 0.25d, 5d);
+
+        if (TrySetNativeZoomFactor(_zoomFactor))
+        {
+            return;
+        }
+
         _ = ApplyZoomAsync();
     }
 
@@ -87,10 +94,12 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
 
     private void OnNavigationCompleted(object? sender, WebViewNavigationCompletedEventArgs e)
     {
-        // NativeWebView deliberately exposes a portable web-view API, rather
-        // than each platform engine's proprietary zoom surface. CSS zoom keeps
-        // this control working on WebView2, WKWebView and WPE alike.
-        _ = ApplyZoomAsync();
+        // Apply again after a new document has arrived. Native zoom owns the
+        // whole renderer; only engines without that facility use CSS fallback.
+        if (!TrySetNativeZoomFactor(_zoomFactor))
+        {
+            _ = ApplyZoomAsync();
+        }
 
         NavigationCompleted?.Invoke(
             this,
@@ -118,6 +127,57 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
             // A document can disappear between a navigation event and script
             // execution. The next successful completion reapplies the scale.
         }
+    }
+
+    /// <summary>
+    /// Uses an engine's native zoom controller when the hosted adapter exposes
+    /// one. Avalonia's public WebView surface intentionally does not yet expose
+    /// portable zoom, but WebView2 does; using its controller avoids CSS zoom's
+    /// layout distortion on Windows. Other engines retain the document fallback
+    /// until their equivalent controller becomes publicly available.
+    /// </summary>
+    private bool TrySetNativeZoomFactor(double factor)
+    {
+        try
+        {
+            var adapter = typeof(NativeWebView)
+                .GetMethod("TryGetAdapter", BindingFlags.Instance | BindingFlags.NonPublic)
+                ?.Invoke(_webView, null);
+
+            if (adapter is null)
+            {
+                return false;
+            }
+
+            for (var type = adapter.GetType(); type is not null; type = type.BaseType)
+            {
+                foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic))
+                {
+                    var controller = field.GetValue(adapter);
+                    var setZoom = field.FieldType.GetMethod(
+                        "SetZoomFactor",
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                        binder: null,
+                        types: [typeof(double)],
+                        modifiers: null);
+
+                    if (setZoom is null)
+                    {
+                        continue;
+                    }
+
+                    setZoom.Invoke(controller, [factor]);
+                    return true;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // The public adapter has no guaranteed zoom contract. Fallback to
+            // the document scale when a platform does not surface a controller.
+        }
+
+        return false;
     }
 
     /// <summary>

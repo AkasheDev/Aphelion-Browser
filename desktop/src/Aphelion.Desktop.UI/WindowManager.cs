@@ -51,6 +51,20 @@ internal sealed class WindowManager(IServiceProvider services)
         return window;
     }
 
+    public MainWindow CreatePrivateWindow()
+    {
+        var factory = () => ActivatorUtilities.CreateInstance<BrowserViewModel>(_services, true);
+        var shell = new ShellViewModel(
+            factory,
+            this,
+            sessionStore: null,
+            favicons: _services.GetService<Aphelion.Desktop.Application.Ports.IFaviconLoader>());
+
+        var window = new MainWindow { DataContext = new MainWindowViewModel(shell), Title = "Private Mode — Aphelion" };
+        Register(window);
+        return window;
+    }
+
     public void Register(MainWindow window)
     {
         ArgumentNullException.ThrowIfNull(window);

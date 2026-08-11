@@ -10,6 +10,12 @@
 
   <ItemGroup>
     <AvaloniaResource Include="Assets\**" />
+    <Content Include="..\..\..\shared\resources\0812.mp3"
+             Link="Assets\Sounds\0812.mp3"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\..\shared\resources\0813.mp3"
+             Link="Assets\Sounds\0813.mp3"
+             CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,6 +26,9 @@
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="LibVLCSharp" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" />
+    <PackageReference Include="VideoLAN.LibVLC.Mac" />
   </ItemGroup>
 
   <ItemGroup>

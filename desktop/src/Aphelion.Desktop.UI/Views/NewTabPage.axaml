@@ -49,7 +49,8 @@
     </DataTemplate>
   </UserControl.Resources>
   <Grid>
-    <views:NewTabBackground />
+    <views:NewTabBackground IsVisible="{Binding !IsPrivate}" />
+    <Border Background="{DynamicResource NewTabBackdropBrush}" IsVisible="{Binding IsPrivate}" />
 
     <Button Classes="newtab-weather"
             Margin="0,20,24,0"
@@ -76,6 +77,7 @@
     <StackPanel Width="820" Margin="32" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="28">
       <StackPanel Spacing="18">
         <Grid Classes="newtab-logo-mark" HorizontalAlignment="Center" IsHitTestVisible="False"
+              IsVisible="{Binding !IsPrivate}"
               RenderTransform="translate(0px,-16px)">
           <Image Classes="newtab-logo-glow"
                  Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
@@ -84,9 +86,16 @@
                  Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
                  RenderOptions.BitmapInterpolationMode="HighQuality" />
         </Grid>
-        <StackPanel Classes="newtab-greeting" Orientation="Horizontal" Spacing="9" HorizontalAlignment="Center">
+        <StackPanel Classes="newtab-greeting" Orientation="Horizontal" Spacing="9" HorizontalAlignment="Center" IsVisible="{Binding !IsPrivate}">
           <TextBlock Classes="newtab-greeting-headline" Text="{Binding Ambient.GreetingHeadline}" />
           <TextBlock Classes="newtab-greeting-prompt" Text="{Binding Ambient.GreetingPrompt}" />
+        </StackPanel>
+        <StackPanel HorizontalAlignment="Center" Spacing="10" IsVisible="{Binding IsPrivate}">
+          <Canvas Width="72" Height="45" HorizontalAlignment="Center">
+            <Path Fill="{DynamicResource NewTabMutedBrush}"
+                  Data="M10,19 L18,8 H54 L62,19 H10 M23,8 L29,2 H43 L49,8 M18,22 A8,8 0 1 0 18,38 A8,8 0 1 0 18,22 M54,22 A8,8 0 1 0 54,38 A8,8 0 1 0 54,22 M26,30 H46" />
+          </Canvas>
+          <TextBlock Text="Private Mode" FontSize="30" FontWeight="SemiBold" Foreground="{DynamicResource NewTabForegroundBrush}" HorizontalAlignment="Center" />
         </StackPanel>
         <Grid Name="NewTabSearchAnchor" Height="58" ClipToBounds="False">
           <Border Name="NewTabSearchSurface"
@@ -161,7 +170,7 @@
         </Grid>
       </StackPanel>
 
-      <ItemsControl ItemsSource="{Binding ShortcutTiles}" HorizontalAlignment="Center">
+      <ItemsControl ItemsSource="{Binding ShortcutTiles}" HorizontalAlignment="Center" IsVisible="{Binding !IsPrivate}">
         <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
         <ItemsControl.DataTemplates>
           <DataTemplate DataType="vm:NewTabShortcutViewModel">
