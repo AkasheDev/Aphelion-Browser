@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:Aphelion.Desktop.UI.Controls"
+             x:Class="Aphelion.Desktop.UI.Views.NewTabBackground"
+             IsHitTestVisible="False"
+             ClipToBounds="True">
+  <Grid Background="{DynamicResource NewTabBackdropBrush}">
+    <controls:NewTabStarfield StarBrush="{DynamicResource NewTabForegroundBrush}"
+                              CyanBrush="{DynamicResource NewTabCyanBrush}"
+                              VioletBrush="{DynamicResource NewTabVioletBrush}">
+      <controls:NewTabStarfield.Effect><BlurEffect Radius="0.65" /></controls:NewTabStarfield.Effect>
+    </controls:NewTabStarfield>
+    <Border Background="{DynamicResource NewTabSceneScrim}" />
+    <Border Opacity="0.36">
+      <Border.Background>
+        <RadialGradientBrush Center="50%,48%" GradientOrigin="50%,48%" RadiusX="72%" RadiusY="76%">
+          <GradientStop Offset="0" Color="{DynamicResource NewTabVignetteClear}" />
+          <GradientStop Offset="0.62" Color="{DynamicResource NewTabVignetteSoft}" />
+          <GradientStop Offset="1" Color="{DynamicResource NewTabVignetteEdge}" />
+        </RadialGradientBrush>
+      </Border.Background>
+    </Border>
+  </Grid>
+</UserControl>

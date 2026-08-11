@@ -1,0 +1,178 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+             xmlns:views="using:Aphelion.Desktop.UI.Views"
+             x:Class="Aphelion.Desktop.UI.Views.NewTabPage"
+             x:DataType="vm:NewTabPageViewModel"
+             Background="{DynamicResource NewTabBackdropBrush}"
+             ClipToBounds="True">
+  <UserControl.Resources>
+    <DataTemplate x:Key="SearchEngineLogoTemplate" x:DataType="vm:SearchEngineOptionViewModel">
+      <Grid Width="24" Height="24">
+        <Border CornerRadius="12"
+                Background="{DynamicResource NewTabGlassHoverBrush}"
+                IsVisible="{Binding !HasIcon}">
+          <TextBlock Text="{Binding FallbackText}"
+                     FontSize="11"
+                     FontWeight="Bold"
+                     Foreground="{DynamicResource NewTabForegroundBrush}"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center" />
+        </Border>
+        <Image Source="{Binding Icon}"
+               Width="22"
+               Height="22"
+               Stretch="Uniform"
+               RenderOptions.BitmapInterpolationMode="HighQuality"
+               IsVisible="{Binding HasIcon}" />
+      </Grid>
+    </DataTemplate>
+    <DataTemplate x:Key="SelectedSearchEngineLogoTemplate" x:DataType="vm:SearchEngineOptionViewModel">
+      <Grid Width="42" Height="42">
+        <Border CornerRadius="21"
+                Background="{DynamicResource NewTabGlassHoverBrush}"
+                IsVisible="{Binding !HasIcon}">
+          <TextBlock Text="{Binding FallbackText}"
+                     FontSize="16"
+                     FontWeight="Bold"
+                     Foreground="{DynamicResource NewTabForegroundBrush}"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center" />
+        </Border>
+        <Image Source="{Binding Icon}"
+               Width="42"
+               Height="42"
+               Stretch="Uniform"
+               RenderOptions.BitmapInterpolationMode="HighQuality"
+               IsVisible="{Binding HasIcon}" />
+      </Grid>
+    </DataTemplate>
+  </UserControl.Resources>
+  <Grid>
+    <views:NewTabBackground />
+
+    <Button Classes="newtab-weather"
+            Margin="0,20,24,0"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Command="{Binding Ambient.RefreshWeatherCommand}"
+            ToolTip.Tip="{Binding Ambient.WeatherDescription}">
+      <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+        <StackPanel Spacing="1" VerticalAlignment="Center">
+          <TextBlock Classes="newtab-weather-location" Text="{Binding Ambient.WeatherLocation}" />
+          <TextBlock Classes="newtab-weather-condition" Text="{Binding Ambient.WeatherDescription}" />
+        </StackPanel>
+        <Canvas Width="32" Height="25" VerticalAlignment="Center">
+          <Ellipse Canvas.Left="15" Canvas.Top="1" Width="11" Height="11"
+                   Fill="{DynamicResource NewTabWarmBrush}" Opacity="0.92" />
+          <Path Canvas.Left="2" Canvas.Top="8" Width="27" Height="15"
+                Stretch="Fill" Fill="{DynamicResource NewTabForegroundBrush}"
+                Data="M7,14 C3,14 1,11.5 1,8.7 C1,5.8 3.3,3.5 6.2,3.5 C7.5,1.4 9.8,0 12.5,0 C16.5,0 19.8,3 20.2,6.8 C23.4,6.9 26,9.2 26,12 C26,13.1 25.6,14 25,14 Z" />
+        </Canvas>
+        <TextBlock Classes="newtab-weather-temperature" Text="{Binding Ambient.TemperatureText}" />
+      </StackPanel>
+    </Button>
+
+    <StackPanel Width="820" Margin="32" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="28">
+      <StackPanel Spacing="18">
+        <StackPanel Classes="newtab-greeting" Orientation="Horizontal" Spacing="9" HorizontalAlignment="Center">
+          <TextBlock Classes="newtab-greeting-headline" Text="{Binding Ambient.GreetingHeadline}" />
+          <TextBlock Classes="newtab-greeting-prompt" Text="{Binding Ambient.GreetingPrompt}" />
+        </StackPanel>
+        <Border Classes="newtab-search">
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="5">
+            <Grid>
+              <Button Name="SearchEngineButton"
+                      Classes="newtab-engine-trigger"
+                      Command="{Binding SearchEngines.ToggleCommand}"
+                      ToolTip.Tip="Choose search engine">
+                <ContentControl Content="{Binding SearchEngines.Selected}"
+                                ContentTemplate="{StaticResource SelectedSearchEngineLogoTemplate}" />
+              </Button>
+              <Popup IsOpen="{Binding SearchEngines.IsOpen, Mode=TwoWay}"
+                     PlacementTarget="{Binding ElementName=SearchEngineButton}"
+                     Placement="Bottom"
+                     VerticalOffset="8"
+                     IsLightDismissEnabled="True">
+                <Border Classes="newtab-engine-picker">
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="SEARCH WITH"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               LetterSpacing="1.1"
+                               Foreground="{DynamicResource NewTabMutedBrush}"
+                               Margin="8,4,8,5" />
+                    <ItemsControl ItemsSource="{Binding SearchEngines.Options}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SearchEngineOptionViewModel">
+                          <Button Classes="newtab-engine-option"
+                                  Click="OnSearchEngineSelected">
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                              <ContentControl Content="{Binding}"
+                                              ContentTemplate="{StaticResource SearchEngineLogoTemplate}" />
+                              <TextBlock Text="{Binding Name}"
+                                         FontSize="12.5"
+                                         FontWeight="Medium"
+                                         Foreground="{DynamicResource NewTabForegroundBrush}"
+                                         VerticalAlignment="Center" />
+                            </StackPanel>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Border>
+              </Popup>
+            </Grid>
+            <TextBox Name="SearchBox" Grid.Column="1" Classes="newtab-search-box" Text="{Binding SearchText}" PlaceholderText="Search the web or enter an address">
+              <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" /></TextBox.KeyBindings>
+            </TextBox>
+            <Button Grid.Column="2" Classes="newtab-search-submit" Command="{Binding SearchCommand}" ToolTip.Tip="Search">
+              <Path Width="16" Height="16" Stretch="Uniform" Stroke="{DynamicResource NewTabForegroundBrush}" StrokeThickness="1.7" Data="M2,8 H14 M9,3 L14,8 L9,13" />
+            </Button>
+          </Grid>
+        </Border>
+      </StackPanel>
+
+      <ItemsControl ItemsSource="{Binding ShortcutTiles}" HorizontalAlignment="Center">
+        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+        <ItemsControl.DataTemplates>
+          <DataTemplate DataType="vm:NewTabShortcutViewModel">
+            <Button Classes="newtab-shortcut" Click="OnOpenShortcut">
+              <Button.ContextMenu><ContextMenu><MenuItem Header="Edit" Click="OnRenameShortcut" /><MenuItem Header="Remove" Click="OnRemoveShortcut" /></ContextMenu></Button.ContextMenu>
+              <StackPanel Spacing="8" HorizontalAlignment="Center">
+                <Border Classes="newtab-shortcut-tile">
+                  <Grid>
+                    <TextBlock Text="{Binding FallbackText}" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource NewTabForegroundBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasFavicon}" />
+                    <Image Source="{Binding Favicon}" Width="25" Height="25" Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality" IsVisible="{Binding HasFavicon}" />
+                  </Grid>
+                </Border>
+                <TextBlock Classes="newtab-shortcut-label" Width="92" Text="{Binding Name}" TextAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </DataTemplate>
+          <DataTemplate DataType="vm:AddNewTabShortcutViewModel">
+            <Button Classes="newtab-shortcut" Click="OnAddShortcut">
+              <StackPanel Spacing="8" HorizontalAlignment="Center">
+                <Border Classes="newtab-shortcut-tile newtab-shortcut-add"><Path Width="17" Height="17" Stretch="Uniform" Stroke="{DynamicResource NewTabForegroundBrush}" StrokeThickness="1.5" Data="M8,1 V15 M1,8 H15" /></Border>
+                <TextBlock Classes="newtab-shortcut-label" Width="92" Text="Add shortcut" TextAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.DataTemplates>
+      </ItemsControl>
+    </StackPanel>
+
+    <Border Background="#99000000" IsVisible="{Binding IsEditorOpen}">
+      <Border Classes="newtab-glass" Width="420" Padding="24" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel Spacing="16">
+          <TextBlock Text="{Binding EditorHeading}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource NewTabForegroundBrush}" />
+          <StackPanel Spacing="7"><TextBlock Classes="newtab-muted" Text="Name" FontSize="12" /><TextBox Text="{Binding EditorName}" MaxLength="32" PlaceholderText="Shortcut name" /></StackPanel>
+          <StackPanel Spacing="7"><TextBlock Classes="newtab-muted" Text="Address" FontSize="12" /><TextBox Text="{Binding EditorAddress}" PlaceholderText="https://example.com" /></StackPanel>
+          <TextBlock Text="{Binding EditorError}" Foreground="{DynamicResource DangerBrush}" TextWrapping="Wrap" IsVisible="{Binding HasEditorError}" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8"><Button Content="Cancel" Command="{Binding CancelEditorCommand}" /><Button Classes="primary" Content="Save" Command="{Binding SaveShortcutCommand}" /></StackPanel>
+        </StackPanel>
+      </Border>
+    </Border>
+  </Grid>
+</UserControl>

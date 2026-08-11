@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
              xmlns:web="using:Avalonia.Controls"
+             xmlns:views="using:Aphelion.Desktop.UI.Views"
              x:Class="Aphelion.Desktop.UI.Views.BrowserView"
              x:DataType="vm:BrowserViewModel">
 
@@ -21,17 +22,9 @@
 
       <web:NativeWebView Name="WebView" IsVisible="{Binding !IsBlank}" />
 
-      <StackPanel IsVisible="{Binding IsBlank}"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center"
-                  Spacing="10">
-        <Image Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
-               Width="72" Height="72"
-               HorizontalAlignment="Center"
-               RenderOptions.BitmapInterpolationMode="HighQuality" />
-        <TextBlock Classes="wordmark" Text="Aphelion" />
-        <TextBlock Classes="subtle" Text="Search or enter an address to begin." />
-      </StackPanel>
+      <Panel IsVisible="{Binding IsBlank}">
+        <views:NewTabPage DataContext="{Binding NewTab}" />
+      </Panel>
 
     </Panel>
 

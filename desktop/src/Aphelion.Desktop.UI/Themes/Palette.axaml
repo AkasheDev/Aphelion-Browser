@@ -28,6 +28,23 @@
       <Color x:Key="Divider">#D8D8E4</Color>
       <Color x:Key="FocusRing">#5A4FCF</Color>
       <Color x:Key="CloseHover">#D93544</Color>
+
+      <!-- New Tab is intentionally a dark, immersive canvas in both shell
+           variants; these semantic tokens keep every view free of literals. -->
+      <Color x:Key="NewTabBackdrop">#080A18</Color>
+      <Color x:Key="NewTabGlass">#B8141728</Color>
+      <Color x:Key="NewTabGlassHover">#D3222640</Color>
+      <Color x:Key="NewTabGlassBorder">#38FFFFFF</Color>
+      <Color x:Key="NewTabForeground">#F7F8FF</Color>
+      <Color x:Key="NewTabMuted">#AEB8D3</Color>
+      <Color x:Key="NewTabViolet">#806BFF</Color>
+      <Color x:Key="NewTabCyan">#42DDE8</Color>
+      <Color x:Key="NewTabWarm">#FFC978</Color>
+      <Color x:Key="NewTabPositive">#75E6B5</Color>
+      <Color x:Key="NewTabSceneScrim">#12000000</Color>
+      <Color x:Key="NewTabVignetteClear">#00000000</Color>
+      <Color x:Key="NewTabVignetteSoft">#09000000</Color>
+      <Color x:Key="NewTabVignetteEdge">#66000000</Color>
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Dark">
@@ -46,6 +63,21 @@
       <Color x:Key="Divider">#2A2A38</Color>
       <Color x:Key="FocusRing">#8C83FF</Color>
       <Color x:Key="CloseHover">#E04452</Color>
+
+      <Color x:Key="NewTabBackdrop">#050611</Color>
+      <Color x:Key="NewTabGlass">#B8121424</Color>
+      <Color x:Key="NewTabGlassHover">#D31E2238</Color>
+      <Color x:Key="NewTabGlassBorder">#32FFFFFF</Color>
+      <Color x:Key="NewTabForeground">#F7F8FF</Color>
+      <Color x:Key="NewTabMuted">#A8B2CC</Color>
+      <Color x:Key="NewTabViolet">#8C78FF</Color>
+      <Color x:Key="NewTabCyan">#3FD8E4</Color>
+      <Color x:Key="NewTabWarm">#FFC978</Color>
+      <Color x:Key="NewTabPositive">#75E6B5</Color>
+      <Color x:Key="NewTabSceneScrim">#12000000</Color>
+      <Color x:Key="NewTabVignetteClear">#00000000</Color>
+      <Color x:Key="NewTabVignetteSoft">#09000000</Color>
+      <Color x:Key="NewTabVignetteEdge">#66000000</Color>
     </ResourceDictionary>
 
   </ResourceDictionary.ThemeDictionaries>
@@ -65,6 +97,17 @@
   <SolidColorBrush x:Key="DividerBrush" Color="{DynamicResource Divider}" />
   <SolidColorBrush x:Key="FocusRingBrush" Color="{DynamicResource FocusRing}" />
   <SolidColorBrush x:Key="CloseHoverBrush" Color="{DynamicResource CloseHover}" />
+
+  <SolidColorBrush x:Key="NewTabBackdropBrush" Color="{DynamicResource NewTabBackdrop}" />
+  <SolidColorBrush x:Key="NewTabGlassBrush" Color="{DynamicResource NewTabGlass}" />
+  <SolidColorBrush x:Key="NewTabGlassHoverBrush" Color="{DynamicResource NewTabGlassHover}" />
+  <SolidColorBrush x:Key="NewTabGlassBorderBrush" Color="{DynamicResource NewTabGlassBorder}" />
+  <SolidColorBrush x:Key="NewTabForegroundBrush" Color="{DynamicResource NewTabForeground}" />
+  <SolidColorBrush x:Key="NewTabMutedBrush" Color="{DynamicResource NewTabMuted}" />
+  <SolidColorBrush x:Key="NewTabVioletBrush" Color="{DynamicResource NewTabViolet}" />
+  <SolidColorBrush x:Key="NewTabCyanBrush" Color="{DynamicResource NewTabCyan}" />
+  <SolidColorBrush x:Key="NewTabWarmBrush" Color="{DynamicResource NewTabWarm}" />
+  <SolidColorBrush x:Key="NewTabPositiveBrush" Color="{DynamicResource NewTabPositive}" />
 
   <!-- Tab group markers. A closed palette mapped from the domain's GroupColor,
        chosen to stay legible against both the light and dark chrome. -->

@@ -23,10 +23,17 @@ internal static class CompositionRoot
         var services = new ServiceCollection();
 
         // Infrastructure
-        services.AddSingleton<ISearchQueryBuilder, DuckDuckGoSearchQueryBuilder>();
         services.AddSingleton<IUserDataLocation, UserDataLocation>();
         services.AddSingleton<ISessionStore, JsonSessionStore>();
+        services.AddSingleton<INewTabShortcutStore, JsonNewTabShortcutStore>();
         services.AddSingleton<IFaviconLoader, FaviconLoader>();
+        services.AddSingleton<ICurrentWeatherProvider, OpenMeteoCurrentWeatherProvider>();
+        services.AddSingleton<ISearchEnginePreferenceStore, JsonSearchEnginePreferenceStore>();
+        services.AddSingleton<ConfigurableSearchQueryBuilder>();
+        services.AddSingleton<ISearchQueryBuilder>(sp =>
+            sp.GetRequiredService<ConfigurableSearchQueryBuilder>());
+        services.AddSingleton<ISearchEnginePreference>(sp =>
+            sp.GetRequiredService<ConfigurableSearchQueryBuilder>());
 
         // Startup sequence. Tasks run in registration order; loading history,
         // bookmarks and settings will be added here as they gain persistence.
@@ -35,6 +42,10 @@ internal static class CompositionRoot
 
         // Application
         services.AddSingleton<NavigateFromAddressBar>();
+        services.AddSingleton<ManageNewTabShortcuts>();
+        services.AddSingleton<NewTabShortcutHub>();
+        services.AddSingleton<NewTabAmbientViewModel>();
+        services.AddSingleton<SearchEngineSelectorViewModel>();
 
         // Presentation. Browsers are transient because every tab needs its own
         // engine session and history; the shell creates one per tab.

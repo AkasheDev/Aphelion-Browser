@@ -24,11 +24,23 @@ public sealed partial class BrowserViewModel : ViewModelBase
     private int _sessionGeneration;
     private PageAddress? _lastStartedAddress;
 
-    public BrowserViewModel(NavigateFromAddressBar navigateFromAddressBar)
+    public BrowserViewModel(
+        NavigateFromAddressBar navigateFromAddressBar,
+        NewTabShortcutHub? shortcutHub = null,
+        NewTabAmbientViewModel? ambient = null,
+        SearchEngineSelectorViewModel? searchEngines = null)
     {
         _navigateFromAddressBar = navigateFromAddressBar
             ?? throw new ArgumentNullException(nameof(navigateFromAddressBar));
+        NewTab = new NewTabPageViewModel(
+            shortcutHub,
+            ambient,
+            searchEngines,
+            NavigateFromNewTab,
+            NavigateTo);
     }
+
+    public NewTabPageViewModel NewTab { get; }
 
     /// <summary>
     /// Binds this view model to the tab it drives. The shell owns tab lifetime, so
@@ -55,6 +67,23 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _tab.BeginNavigation(address);
         _session?.Navigate(address);
         SyncFromTab();
+    }
+
+    private bool NavigateFromNewTab(string query)
+    {
+        if (_session is null || string.IsNullOrWhiteSpace(query))
+        {
+            return false;
+        }
+
+        var navigated = _navigateFromAddressBar.Execute(_tab, _session, query);
+
+        if (navigated)
+        {
+            SyncFromTab();
+        }
+
+        return navigated;
     }
 
     /// <summary>
