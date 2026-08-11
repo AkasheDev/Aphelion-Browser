@@ -19,6 +19,7 @@ namespace Aphelion.Desktop.UI.ViewModels;
 public sealed partial class BrowserViewModel : ViewModelBase
 {
     private readonly NavigateFromAddressBar _navigateFromAddressBar;
+    private readonly ManageSiteZoom? _siteZoom;
 
     private BrowserTab _tab = new(TabId.New());
     private IBrowserEngineSession? _session;
@@ -32,10 +33,12 @@ public sealed partial class BrowserViewModel : ViewModelBase
         NewTabShortcutHub? shortcutHub = null,
         NewTabAmbientViewModel? ambient = null,
         SearchEngineSelectorViewModel? searchEngines = null,
-        ISearchSuggestionProvider? suggestions = null)
+        ISearchSuggestionProvider? suggestions = null,
+        ManageSiteZoom? siteZoom = null)
     {
         _navigateFromAddressBar = navigateFromAddressBar
             ?? throw new ArgumentNullException(nameof(navigateFromAddressBar));
+        _siteZoom = siteZoom;
         _loadingProgressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
         _loadingProgressTimer.Tick += OnLoadingProgressTick;
         ErrorPage = new NavigationErrorPageViewModel(RetryNavigation, ReturnToNewTab);
@@ -64,6 +67,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
     public void Bind(BrowserTab tab)
     {
         _tab = tab ?? throw new ArgumentNullException(nameof(tab));
+        ApplySiteZoom();
         SyncFromTab();
     }
 
@@ -81,6 +85,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
         ErrorPage.Hide();
         _tab.BeginNavigation(address);
+        ApplySiteZoom();
         _session?.Navigate(address);
         SyncFromTab();
     }
@@ -113,6 +118,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         if (_session is not null && _tab.Address is { } address)
         {
             _tab.BeginNavigation(address);
+            ApplySiteZoom();
             _session.Navigate(address);
             SyncFromTab();
         }
@@ -127,6 +133,12 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
     [ObservableProperty]
     private bool _isLoading;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ZoomLabel))]
+    private int _zoomPercent = PageZoom.DefaultPercent;
+
+    public string ZoomLabel => $"{ZoomPercent}%";
 
     /// <summary>Simulated, monotonic navigation progress from 0 to 100.</summary>
     [ObservableProperty]
@@ -226,6 +238,15 @@ public sealed partial class BrowserViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void ZoomIn() => SetZoom(PageZoom.FromPercent(ZoomPercent).Increase());
+
+    [RelayCommand]
+    private void ZoomOut() => SetZoom(PageZoom.FromPercent(ZoomPercent).Decrease());
+
+    [RelayCommand]
+    private void ResetZoom() => SetZoom(PageZoom.Default);
+
+    [RelayCommand]
     private void StopLoading() => _session?.StopLoading();
 
     private void OnNavigationStarted(object? sender, EngineNavigationStartedEventArgs e)
@@ -241,6 +262,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         {
             _lastStartedAddress = address;
             _tab.BeginNavigation(address);
+            ApplySiteZoom();
         }
 
         SyncFromTab();
@@ -499,6 +521,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
     {
         _session?.StopLoading();
         _tab.ResetToBlank();
+        ApplySiteZoom();
         ErrorPage.Hide();
         SyncFromTab();
     }
@@ -509,6 +532,20 @@ public sealed partial class BrowserViewModel : ViewModelBase
         {
             OnPropertyChanged(nameof(ShouldShowWebView));
         }
+    }
+
+    private void ApplySiteZoom()
+    {
+        var zoom = _siteZoom?.Resolve(_tab.Address) ?? PageZoom.Default;
+        ZoomPercent = zoom.Percent;
+        _session?.SetZoomFactor(zoom.Factor);
+    }
+
+    private void SetZoom(PageZoom zoom)
+    {
+        zoom = _siteZoom?.Save(_tab.Address, zoom) ?? zoom;
+        ZoomPercent = zoom.Percent;
+        _session?.SetZoomFactor(zoom.Factor);
     }
 
 }

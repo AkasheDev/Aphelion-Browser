@@ -193,6 +193,25 @@ public partial class MainWindow : Window
             return;
         }
 
+        if ((e.KeyModifiers & KeyModifiers.Control) != 0 &&
+            Shell?.FocusedBrowser is { } zoomBrowser)
+        {
+            var zoomCommand = e.Key switch
+            {
+                Key.OemPlus or Key.Add => zoomBrowser.ZoomInCommand,
+                Key.OemMinus or Key.Subtract => zoomBrowser.ZoomOutCommand,
+                Key.D0 or Key.NumPad0 => zoomBrowser.ResetZoomCommand,
+                _ => null,
+            };
+
+            if (zoomCommand?.CanExecute(null) == true)
+            {
+                zoomCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.KeyModifiers != KeyModifiers.Alt || Shell?.FocusedBrowser is not { } browser)
         {
             return;

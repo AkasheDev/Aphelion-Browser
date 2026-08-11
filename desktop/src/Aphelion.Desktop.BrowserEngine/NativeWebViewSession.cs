@@ -18,6 +18,7 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
 {
     private readonly NativeWebView _webView;
     private bool _disposed;
+    private double _zoomFactor = 1d;
 
     public NativeWebViewSession(NativeWebView webView)
     {
@@ -39,6 +40,17 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     {
         ArgumentNullException.ThrowIfNull(address);
         _webView.Navigate(address.Value);
+    }
+
+    public void SetZoomFactor(double factor)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _zoomFactor = Math.Clamp(factor, 0.25d, 5d);
+        _ = ApplyZoomAsync();
     }
 
     public bool GoBack() => _webView.GoBack();
@@ -73,13 +85,40 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     private void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e) =>
         NavigationStarted?.Invoke(this, new EngineNavigationStartedEventArgs(e.Request));
 
-    private void OnNavigationCompleted(object? sender, WebViewNavigationCompletedEventArgs e) =>
+    private void OnNavigationCompleted(object? sender, WebViewNavigationCompletedEventArgs e)
+    {
+        // NativeWebView deliberately exposes a portable web-view API, rather
+        // than each platform engine's proprietary zoom surface. CSS zoom keeps
+        // this control working on WebView2, WKWebView and WPE alike.
+        _ = ApplyZoomAsync();
+
         NavigationCompleted?.Invoke(
             this,
             new EngineNavigationCompletedEventArgs(
                 e.IsSuccess,
                 e.IsSuccess ? null : "Navigation failed.",
                 e.Request));
+    }
+
+    private async Task ApplyZoomAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            var factor = _zoomFactor.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            await _webView.InvokeScript(
+                $"document.documentElement.style.zoom = '{factor}';").ConfigureAwait(true);
+        }
+        catch (Exception)
+        {
+            // A document can disappear between a navigation event and script
+            // execution. The next successful completion reapplies the scale.
+        }
+    }
 
     /// <summary>
     /// Stops the document and replaces it with an inert page before this native

@@ -30,6 +30,7 @@ internal static class CompositionRoot
         services.AddSingleton<ICurrentWeatherProvider, OpenMeteoCurrentWeatherProvider>();
         services.AddSingleton<ISearchSuggestionProvider, SearchEngineSuggestionProvider>();
         services.AddSingleton<ISearchEnginePreferenceStore, JsonSearchEnginePreferenceStore>();
+        services.AddSingleton<ISiteZoomStore, JsonSiteZoomStore>();
         services.AddSingleton<ConfigurableSearchQueryBuilder>();
         services.AddSingleton<ISearchQueryBuilder>(sp =>
             sp.GetRequiredService<ConfigurableSearchQueryBuilder>());
@@ -43,6 +44,7 @@ internal static class CompositionRoot
 
         // Application
         services.AddSingleton<NavigateFromAddressBar>();
+        services.AddSingleton<ManageSiteZoom>();
         services.AddSingleton<ManageNewTabShortcuts>();
         services.AddSingleton<NewTabShortcutHub>();
         services.AddSingleton<NewTabAmbientViewModel>();

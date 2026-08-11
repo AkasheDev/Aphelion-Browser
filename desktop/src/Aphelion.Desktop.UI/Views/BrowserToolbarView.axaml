@@ -16,7 +16,7 @@
         DataContext="{Binding}">
 
     <Grid Grid.Row="0"
-          ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*"
+          ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,*"
           Margin="6,6,10,6"
           ColumnSpacing="2">
 
@@ -53,10 +53,29 @@
       <Path Classes="glyph" Data="M0.5,2.5 H12.5 V10.5 H0.5 Z M4.5,2.5 V10.5" />
       </Button>
 
+      <Border Grid.Column="5"
+              Classes="zoom-control"
+              IsVisible="{Binding !Shell.FocusedBrowser.IsBlank}">
+        <Grid ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="1">
+          <Button Grid.Column="0" Classes="zoom-adjust" ToolTip.Tip="Zoom out (Ctrl+-)"
+                  Command="{Binding Shell.FocusedBrowser.ZoomOutCommand}">
+            <Path Classes="zoom-glyph" Data="M3,6 H11" />
+          </Button>
+          <Button Grid.Column="1" Classes="zoom-reset" ToolTip.Tip="Reset zoom (Ctrl+0)"
+                  Command="{Binding Shell.FocusedBrowser.ResetZoomCommand}">
+            <TextBlock Text="{Binding Shell.FocusedBrowser.ZoomLabel}" />
+          </Button>
+          <Button Grid.Column="2" Classes="zoom-adjust" ToolTip.Tip="Zoom in (Ctrl++)"
+                  Command="{Binding Shell.FocusedBrowser.ZoomInCommand}">
+            <Path Classes="zoom-glyph" Data="M7,3 V11 M3,7 H11" />
+          </Button>
+        </Grid>
+      </Border>
+
       <TextBox Name="AddressBox"
-               Grid.Column="5"
+               Grid.Column="6"
                Classes="address"
-               Margin="8,0,0,0"
+               Margin="6,0,0,0"
                Text="{Binding Shell.FocusedBrowser.AddressText}"
                PlaceholderText="Search or enter address">
         <TextBox.KeyBindings>
