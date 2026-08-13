@@ -36,6 +36,8 @@ public sealed partial class NewTabPageViewModel : ViewModelBase
         {
             Ambient.PropertyChanged += OnAmbientPropertyChanged;
         }
+
+        Search.PropertyChanged += OnSearchPropertyChanged;
     }
 
     public NewTabAmbientViewModel? Ambient { get; }
@@ -56,11 +58,27 @@ public sealed partial class NewTabPageViewModel : ViewModelBase
     /// </summary>
     public bool ShowWeatherOffLabel => !IsPrivate && Ambient?.IsWeatherEnabled == false;
 
+    /// <summary>
+    /// Whether the shortcut row is showing. It and the suggestion list share the
+    /// lower half of the page, so the shortcuts step aside while suggestions are
+    /// up — the mark, the greeting and the search box above are untouched and
+    /// stay exactly where they are.
+    /// </summary>
+    public bool ShowShortcutRow => !IsPrivate && !Search.HasSuggestions;
+
     private void OnAmbientPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(NewTabAmbientViewModel.IsWeatherEnabled))
         {
             OnPropertyChanged(nameof(ShowWeatherOffLabel));
+        }
+    }
+
+    private void OnSearchPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(NewTabSearchBoxViewModel.HasSuggestions))
+        {
+            OnPropertyChanged(nameof(ShowShortcutRow));
         }
     }
 

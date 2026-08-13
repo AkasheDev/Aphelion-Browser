@@ -44,7 +44,19 @@ public sealed partial class NewTabSearchBoxViewModel : ViewModelBase, IDisposabl
 
     public ObservableCollection<string> Suggestions { get; } = [];
 
-    public bool HasSuggestions => Suggestions.Count > 0;
+    /// <summary>
+    /// Whether the suggestion list should be on screen: there is something to
+    /// show, and the search box has not been left.
+    /// </summary>
+    /// <remarks>
+    /// Losing focus hides the list without discarding it, so returning to a box
+    /// whose text has not changed shows the same suggestions immediately rather
+    /// than waiting out the debounce and another round trip for a query the user
+    /// never altered.
+    /// </remarks>
+    public bool HasSuggestions => Suggestions.Count > 0 && !_isSearchBoxUnfocused;
+
+    private bool _isSearchBoxUnfocused;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -63,15 +75,43 @@ public sealed partial class NewTabSearchBoxViewModel : ViewModelBase, IDisposabl
     partial void OnSearchTextChanged(string value) => RequestSuggestions();
 
     /// <summary>
-    /// Called when the search box regains focus (clicking back into it after
-    /// dismissing the suggestions popup, or returning to this tab). Typing
-    /// already re-requests suggestions via <see cref="OnSearchTextChanged"/>,
-    /// but clicking into a box that already has text left over from before
-    /// does not raise that event, so the popup stayed closed until the next
-    /// keystroke — this re-runs the same request for whatever text is
-    /// already there.
+    /// Called when the search box takes focus. Suggestions kept from before are
+    /// shown again as they are; a box whose text arrived while it was unfocused
+    /// asks for them instead.
     /// </summary>
-    public void RequestSuggestionsForFocus() => RequestSuggestions();
+    public void RequestSuggestionsForFocus()
+    {
+        var wasHidden = _isSearchBoxUnfocused;
+        _isSearchBoxUnfocused = false;
+
+        if (Suggestions.Count > 0)
+        {
+            if (wasHidden)
+            {
+                OnPropertyChanged(nameof(HasSuggestions));
+            }
+
+            return;
+        }
+
+        RequestSuggestions();
+    }
+
+    /// <summary>
+    /// Called when the search box loses focus. The list goes off screen but is
+    /// kept, so coming back to an unchanged query is instant — see the remarks
+    /// on <see cref="HasSuggestions"/>.
+    /// </summary>
+    public void HideSuggestionsForLostFocus()
+    {
+        if (_isSearchBoxUnfocused)
+        {
+            return;
+        }
+
+        _isSearchBoxUnfocused = true;
+        OnPropertyChanged(nameof(HasSuggestions));
+    }
 
     partial void OnIsSuggestionsEnabledChanged(bool value)
     {
@@ -173,16 +213,21 @@ public sealed partial class NewTabSearchBoxViewModel : ViewModelBase, IDisposabl
     }
 
     /// <summary>
-    /// Called when the page this search box belongs to stops being visible —
-    /// see the remarks on the suggestions Popup in NewTabPage.axaml. Cancels any
-    /// in-flight request too, so a reply that arrives after the tab is hidden
-    /// cannot repopulate the list and reopen the popup the user never asked for.
+    /// Called when the suggestions are dismissed outright — the page stopped
+    /// being visible, or a click landed away from the search box. Unlike losing
+    /// focus, this discards the list rather than parking it. Any in-flight
+    /// request is cancelled too, so a reply arriving afterwards cannot
+    /// repopulate a list the user has dismissed.
     /// </summary>
     public void ClearSuggestionsForHidden()
     {
         _request?.Cancel();
         _request?.Dispose();
         _request = null;
+
+        // Reset alongside the clear: with nothing kept, leaving the hidden flag
+        // set would suppress the next set of results until focus was cycled.
+        _isSearchBoxUnfocused = false;
         ClearSuggestions();
     }
 

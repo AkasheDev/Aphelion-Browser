@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Aphelion.Desktop.UI.ViewModels;
 
 namespace Aphelion.Desktop.UI.Views;
@@ -11,6 +13,7 @@ public partial class NewTabPage : UserControl
     public NewTabPage()
     {
         InitializeComponent();
+        AddHandler(PointerPressedEvent, OnPagePointerPressed, RoutingStrategies.Tunnel);
     }
 
     protected override void OnLoaded(RoutedEventArgs e)
@@ -96,40 +99,92 @@ public partial class NewTabPage : UserControl
         }
     }
 
-    private void OnSuggestionsPopupClosed(object? sender, EventArgs e)
+    /// <summary>
+    /// Parks the suggestion list when the search box is left.
+    /// </summary>
+    /// <remarks>
+    /// Deferred rather than run inline: clicking a suggestion moves focus to
+    /// that row's button, which raises this before the click is delivered.
+    /// Hiding the list there would remove the button out from under the press.
+    /// Posting the check lets focus settle first, and a focus that landed inside
+    /// the list is not a departure at all.
+    /// </remarks>
+    private void OnSearchBoxLostFocus(object? sender, RoutedEventArgs e)
     {
-        // Light dismiss (clicking anywhere outside the popup) closes it at the
-        // Avalonia level without touching Search.HasSuggestions, which is what
-        // IsOpen is actually bound to. Left alone, the suggestion list stayed
-        // populated behind a closed popup, so clicking back into SearchBox with
-        // the same text produced no GotFocus-driven change and the popup never
-        // reopened. Clearing here keeps view-model state truthful to what is
-        // visible, the same way ClearSuggestionsForHidden does for tab switches.
-        //
-        // This event fires from inside Popup's own IsOpen change handling —
-        // clearing Suggestions synchronously here re-enters the ItemsControl's
-        // in-progress CollectionChanged handling for the same close and throws
-        // ObservableCollection's reentrancy guard. Posting it lets that call
-        // stack unwind first.
-        //
-        // The post is also why the clear has to re-check focus rather than run
-        // unconditionally. The dismissing click may itself land in SearchBox,
-        // which raises GotFocus and requests suggestions for the text already
-        // there; that request would then be wiped by this clear arriving after
-        // it. Clicking into the box has to leave suggestions showing, so only
-        // a dismissal that left the box unfocused clears them.
-        if (DataContext is NewTabPageViewModel { Search: { } search })
+        if (DataContext is not NewTabPageViewModel { Search: { } search })
         {
-            Dispatcher.UIThread.Post(
-                () =>
-                {
-                    if (!SearchBox.IsFocused)
-                    {
-                        search.ClearSuggestionsForHidden();
-                    }
-                },
-                DispatcherPriority.Background);
+            return;
         }
+
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+
+                if (focused is Visual visual && IsWithin(visual, SuggestionList))
+                {
+                    return;
+                }
+
+                search.HideSuggestionsForLostFocus();
+            },
+            DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// Puts the suggestion list away when the pointer goes down anywhere on the
+    /// page that is not the search box or the list itself.
+    /// </summary>
+    /// <remarks>
+    /// The list used to live in a Popup, which brought light dismiss with it.
+    /// It is now an ordinary part of the page — see the remarks in the XAML for
+    /// why — so that behaviour has to be provided here. Handled on the tunnel so
+    /// it runs before a click is consumed by whatever it landed on.
+    ///
+    /// This hides rather than clears, and it is the reason the search box cannot
+    /// be relied on to report the departure itself: clicking empty page does not
+    /// move focus out of a TextBox, so no LostFocus arrives, and none arrives on
+    /// the way back either. Discarding the list here left a box that still held
+    /// the query but showed nothing until it was retyped.
+    /// </remarks>
+    private void OnPagePointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        // No HasSuggestions guard here: while the list is parked that is already
+        // false, and this handler is exactly what has to notice the click that
+        // brings it back.
+        if (DataContext is not NewTabPageViewModel { Search: { } search } ||
+            e.Source is not Visual source)
+        {
+            return;
+        }
+
+        if (IsWithin(source, SuggestionList))
+        {
+            return;
+        }
+
+        // Clicking the box is the way back: focus never left it, so GotFocus
+        // will not fire to restore what the click before this one put away.
+        if (IsWithin(source, SearchBox))
+        {
+            search.RequestSuggestionsForFocus();
+            return;
+        }
+
+        search.HideSuggestionsForLostFocus();
+    }
+
+    private static bool IsWithin(Visual candidate, Visual container)
+    {
+        for (var v = candidate; v is not null; v = v.GetVisualParent())
+        {
+            if (ReferenceEquals(v, container))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private void OnSearchEngineSelected(object? sender, RoutedEventArgs e)

@@ -3,6 +3,7 @@
              xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
              xmlns:views="using:Aphelion.Desktop.UI.Views"
              x:Class="Aphelion.Desktop.UI.Views.NewTabPage"
+             x:Name="NewTabRoot"
              x:DataType="vm:NewTabPageViewModel"
              Background="{DynamicResource NewTabBackdropBrush}"
              ClipToBounds="True">
@@ -102,8 +103,16 @@
       <TextBlock Text="Weather off" />
     </Button>
 
-    <StackPanel Width="820" Margin="32" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="28">
-      <StackPanel Spacing="18">
+    <!--
+      Two rows, both half the page. The masthead and the search box sit at the
+      bottom of the upper half, so the box lands on the page's centre line and
+      stays there whether or not suggestions are showing. The list then gets the
+      entire lower half to itself and scrolls if it needs more, which is what
+      keeps it inside the window — the box no longer has to move to make room.
+    -->
+    <Grid Width="820" Margin="32" HorizontalAlignment="Center" RowDefinitions="*,*">
+
+      <StackPanel Grid.Row="0" VerticalAlignment="Bottom" Spacing="18">
         <Grid Classes="newtab-logo-mark" HorizontalAlignment="Center" IsHitTestVisible="False"
               IsVisible="{Binding !IsPrivate}"
               RenderTransform="translate(0px,-16px)">
@@ -184,7 +193,7 @@
                   </Border>
                 </Popup>
               </Grid>
-              <TextBox Name="SearchBox" Grid.Column="1" Classes="newtab-search-box" Text="{Binding Search.SearchText}" PlaceholderText="Search the web or enter an address" GotFocus="OnSearchBoxGotFocus">
+              <TextBox Name="SearchBox" Grid.Column="1" Classes="newtab-search-box" Text="{Binding Search.SearchText}" PlaceholderText="Search the web or enter an address" GotFocus="OnSearchBoxGotFocus" LostFocus="OnSearchBoxLostFocus">
                 <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding Search.SearchCommand}" /></TextBox.KeyBindings>
               </TextBox>
               <Button Grid.Column="2" Classes="newtab-search-submit" Command="{Binding Search.SearchCommand}" ToolTip.Tip="Search">
@@ -192,50 +201,60 @@
               </Button>
             </Grid>
           </Border>
-          <!--
-            IsLightDismissEnabled matters here in a way it does not for the
-            engine picker above: this page can leave the visual tree entirely
-            when the user switches tabs, and a Popup is its own top-level
-            window at the OS level — it does not close just because the page
-            that opened it is no longer showing. Without this, choosing a
-            different tab while suggestions were open left the list floating
-            over whatever page came next. NewTabSearchBoxViewModel also clears
-            Suggestions on IsVisibleChanged for the same reason from the other
-            side: the popup binds to HasSuggestions, so an empty list closes
-            it even if light dismiss did not fire.
-          -->
-          <Popup IsOpen="{Binding Search.HasSuggestions, Mode=OneWay}"
-                 Placement="Bottom"
-                 PlacementTarget="{Binding ElementName=NewTabSearchAnchor}"
-                 VerticalOffset="10"
-                 IsLightDismissEnabled="True"
-                 Closed="OnSuggestionsPopupClosed">
-            <Border Classes="newtab-suggestions"
-                    Width="{Binding Bounds.Width, ElementName=NewTabSearchSurface}">
-              <ItemsControl ItemsSource="{Binding Search.Suggestions}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="x:String">
-                    <Button Classes="newtab-suggestion" Click="OnSearchSuggestionSelected">
-                      <Grid ColumnDefinitions="Auto,*" ColumnSpacing="11">
-                        <Border Classes="newtab-suggestion-icon">
-                          <Path Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource NewTabMutedBrush}"
-                                StrokeThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                Data="M6.2,1 A5.2,5.2 0 1 0 6.2,11.4 A5.2,5.2 0 1 0 6.2,1 M10.1,10.1 L14,14" />
-                        </Border>
-                        <TextBlock Grid.Column="1" Text="{Binding}" FontSize="13" FontWeight="Medium"
-                                   Foreground="{DynamicResource NewTabForegroundBrush}" TextTrimming="CharacterEllipsis"
-                                   VerticalAlignment="Center" />
-                      </Grid>
-                    </Button>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-            </Border>
-          </Popup>
         </Grid>
+
       </StackPanel>
 
-      <ItemsControl ItemsSource="{Binding ShortcutTiles}" HorizontalAlignment="Center" IsVisible="{Binding !IsPrivate}">
+      <!--
+        Part of the page, not a Popup. A Popup is a separate top-level window:
+        nothing clips it to the page, so a long list ran past the bottom of the
+        browser, and in full screen it had no room to place itself at all and
+        simply never appeared. As an ordinary element in the lower half of the
+        grid it is bounded by the page and scrolls within it.
+
+        Dismissing on an outside click, which the Popup used to provide, is
+        handled by OnPagePointerPressed in the code-behind.
+      -->
+      <ScrollViewer Grid.Row="1"
+                    Margin="0,14,0,0"
+                    HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto"
+                    IsVisible="{Binding Search.HasSuggestions}">
+        <ItemsControl Name="SuggestionList"
+                      Classes="newtab-suggestions"
+                      ItemsSource="{Binding Search.Suggestions}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="x:String">
+              <Button Classes="newtab-suggestion" Click="OnSearchSuggestionSelected">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                  <Path Classes="newtab-suggestion-glyph"
+                        Width="14" Height="14" Stretch="Uniform"
+                        Stroke="{DynamicResource NewTabMutedBrush}" StrokeThickness="1.5"
+                        VerticalAlignment="Center"
+                        Data="M6.2,1 A5.2,5.2 0 1 0 6.2,11.4 A5.2,5.2 0 1 0 6.2,1 M10.1,10.1 L14,14" />
+                  <TextBlock Grid.Column="1" Classes="newtab-suggestion-text"
+                             Text="{Binding}" TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center" />
+                  <Path Grid.Column="2" Classes="newtab-suggestion-go"
+                        Width="13" Height="13" Stretch="Uniform"
+                        Stroke="{DynamicResource NewTabMutedBrush}" StrokeThickness="1.6"
+                        VerticalAlignment="Center"
+                        Data="M2,8 H14 M9,3 L14,8 L9,13" />
+                </Grid>
+              </Button>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- Shares the lower half with the suggestion list, which takes over the
+           space while it is showing. -->
+      <ItemsControl Grid.Row="1"
+                    ItemsSource="{Binding ShortcutTiles}"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Top"
+                    Margin="0,28,0,0"
+                    IsVisible="{Binding ShowShortcutRow}">
         <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel HorizontalAlignment="Center" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
         <ItemsControl.DataTemplates>
           <DataTemplate DataType="vm:NewTabShortcutViewModel">
@@ -262,7 +281,7 @@
           </DataTemplate>
         </ItemsControl.DataTemplates>
       </ItemsControl>
-    </StackPanel>
+    </Grid>
 
     <Border Background="#99000000" IsVisible="{Binding IsEditorOpen}">
       <Border Classes="newtab-glass" Width="420" Padding="24" HorizontalAlignment="Center" VerticalAlignment="Center">

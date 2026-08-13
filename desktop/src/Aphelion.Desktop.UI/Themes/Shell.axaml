@@ -448,38 +448,84 @@
     <Setter Property="Opacity" Value="0.6" />
   </Style>
 
-  <Style Selector="Border.newtab-suggestions">
-    <Setter Property="Padding" Value="7" />
-    <Setter Property="Margin" Value="0" />
-    <Setter Property="CornerRadius" Value="20" />
-    <Setter Property="Background" Value="{DynamicResource NewTabBackdropBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource NewTabGlassBorderBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="BoxShadow" Value="0 14 36 0 #66000000" />
+  <!-- Not a card. The suggestions used to sit in a bordered, shadowed panel hung
+       under the search box, which read as a panel inside a panel: two stacked
+       surfaces competing for the same attention. What is left is a bare column
+       of rows directly on the starfield — no ground, no border, no shadow. The
+       only thing that reads as drawn is the row under the pointer, which is why
+       this can be fully transparent now that it is part of the page rather than
+       a Popup with its own opaque window behind it. -->
+  <Style Selector="ItemsControl.newtab-suggestions">
+    <Setter Property="Margin" Value="0,4,0,0" />
   </Style>
 
   <Style Selector="Button.newtab-suggestion">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-    <Setter Property="Padding" Value="10,7" />
+    <Setter Property="Padding" Value="18,0" />
+    <Setter Property="Height" Value="46" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
-    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="CornerRadius" Value="23" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.13" />
+      </Transitions>
+    </Setter>
   </Style>
 
-  <Style Selector="Border.newtab-suggestion-icon">
-    <Setter Property="Width" Value="30" />
-    <Setter Property="Height" Value="30" />
-    <Setter Property="CornerRadius" Value="15" />
-    <Setter Property="Background" Value="{DynamicResource NewTabGlassBrush}" />
-    <Setter Property="BorderBrush" Value="{DynamicResource NewTabGlassBorderBrush}" />
-    <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="HorizontalAlignment" Value="Center" />
-    <Setter Property="VerticalAlignment" Value="Center" />
-  </Style>
-
+  <!-- A full pill on hover, echoing the shape of the search box above it, so the
+       hovered row looks like the query it would become rather than a menu item. -->
   <Style Selector="Button.newtab-suggestion:pointerover /template/ ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+    <Setter Property="Background" Value="{DynamicResource NewTabGlassHoverBrush}" />
+    <Setter Property="CornerRadius" Value="23" />
+  </Style>
+
+  <!-- Bare glyph, no badge behind it: the badge was another nested surface, and
+       at this size the magnifier alone carries the meaning. -->
+  <Style Selector="Path.newtab-suggestion-glyph">
+    <Setter Property="Opacity" Value="0.5" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.13" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.newtab-suggestion:pointerover Path.newtab-suggestion-glyph">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <Style Selector="Button.newtab-suggestion TextBlock.newtab-suggestion-text">
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="Normal" />
+    <Setter Property="Foreground" Value="{DynamicResource NewTabMutedBrush}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Foreground" Duration="0:0:0.13" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <!-- The text is the element that brightens; weight stays put so rows do not
+       shift sideways as the pointer moves down the list. -->
+  <Style Selector="Button.newtab-suggestion:pointerover TextBlock.newtab-suggestion-text">
+    <Setter Property="Foreground" Value="{DynamicResource NewTabForegroundBrush}" />
+  </Style>
+
+  <!-- Only visible on hover: a hint that Enter/click sends this one, matching
+       the arrow on the search button itself. -->
+  <Style Selector="Button.newtab-suggestion Path.newtab-suggestion-go">
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.13" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Button.newtab-suggestion:pointerover Path.newtab-suggestion-go">
+    <Setter Property="Opacity" Value="0.6" />
   </Style>
 
   <Style Selector="TextBox.newtab-search-box">

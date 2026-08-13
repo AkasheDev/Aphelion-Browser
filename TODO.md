@@ -12,10 +12,6 @@ Sağ tık sayfa menüsü: geri/ileri/yenile, bağlantıyı yeni sekmede aç, se�
 
 İlk açılış / ayar deneyimi: kullanıcı verisi, varsayılan arama motoru, görünüm gibi kısa bir onboarding.
 
-Zoom popup gelmiyor
-
 Anasayfaya geri donemiyorsun
 
-Anasayfada acik kalan panel
-
-Arama cubugu sorunu
+Arama sonuclari sorunu
