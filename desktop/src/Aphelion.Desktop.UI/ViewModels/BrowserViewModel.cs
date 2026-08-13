@@ -459,6 +459,12 @@ public sealed partial class BrowserViewModel : ViewModelBase
     /// <summary>The current page's favicon address, surfaced for the tab strip.</summary>
     public PageAddress? FaviconAddress => _tab.FaviconAddress;
 
+    /// <summary>
+    /// The page currently open, or null on a blank tab. Surfaced for the toolbar
+    /// star, which has to know whether this address is already bookmarked.
+    /// </summary>
+    public PageAddress? Address => _tab.Address;
+
     private void SyncFromTab()
     {
         var wasLoading = IsLoading;
@@ -504,9 +510,10 @@ public sealed partial class BrowserViewModel : ViewModelBase
             _ => string.Empty,
         };
 
-        // PageTitle is derived from the tab rather than stored, so it has to be
-        // raised by hand whenever the tab changes underneath it.
+        // PageTitle and Address are derived from the tab rather than stored, so
+        // they have to be raised by hand whenever the tab changes underneath them.
         OnPropertyChanged(nameof(PageTitle));
+        OnPropertyChanged(nameof(Address));
 
         // Every caller of SyncFromTab that changes _cameFromNewTab or the tab's
         // address needs CanGoBack recomputed; folding it in here means no call

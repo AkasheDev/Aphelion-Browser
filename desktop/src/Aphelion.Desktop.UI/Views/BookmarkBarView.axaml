@@ -1,0 +1,200 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+             x:Class="Aphelion.Desktop.UI.Views.BookmarkBarView"
+             x:DataType="vm:BookmarksViewModel">
+
+  <UserControl.Resources>
+    <!--
+      One template for a row wherever it appears: along the bar and inside a
+      folder's dropdown. A folder shows a folder glyph and a chevron, a bookmark
+      shows its icon; both open through the same command.
+    -->
+    <DataTemplate x:Key="BookmarkRowTemplate" x:DataType="vm:BookmarkNodeViewModel">
+      <!-- The marker showing where a dragged row would land sits in front of the
+           row: to its left on the bar, above it in a dropdown, where rows run
+           down instead of across. A Panel rather than a Grid so the flat marker
+           can overlay the row's top edge without adding a row of its own. -->
+      <Panel>
+
+        <Border Classes="bookmark-drop-marker"
+                Classes.horizontal="{Binding IsInFolder}"
+                HorizontalAlignment="Left"
+                IsVisible="{Binding IsDropBefore}"
+                ZIndex="5" />
+
+        <Panel Margin="{Binding RowInset}">
+          <Button Name="RowButton"
+                  Classes="bookmark-item"
+                  Classes.open="{Binding IsOpen}"
+                  Classes.drop-into="{Binding IsDropTarget}"
+                  Command="{Binding Owner.OpenCommand}"
+                  CommandParameter="{Binding}"
+                  ToolTip.Tip="{Binding AddressText}"
+                  PointerEntered="OnRowPointerEntered">
+            <Button.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="Open"
+                          Command="{Binding Owner.OpenCommand}"
+                          CommandParameter="{Binding}" />
+                <Separator />
+                <MenuItem Header="Rename…"
+                          Command="{Binding Owner.BeginRenameCommand}"
+                          CommandParameter="{Binding}" />
+                <!-- Filing without dragging, for anyone who would rather pick a
+                     destination than drag to one. Each entry carries both the
+                     row being moved and where it is going, so the menu item
+                     needs no binding back up to its owner. -->
+                <MenuItem Header="Move to" ItemsSource="{Binding MoveTargets}">
+                  <MenuItem.ItemTemplate>
+                    <DataTemplate x:DataType="vm:BookmarkMoveTargetViewModel">
+                      <TextBlock Text="{Binding Label}" />
+                    </DataTemplate>
+                  </MenuItem.ItemTemplate>
+                  <MenuItem.ItemContainerTheme>
+                    <ControlTheme TargetType="MenuItem" BasedOn="{StaticResource {x:Type MenuItem}}"
+                                  x:DataType="vm:BookmarkMoveTargetViewModel">
+                      <Setter Property="Command" Value="{Binding MoveCommand}" />
+                    </ControlTheme>
+                  </MenuItem.ItemContainerTheme>
+                </MenuItem>
+                <MenuItem Header="Delete"
+                          Command="{Binding Owner.DeleteCommand}"
+                          CommandParameter="{Binding}" />
+              </ContextMenu>
+            </Button.ContextMenu>
+            <Grid ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="7">
+
+              <Path Grid.Column="0" Classes="glyph" Width="13" Height="13" Stretch="Uniform"
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding IsFolder}"
+                    Data="M1,3 H5.5 L7,4.8 H12 V11 H1 Z" />
+
+              <Panel Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center"
+                     IsVisible="{Binding !IsFolder}">
+                <!-- Sites without a usable icon keep the row's alignment by
+                     falling back to a neutral glyph rather than collapsing. -->
+                <Path Classes="glyph" Width="12" Height="12" Stretch="Uniform"
+                      IsVisible="{Binding !HasFavicon}"
+                      Data="M6.5,1 A5.5,5.5 0 1 0 6.5,12 A5.5,5.5 0 1 0 6.5,1 M1,6.5 H12 M6.5,1 A7,5.5 0 0 0 6.5,12 A7,5.5 0 0 0 6.5,1" />
+                <Image Source="{Binding Favicon}" Width="14" Height="14" Stretch="Uniform"
+                       IsVisible="{Binding HasFavicon}"
+                       RenderOptions.BitmapInterpolationMode="HighQuality" />
+              </Panel>
+
+              <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center"
+                         MaxWidth="150" TextTrimming="CharacterEllipsis" />
+
+              <!-- Only inside a dropdown, where it points at the submenu that
+                   will open beside it. On the bar the folder glyph already says
+                   what the row is, so a chevron there is noise. -->
+              <Path Grid.Column="2" Classes="glyph" Width="7" Height="7" Stretch="Uniform"
+                    VerticalAlignment="Center" HorizontalAlignment="Right"
+                    IsVisible="{Binding ShowsSideChevron}"
+                    Data="M3,1 L7,5 L3,9" />
+
+            </Grid>
+          </Button>
+
+          <!-- A folder's contents. A Popup rather than an in-tree overlay
+               because the page below is a native web view, which paints over
+               anything Avalonia draws on top of it; a Popup is its own window at
+               the OS level and composites above it. Nested folders open to the
+               side, as menus do, rather than below. -->
+          <Popup IsOpen="{Binding IsOpen}"
+                 PlacementTarget="{Binding ElementName=RowButton}"
+                 Placement="{Binding FolderPlacement}"
+                 IsLightDismissEnabled="True"
+                 Closed="OnFolderPopupClosed">
+            <Border Classes="panel bookmark-folder-panel">
+              <!-- The same action as on the bar, scoped to this folder. -->
+              <Border.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="Add folder here"
+                            Command="{Binding Owner.CreateFolderInCommand}"
+                            CommandParameter="{Binding}" />
+                </ContextMenu>
+              </Border.ContextMenu>
+              <Panel>
+                <TextBlock Classes="bookmark-empty"
+                           Text="Empty folder"
+                           IsVisible="{Binding !Children.Count}" />
+                <ScrollViewer MaxHeight="420" HorizontalScrollBarVisibility="Disabled">
+                  <ItemsControl ItemsSource="{Binding Children}"
+                                ItemTemplate="{StaticResource BookmarkRowTemplate}"
+                                AttachedToVisualTree="OnFolderItemsAttached" />
+                </ScrollViewer>
+              </Panel>
+            </Border>
+          </Popup>
+        </Panel>
+      </Panel>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <Border Classes="bookmark-bar">
+    <!-- Right-clicking the bar itself, rather than any row on it, is where
+         adding a folder belongs: it is an action on the bar, not on a bookmark
+         that happened to be under the pointer. -->
+    <Border.ContextMenu>
+      <ContextMenu>
+        <MenuItem Header="Add folder" Command="{Binding CreateFolderCommand}" />
+      </ContextMenu>
+    </Border.ContextMenu>
+    <Panel>
+
+      <!-- Standing in for the rows until there are some, so the bar explains
+           itself instead of showing an unexplained empty strip. -->
+      <TextBlock Classes="bookmark-empty"
+                 Text="Bookmark a page with the star, or press Ctrl+D."
+                 VerticalAlignment="Center"
+                 IsVisible="{Binding !BarItems.Count}" />
+
+      <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+        <ItemsControl Name="BarItemsHost" ItemsSource="{Binding BarItems}">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="1" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <StaticResource ResourceKey="BookmarkRowTemplate" />
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <!-- The marker for a drop past the last row, which no row can draw. -->
+      <Border Classes="bookmark-drop-marker"
+              Name="TrailingDropMarker"
+              HorizontalAlignment="Left"
+              IsVisible="False" />
+
+      <!-- Renaming. Anchored to the bar rather than to the row it was started
+           from, because that row can be reconciled away underneath the popup. -->
+      <Popup IsOpen="{Binding IsRenaming}"
+             PlacementTarget="{Binding $parent[UserControl]}"
+             Placement="Bottom"
+             HorizontalOffset="8"
+             IsLightDismissEnabled="True"
+             Closed="OnRenamePopupClosed">
+        <Border Classes="panel" Width="260" Padding="12">
+          <StackPanel Spacing="10">
+            <TextBlock Classes="panel-title" Text="Rename" Margin="0" />
+            <TextBox Name="RenameBox" Text="{Binding RenameText}" MaxLength="120">
+              <TextBox.KeyBindings>
+                <KeyBinding Gesture="Enter" Command="{Binding CommitRenameCommand}" />
+                <KeyBinding Gesture="Escape" Command="{Binding CancelRenameCommand}" />
+              </TextBox.KeyBindings>
+            </TextBox>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+              <Button Content="Cancel" Command="{Binding CancelRenameCommand}" />
+              <Button Classes="primary" Content="Save" Command="{Binding CommitRenameCommand}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+      </Popup>
+
+    </Panel>
+  </Border>
+
+</UserControl>

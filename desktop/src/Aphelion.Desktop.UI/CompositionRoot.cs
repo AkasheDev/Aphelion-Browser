@@ -26,6 +26,7 @@ internal static class CompositionRoot
         // Infrastructure
         services.AddSingleton<IUserDataLocation, UserDataLocation>();
         services.AddSingleton<ISessionStore, JsonSessionStore>();
+        services.AddSingleton<IBookmarkStore, JsonBookmarkStore>();
         services.AddSingleton<INewTabShortcutStore, JsonNewTabShortcutStore>();
         services.AddSingleton<IFaviconLoader, FaviconLoader>();
         services.AddSingleton<ICurrentWeatherProvider, OpenMeteoCurrentWeatherProvider>();
@@ -44,8 +45,8 @@ internal static class CompositionRoot
         services.AddSingleton<ISearchEnginePreference>(sp =>
             sp.GetRequiredService<ConfigurableSearchQueryBuilder>());
 
-        // Startup sequence. Tasks run in registration order; loading history,
-        // bookmarks and settings will be added here as they gain persistence.
+        // Startup sequence. Tasks run in registration order; loading history and
+        // settings will be added here as they gain persistence.
         services.AddSingleton<IStartupTask, PrepareUserDataStartupTask>();
         services.AddSingleton<RunStartupSequence>();
 
@@ -56,6 +57,12 @@ internal static class CompositionRoot
         services.AddSingleton<NewTabShortcutHub>();
         services.AddSingleton<NewTabAmbientViewModel>();
         services.AddSingleton<SearchEngineSelectorViewModel>();
+
+        // Bookmarks belong to the profile rather than to a window, so torn-off
+        // windows share one tree and one bar view model between them.
+        services.AddSingleton(sp =>
+            BookmarksViewModel.Restore(sp.GetRequiredService<IBookmarkStore>()));
+        services.AddSingleton<BookmarksViewModel>();
 
         // Presentation. Browsers are transient because every tab needs its own
         // engine session and history; the shell creates one per tab.
@@ -70,7 +77,8 @@ internal static class CompositionRoot
             sp.GetRequiredService<WindowManager>(),
             sp.GetRequiredService<ISessionStore>(),
             sp.GetRequiredService<IFaviconLoader>(),
-            sp.GetRequiredService<ITabSoundPlayer>()));
+            sp.GetRequiredService<ITabSoundPlayer>(),
+            sp.GetRequiredService<BookmarksViewModel>()));
         services.AddSingleton<SplashViewModel>();
         services.AddSingleton<MainWindowViewModel>();
 

@@ -255,6 +255,25 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Handled here as well as in the window's KeyBindings because a hosted
+        // native web view can consume the key before those are consulted.
+        if (Shell is { } bookmarkShell)
+        {
+            if (e.Key == Key.D && e.KeyModifiers == KeyModifiers.Control)
+            {
+                bookmarkShell.BookmarkActiveTabCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.B && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
+            {
+                bookmarkShell.ToggleBookmarkBarCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+        }
+
         if (e.Key == Key.N && (e.KeyModifiers == KeyModifiers.Control || e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)))
         {
             if (Shell?.WindowManager is WindowManager manager)

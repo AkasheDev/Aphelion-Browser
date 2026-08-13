@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+             xmlns:views="using:Aphelion.Desktop.UI.Views"
              x:Class="Aphelion.Desktop.UI.Views.BrowserToolbarView"
              x:DataType="vm:MainWindowViewModel">
 
@@ -11,12 +12,10 @@
 
     Navigation binds to the active browser; split and grouping act on the window.
   -->
-  <Grid RowDefinitions="Auto,1"
-        Background="{DynamicResource SurfaceBaseBrush}"
+  <Grid Background="{DynamicResource SurfaceBaseBrush}"
         DataContext="{Binding}">
 
-    <Grid Grid.Row="0"
-          ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*"
+    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto"
           Margin="6,6,10,6"
           ColumnSpacing="2">
 
@@ -65,16 +64,34 @@
         </TextBox.KeyBindings>
       </TextBox>
 
+      <!-- Filled once the open page is saved, hollow otherwise, and the anchor
+           the add/edit form hangs from. -->
+      <Button Grid.Column="6"
+              Name="BookmarkStar"
+              Classes="icon"
+              Classes.bookmarked="{Binding Shell.IsActivePageBookmarked}"
+              Margin="4,0,0,0"
+              ToolTip.Tip="Bookmark this page (Ctrl+D)"
+              Command="{Binding Shell.BookmarkActiveTabCommand}">
+        <Path Classes="glyph"
+              Data="M6.5,1 L8.2,4.9 L12.4,5.3 L9.2,8.1 L10.2,12.2 L6.5,10 L2.8,12.2 L3.8,8.1 L0.6,5.3 L4.8,4.9 Z" />
+      </Button>
+
+      <Popup IsOpen="{Binding Shell.IsBookmarkEditorOpen}"
+             PlacementTarget="{Binding ElementName=BookmarkStar}"
+             Placement="BottomEdgeAlignedRight"
+             VerticalOffset="8"
+             IsLightDismissEnabled="True"
+             Closed="OnBookmarkEditorClosed">
+        <views:BookmarkEditorView DataContext="{Binding Shell.BookmarkEditor}" />
+      </Popup>
+
     </Grid>
 
-    <!-- Kept directly under the navigation strip; a future bookmark bar can
-         move this single row below itself without changing loading behavior. -->
-    <ProgressBar Grid.Row="1"
-                 Classes="navigation-progress"
-                 Minimum="0"
-                 Maximum="100"
-                 Value="{Binding Shell.FocusedBrowser.LoadingProgress}"
-                 IsVisible="{Binding Shell.FocusedBrowser.IsLoadingProgressVisible}" />
+    <!-- The loading bar used to sit here, directly under the navigation strip.
+         It now lives below the bookmark bar in MainWindow so that it always
+         marks the boundary between the browser's chrome and the page, rather
+         than having a row of bookmarks appear beneath it. -->
 
   </Grid>
 

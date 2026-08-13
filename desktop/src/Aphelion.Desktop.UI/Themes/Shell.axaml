@@ -780,6 +780,155 @@
     <Setter Property="Padding" Value="12" />
   </Style>
 
+  <!-- ===== Bookmarks ===== -->
+
+  <Style Selector="Button.icon.bookmarked Path.glyph">
+    <Setter Property="Fill" Value="{DynamicResource BrandPrimaryBrush}" />
+    <Setter Property="Stroke" Value="{DynamicResource BrandPrimaryBrush}" />
+  </Style>
+
+  <!-- Continuous with the toolbar above it: same ground, no dividing line, so
+       the two read as one band of chrome rather than two stacked bars. The
+       loading line below the bar is what separates chrome from page. -->
+  <Style Selector="Border.bookmark-bar">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBaseBrush}" />
+    <Setter Property="Padding" Value="6,0,6,5" />
+    <Setter Property="MinHeight" Value="32" />
+  </Style>
+
+  <Style Selector="Button.bookmark-item">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}" />
+    <Setter Property="Padding" Value="8,5" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.12" />
+        <BrushTransition Property="Foreground" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <!-- Path.glyph only carries a stroke inside Button.icon, so the folder and
+       chevron glyphs in these rows drew as nothing until given one here. -->
+  <Style Selector="Button.bookmark-item Path.glyph">
+    <Setter Property="Stroke" Value="{DynamicResource ForegroundMutedBrush}" />
+    <Setter Property="StrokeThickness" Value="1.3" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <!-- The label and glyphs brighten along with the fill, so a row lights up as
+       one object instead of a rectangle appearing behind static contents. -->
+  <Style Selector="Button.bookmark-item:pointerover">
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Button.bookmark-item:pointerover Path.glyph">
+    <Setter Property="Stroke" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Button.bookmark-item.open Path.glyph">
+    <Setter Property="Stroke" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Button.bookmark-item.drop-into Path.glyph">
+    <Setter Property="Stroke" Value="White" />
+  </Style>
+
+  <Style Selector="Button.bookmark-item:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+  </Style>
+
+  <!-- Held open while its dropdown is showing, so it is clear which folder the
+       list below belongs to. -->
+  <Style Selector="Button.bookmark-item.open">
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Button.bookmark-item.open /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+  </Style>
+
+  <!-- The row a drag is hovering over, when the drop would file into it. -->
+  <Style Selector="Button.bookmark-item.drop-into /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BrandPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="Button.bookmark-item.drop-into">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+
+  <!-- Marks where a dragged row would land, between two others: upright on the
+       bar, and lying flat inside a dropdown, where rows stack downwards. -->
+  <Style Selector="Border.bookmark-drop-marker">
+    <Setter Property="Width" Value="2" />
+    <Setter Property="Margin" Value="0,4" />
+    <Setter Property="CornerRadius" Value="1" />
+    <Setter Property="Background" Value="{DynamicResource BrandPrimaryBrush}" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+  </Style>
+
+  <Style Selector="Border.bookmark-drop-marker.horizontal">
+    <Setter Property="Width" Value="NaN" />
+    <Setter Property="Height" Value="2" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Margin" Value="4,0" />
+  </Style>
+
+  <!-- Wider padding than the bar's rows: a dropdown is a list being read down,
+       not a strip being scanned across. -->
+  <Style Selector="Border.bookmark-folder-panel">
+    <Setter Property="Padding" Value="5" />
+    <Setter Property="MinWidth" Value="220" />
+  </Style>
+
+  <Style Selector="Border.bookmark-folder-panel Button.bookmark-item">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="Padding" Value="9,7" />
+  </Style>
+
+  <Style Selector="TextBlock.bookmark-empty">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+    <Setter Property="Margin" Value="10,8" />
+  </Style>
+
+  <Style Selector="Border.bookmark-folder-list">
+    <Setter Property="Background" Value="{DynamicResource SurfaceSunkenBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource DividerBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}" />
+    <Setter Property="Padding" Value="3" />
+  </Style>
+
+  <Style Selector="ListBox.bookmark-folder-picker">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="ListBox.bookmark-folder-picker ListBoxItem">
+    <Setter Property="Padding" Value="7,5" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusSmall}" />
+  </Style>
+
+  <!-- Same reason as the bar's rows: outside Button.icon a glyph has no stroke. -->
+  <Style Selector="ListBox.bookmark-folder-picker Path.glyph">
+    <Setter Property="Stroke" Value="{DynamicResource ForegroundMutedBrush}" />
+    <Setter Property="StrokeThickness" Value="1.3" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+  </Style>
+
   <Style Selector="Border.panel.drawer">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />

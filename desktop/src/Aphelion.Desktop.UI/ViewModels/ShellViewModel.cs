@@ -49,13 +49,23 @@ public sealed partial class ShellViewModel : ViewModelBase
         object? windowManager = null,
         ISessionStore? sessionStore = null,
         IFaviconLoader? favicons = null,
-        ITabSoundPlayer? tabSounds = null)
+        ITabSoundPlayer? tabSounds = null,
+        BookmarksViewModel? bookmarks = null)
     {
         _browserFactory = browserFactory ?? throw new ArgumentNullException(nameof(browserFactory));
         WindowManager = windowManager;
         _sessionStore = sessionStore;
         _favicons = favicons;
         _tabSounds = tabSounds;
+        Bookmarks = bookmarks;
+
+        if (Bookmarks is not null)
+        {
+            // The bar navigates the window it was clicked in, so the shell — not
+            // the profile-wide bookmark view model — supplies the destination.
+            Bookmarks.Navigate = address => ActiveBrowser?.NavigateTo(address);
+            Bookmarks.BookmarksChanged += (_, _) => OnPropertyChanged(nameof(IsActivePageBookmarked));
+        }
 
         Overflow = new TabListViewModel(
             "Other tabs",
@@ -94,6 +104,77 @@ public sealed partial class ShellViewModel : ViewModelBase
 
     /// <summary>Single zoom notification shared by every tab in this window.</summary>
     public ZoomFeedbackViewModel ZoomFeedback { get; } = new();
+
+    /// <summary>
+    /// The saved bookmarks, shared with every other window in the profile. Null
+    /// only in tests and previews, which construct a shell without them.
+    /// </summary>
+    public BookmarksViewModel? Bookmarks { get; }
+
+    /// <summary>
+    /// Whether the bookmark bar is showing. On by default and left that way:
+    /// hiding it belongs in the settings store, which does not exist yet, and a
+    /// toggle whose state is forgotten on every launch is worse than none.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isBookmarkBarVisible = true;
+
+    /// <summary>The add/edit form behind the star, or null when it is closed.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBookmarkEditorOpen))]
+    private BookmarkEditorViewModel? _bookmarkEditor;
+
+    public bool IsBookmarkEditorOpen => BookmarkEditor is not null;
+
+    /// <summary>Whether the page on screen is already saved, drawn as a filled star.</summary>
+    public bool IsActivePageBookmarked =>
+        Bookmarks?.IsBookmarked(ActiveBrowser?.Address) == true;
+
+    [RelayCommand]
+    private void ToggleBookmarkBar() => IsBookmarkBarVisible = !IsBookmarkBarVisible;
+
+    /// <summary>
+    /// Saves the open page, or reopens the form for it when it is already saved.
+    /// </summary>
+    /// <remarks>
+    /// Clicking the star a second time edits rather than adding a duplicate,
+    /// which is how Chrome's star behaves; the form's Remove button is the way
+    /// back out.
+    /// </remarks>
+    [RelayCommand]
+    private void BookmarkActiveTab()
+    {
+        if (Bookmarks is null || ActiveBrowser is not { Address: { } address } browser)
+        {
+            return;
+        }
+
+        var existing = Bookmarks.FindByAddress(address);
+
+        if (existing is null)
+        {
+            // Saved before the form opens, so the star fills immediately and
+            // dismissing the form leaves the bookmark in place.
+            existing = Bookmarks.AddBookmark(
+                Bookmarks.Tree.Root,
+                browser.PageTitle,
+                address,
+                browser.FaviconAddress);
+        }
+
+        var editor = new BookmarkEditorViewModel(
+            Bookmarks,
+            address,
+            existing.Name,
+            browser.FaviconAddress,
+            existing);
+
+        editor.Closed += (_, _) => BookmarkEditor = null;
+        BookmarkEditor = editor;
+    }
+
+    [RelayCommand]
+    private void CloseBookmarkEditor() => BookmarkEditor = null;
 
     [ObservableProperty]
     private bool _isOverflowOpen;
@@ -159,8 +240,14 @@ public sealed partial class ShellViewModel : ViewModelBase
     partial void OnIsRightPaneFocusedChanged(bool value) =>
         OnPropertyChanged(nameof(FocusedBrowser));
 
-    partial void OnActiveBrowserChanged(BrowserViewModel? value) =>
+    partial void OnActiveBrowserChanged(BrowserViewModel? value)
+    {
         OnPropertyChanged(nameof(FocusedBrowser));
+
+        // Switching tabs puts a different address on screen, which the star has
+        // to reflect even though no navigation happened.
+        OnPropertyChanged(nameof(IsActivePageBookmarked));
+    }
 
     partial void OnSplitBrowserChanged(BrowserViewModel? value) =>
         OnPropertyChanged(nameof(FocusedBrowser));
@@ -971,6 +1058,13 @@ public sealed partial class ShellViewModel : ViewModelBase
             or nameof(BrowserViewModel.FaviconAddress))
         {
             RefreshTabDisplay();
+        }
+
+        // Navigating changes whether the star is filled, so it follows the page
+        // rather than only refreshing when the bookmarks themselves change.
+        if (e.PropertyName == nameof(BrowserViewModel.Address))
+        {
+            OnPropertyChanged(nameof(IsActivePageBookmarked));
         }
     }
 

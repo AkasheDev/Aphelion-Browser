@@ -34,7 +34,11 @@ internal sealed class WindowManager(IServiceProvider services)
             _services.GetRequiredService<Func<BrowserViewModel>>(),
             this,
             sessionStore: null,
-            favicons: _services.GetService<Aphelion.Desktop.Application.Ports.IFaviconLoader>());
+            favicons: _services.GetService<Aphelion.Desktop.Application.Ports.IFaviconLoader>(),
+            tabSounds: null,
+            // Bookmarks belong to the profile, so an ordinary new window shows
+            // the same bar as the one it was opened from.
+            bookmarks: _services.GetService<BookmarksViewModel>());
 
         var window = new MainWindow
         {
@@ -77,7 +81,13 @@ internal sealed class WindowManager(IServiceProvider services)
             factory,
             this,
             sessionStore: null,
-            favicons: _services.GetService<Aphelion.Desktop.Application.Ports.IFaviconLoader>());
+            favicons: _services.GetService<Aphelion.Desktop.Application.Ports.IFaviconLoader>(),
+            tabSounds: null,
+            // Bookmarks are shown and can be added here too. They are things the
+            // user chose to keep, not a record of where they have been, so they
+            // are not what private mode is protecting — the same call Chrome
+            // makes. Browsing history and cookies remain untouched by them.
+            bookmarks: _services.GetService<BookmarksViewModel>());
 
         var window = new MainWindow { DataContext = new MainWindowViewModel(shell), Title = "Private Mode — Aphelion" };
         Register(window);

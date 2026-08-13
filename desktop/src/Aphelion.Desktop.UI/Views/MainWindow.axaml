@@ -34,6 +34,8 @@
     <KeyBinding Gesture="Ctrl+W" Command="{Binding Shell.CloseTabCommand}"
                 CommandParameter="{Binding Shell.ActiveTab}" />
     <KeyBinding Gesture="Escape" Command="{Binding Shell.FocusedBrowser.CancelAddressEditingCommand}" />
+    <KeyBinding Gesture="Ctrl+D" Command="{Binding Shell.BookmarkActiveTabCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+B" Command="{Binding Shell.ToggleBookmarkBarCommand}" />
   </Window.KeyBindings>
 
   <DockPanel>
@@ -344,6 +346,30 @@
          be composited underneath an Avalonia overlay. -->
     <!-- One toolbar for the window, above both panes -->
     <views:BrowserToolbarView Name="BrowserToolbar" DockPanel.Dock="Top" />
+
+    <!-- Sits between the toolbar and the page, as in Chrome, and stays visible.
+         Hiding it will become a setting once there is a settings store to keep
+         the choice in; until then a toggle that forgets itself every launch is
+         worse than no toggle. -->
+    <ContentControl DockPanel.Dock="Top"
+                    Content="{Binding Shell.Bookmarks}"
+                    IsVisible="{Binding Shell.IsBookmarkBarVisible}">
+      <ContentControl.ContentTemplate>
+        <DataTemplate DataType="vm:BookmarksViewModel">
+          <views:BookmarkBarView />
+        </DataTemplate>
+      </ContentControl.ContentTemplate>
+    </ContentControl>
+
+    <!-- Below the bookmark bar rather than tucked under the navigation strip, so
+         it reads as the line where the browser's own chrome ends and the page
+         begins no matter what sits above it. -->
+    <ProgressBar DockPanel.Dock="Top"
+                 Classes="navigation-progress"
+                 Minimum="0"
+                 Maximum="100"
+                 Value="{Binding Shell.FocusedBrowser.LoadingProgress}"
+                 IsVisible="{Binding Shell.FocusedBrowser.IsLoadingProgressVisible}" />
 
     <Grid Name="ContentHost" ColumnDefinitions="*,0">
 
