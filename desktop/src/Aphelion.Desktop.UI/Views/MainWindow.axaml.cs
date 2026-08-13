@@ -33,7 +33,17 @@ public partial class MainWindow : Window
         // press the drag handler needs.
         AddHandler(PointerReleasedEvent, OnPointerReleasedTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnNavigationShortcutTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
-        AddHandler(PointerWheelChangedEvent, OnZoomWheelTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+
+        // WebView2 is a native child window on Windows and owns Ctrl+wheel. Its
+        // real factor is observed by the browser-engine adapter instead; adding
+        // a second Avalonia handler here makes the level depend on whether the
+        // pointer happened to be over chrome or page content. Other backends can
+        // still use the portable routed gesture until they expose equivalent
+        // native zoom-factor events.
+        if (!OperatingSystem.IsWindows())
+        {
+            AddHandler(PointerWheelChangedEvent, OnZoomWheelTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+        }
         AddHandler(PointerPressedEvent, OnOverflowDismissTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         HookPaneFocus();
     }

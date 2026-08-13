@@ -91,8 +91,9 @@
       the row's measurement, so appearing and disappearing never nudges the
       toolbar's layout; ZIndex keeps it above the address box it overlaps.
 
-      Bound to FocusedBrowser rather than ActiveBrowser so the toast tracks
-      whichever split pane the zoom commands are acting on.
+      Visibility and the displayed percentage live at window scope. A tab or
+      split-focus change therefore cannot detach an in-flight notification;
+      its controls still act on whichever browser currently owns the toolbar.
     -->
     <Border Grid.Row="0"
             Classes="zoom-toast"
@@ -100,7 +101,7 @@
             VerticalAlignment="Center"
             Margin="0,0,16,0"
             ZIndex="10"
-            IsVisible="{Binding Shell.FocusedBrowser.IsZoomToastVisible}">
+            IsVisible="{Binding Shell.ZoomFeedback.IsVisible}">
       <StackPanel Orientation="Horizontal" Spacing="2">
         <Button Classes="icon small" ToolTip.Tip="Zoom out"
                 Command="{Binding Shell.FocusedBrowser.ZoomOutCommand}">
@@ -108,7 +109,7 @@
         </Button>
         <Button Classes="zoom-toast-label" ToolTip.Tip="Reset zoom"
                 Command="{Binding Shell.FocusedBrowser.ResetZoomCommand}">
-          <TextBlock Text="{Binding Shell.FocusedBrowser.ZoomLabel}" />
+          <TextBlock Text="{Binding Shell.ZoomFeedback.Label}" />
         </Button>
         <Button Classes="icon small" ToolTip.Tip="Zoom in"
                 Command="{Binding Shell.FocusedBrowser.ZoomInCommand}">

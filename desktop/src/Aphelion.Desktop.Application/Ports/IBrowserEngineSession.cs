@@ -59,6 +59,17 @@ public interface IBrowserEngineSession
 
     /// <summary>Raised when a navigation finishes, successfully or not.</summary>
     event EventHandler<EngineNavigationCompletedEventArgs>? NavigationCompleted;
+
+    /// <summary>
+    /// Raised when the engine itself changes zoom, including native Ctrl+wheel
+    /// and native keyboard zoom handled inside the hosted page.
+    /// </summary>
+    event EventHandler<EngineZoomFactorChangedEventArgs>? ZoomFactorChanged;
+}
+
+public sealed class EngineZoomFactorChangedEventArgs(double factor) : EventArgs
+{
+    public double Factor { get; } = factor;
 }
 
 public sealed class EngineNavigationStartedEventArgs(Uri? requestedUrl) : EventArgs

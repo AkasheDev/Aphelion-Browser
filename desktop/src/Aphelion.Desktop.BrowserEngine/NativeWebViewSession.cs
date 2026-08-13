@@ -1,7 +1,7 @@
 using Aphelion.Desktop.Application.Ports;
+using Aphelion.Desktop.BrowserEngine.Windows;
 using Aphelion.Desktop.Domain.ValueObjects;
 using Avalonia.Controls;
-using System.Reflection;
 
 namespace Aphelion.Desktop.BrowserEngine;
 
@@ -18,15 +18,24 @@ namespace Aphelion.Desktop.BrowserEngine;
 public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
 {
     private readonly NativeWebView _webView;
+    private readonly WebView2ZoomBridge _windowsZoom;
     private bool _disposed;
-    private double _zoomFactor = 1d;
+    private bool _navigationInProgress;
+    private Uri? _latestNavigationRequest;
+    private double _desiredZoomFactor = 1d;
+    private double _actualZoomFactor = 1d;
 
     public NativeWebViewSession(NativeWebView webView)
     {
         _webView = webView ?? throw new ArgumentNullException(nameof(webView));
+        _windowsZoom = new WebView2ZoomBridge(OnNativeZoomChanged);
 
         _webView.NavigationStarted += OnNavigationStarted;
         _webView.NavigationCompleted += OnNavigationCompleted;
+        _webView.AdapterCreated += OnAdapterCreated;
+        _webView.AdapterDestroyed += OnAdapterDestroyed;
+
+        TryAttachZoomBridge(_webView.TryGetPlatformHandle());
     }
 
     public bool CanGoBack => _webView.CanGoBack;
@@ -36,6 +45,8 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     public event EventHandler<EngineNavigationStartedEventArgs>? NavigationStarted;
 
     public event EventHandler<EngineNavigationCompletedEventArgs>? NavigationCompleted;
+
+    public event EventHandler<EngineZoomFactorChangedEventArgs>? ZoomFactorChanged;
 
     public void Navigate(PageAddress address)
     {
@@ -47,20 +58,21 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     {
         if (_disposed)
         {
-            return _zoomFactor;
+            return _actualZoomFactor;
         }
 
-        _zoomFactor = Math.Clamp(factor, 0.25d, 5d);
+        _desiredZoomFactor = Math.Clamp(factor, 0.25d, 5d);
 
-        if (TrySetNativeZoomFactor(_zoomFactor, out var appliedFactor))
+        if (_windowsZoom.TrySet(_desiredZoomFactor, out var appliedFactor))
         {
-            _zoomFactor = appliedFactor;
+            _actualZoomFactor = Math.Clamp(appliedFactor, 0.25d, 5d);
             _ = RestoreDocumentZoomAsync();
-            return _zoomFactor;
+            return _actualZoomFactor;
         }
 
         _ = ApplyZoomAsync();
-        return _zoomFactor;
+        _actualZoomFactor = _desiredZoomFactor;
+        return _actualZoomFactor;
     }
 
     public bool GoBack() => _webView.GoBack();
@@ -128,21 +140,35 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         }
     }
 
-    private void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e) =>
+    private void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
+    {
+        _navigationInProgress = true;
+        _latestNavigationRequest = e.Request;
         NavigationStarted?.Invoke(this, new EngineNavigationStartedEventArgs(e.Request));
+    }
 
     private void OnNavigationCompleted(object? sender, WebViewNavigationCompletedEventArgs e)
     {
+        var completesLatestNavigation = RequestsMatch(e.Request, _latestNavigationRequest);
+
         // Apply again after a new document has arrived. Native zoom owns the
         // whole renderer; only engines without that facility use CSS fallback.
-        if (TrySetNativeZoomFactor(_zoomFactor, out var appliedFactor))
+        if (completesLatestNavigation &&
+            _windowsZoom.TrySet(_desiredZoomFactor, out var appliedFactor))
         {
-            _zoomFactor = appliedFactor;
+            _actualZoomFactor = Math.Clamp(appliedFactor, 0.25d, 5d);
             _ = RestoreDocumentZoomAsync();
         }
-        else
+        else if (completesLatestNavigation)
         {
             _ = ApplyZoomAsync();
+            _actualZoomFactor = _desiredZoomFactor;
+        }
+
+        if (completesLatestNavigation)
+        {
+            _navigationInProgress = false;
+            _latestNavigationRequest = null;
         }
 
         NavigationCompleted?.Invoke(
@@ -153,6 +179,16 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
                 e.Request));
     }
 
+    private static bool RequestsMatch(Uri? completed, Uri? latest) =>
+        completed is null ||
+        latest is not null &&
+        Uri.Compare(
+            completed,
+            latest,
+            UriComponents.HttpRequestUrl,
+            UriFormat.SafeUnescaped,
+            StringComparison.OrdinalIgnoreCase) == 0;
+
     private async Task ApplyZoomAsync()
     {
         if (_disposed)
@@ -162,7 +198,7 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
 
         try
         {
-            var factor = _zoomFactor.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var factor = _desiredZoomFactor.ToString(System.Globalization.CultureInfo.InvariantCulture);
             await _webView.InvokeScript(
                 $$"""
                 (() => {
@@ -182,99 +218,46 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         }
     }
 
-    /// <summary>
-    /// Uses an engine's native zoom controller when the hosted adapter exposes
-    /// one. Avalonia's public WebView surface intentionally does not yet expose
-    /// portable zoom, but WebView2 does; using its controller avoids CSS zoom's
-    /// layout distortion on Windows. Other engines retain the document fallback
-    /// until their equivalent controller becomes publicly available.
-    /// </summary>
-    private bool TrySetNativeZoomFactor(double factor, out double appliedFactor)
+    private void OnAdapterCreated(object? sender, WebViewAdapterEventArgs e) =>
+        TryAttachZoomBridge(e.TryGetPlatformHandle());
+
+    private void OnAdapterDestroyed(object? sender, WebViewAdapterEventArgs e) =>
+        _windowsZoom.Detach();
+
+    private void TryAttachZoomBridge(Avalonia.Platform.IPlatformHandle? platformHandle)
     {
-        appliedFactor = factor;
-
-        try
+        if (_disposed || !_windowsZoom.TryAttach(platformHandle))
         {
-            var adapter = typeof(NativeWebView)
-                .GetMethod("TryGetAdapter", BindingFlags.Instance | BindingFlags.NonPublic)
-                ?.Invoke(_webView, null);
-
-            if (adapter is null)
-            {
-                return false;
-            }
-
-            for (var type = adapter.GetType(); type is not null; type = type.BaseType)
-            {
-                foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic))
-                {
-                    var controller = field.GetValue(adapter);
-                    var setZoom = field.FieldType.GetMethod(
-                        "SetZoomFactor",
-                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                        binder: null,
-                        types: [typeof(double)],
-                        modifiers: null);
-
-                    if (setZoom is null)
-                    {
-                        continue;
-                    }
-
-                    setZoom.Invoke(controller, [factor]);
-                    DisableBuiltInZoomControls(adapter);
-
-                    var getZoom = field.FieldType.GetMethod(
-                        "GetZoomFactor",
-                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                        binder: null,
-                        types: Type.EmptyTypes,
-                        modifiers: null);
-
-                    if (getZoom?.Invoke(controller, null) is double actual)
-                    {
-                        appliedFactor = Math.Clamp(actual, 0.25d, 5d);
-                    }
-
-                    return true;
-                }
-            }
-        }
-        catch (Exception)
-        {
-            // The public adapter has no guaranteed zoom contract. Fallback to
-            // the document scale when a platform does not surface a controller.
+            return;
         }
 
-        return false;
+        if (_windowsZoom.TrySet(_desiredZoomFactor, out var appliedFactor))
+        {
+            _actualZoomFactor = Math.Clamp(appliedFactor, 0.25d, 5d);
+            _ = RestoreDocumentZoomAsync();
+        }
     }
 
-    /// <summary>
-    /// Prevents the platform WebView from applying a second, invisible zoom on
-    /// Ctrl+wheel. Aphelion owns that gesture so persisted and displayed values
-    /// cannot drift away from the renderer.
-    /// </summary>
-    private static void DisableBuiltInZoomControls(object adapter)
+    private void OnNativeZoomChanged(double factor)
     {
-        try
+        if (_disposed || !double.IsFinite(factor))
         {
-            MethodInfo? tryGetWebView = null;
-
-            for (var type = adapter.GetType(); type is not null && tryGetWebView is null; type = type.BaseType)
-            {
-                tryGetWebView = type.GetMethod(
-                    "TryGetWebView2",
-                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
-            }
-
-            var webView = tryGetWebView?.Invoke(adapter, null);
-            var settings = webView?.GetType().GetMethod("GetSettings")?.Invoke(webView, null);
-            settings?.GetType().GetMethod("SetIsZoomControlEnabled")?.Invoke(settings, [false]);
+            return;
         }
-        catch (Exception)
+
+        _actualZoomFactor = Math.Clamp(factor, 0.25d, 5d);
+
+        // WebView2 may announce its own remembered site factor while a document
+        // is changing. Aphelion's persisted value remains authoritative and is
+        // reapplied on completion; only an interaction outside navigation is a
+        // user zoom that should update application state.
+        if (_navigationInProgress)
         {
-            // Other platform adapters do not expose WebView2 settings.
+            return;
         }
+
+        _desiredZoomFactor = _actualZoomFactor;
+        ZoomFactorChanged?.Invoke(this, new EngineZoomFactorChangedEventArgs(_actualZoomFactor));
     }
 
     private async Task RestoreDocumentZoomAsync()
@@ -338,6 +321,9 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
 
         _webView.NavigationStarted -= OnNavigationStarted;
         _webView.NavigationCompleted -= OnNavigationCompleted;
+        _webView.AdapterCreated -= OnAdapterCreated;
+        _webView.AdapterDestroyed -= OnAdapterDestroyed;
+        _windowsZoom.Dispose();
         _disposed = true;
     }
 }

@@ -92,6 +92,9 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// <summary>Candidates for the second pane, listed a page at a time.</summary>
     public TabListViewModel SplitPicker { get; }
 
+    /// <summary>Single zoom notification shared by every tab in this window.</summary>
+    public ZoomFeedbackViewModel ZoomFeedback { get; } = new();
+
     [ObservableProperty]
     private bool _isOverflowOpen;
 
@@ -906,6 +909,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         var browser = _browserFactory();
         browser.Bind(tab);
         browser.PropertyChanged += OnBrowserPropertyChanged;
+        browser.ZoomFeedbackRequested += OnZoomFeedbackRequested;
         _browsers[tab.Id] = browser;
     }
 
@@ -914,6 +918,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         if (_browsers.Remove(id, out var browser))
         {
             browser.PropertyChanged -= OnBrowserPropertyChanged;
+            browser.ZoomFeedbackRequested -= OnZoomFeedbackRequested;
         }
     }
 
@@ -968,6 +973,9 @@ public sealed partial class ShellViewModel : ViewModelBase
             RefreshTabDisplay();
         }
     }
+
+    private void OnZoomFeedbackRequested(object? sender, ZoomFeedbackRequestedEventArgs e) =>
+        ZoomFeedback.Show(e.Percent);
 
     private bool IsHidden(BrowserTab tab) =>
         tab.GroupId is { } id && _session.FindGroup(id)?.IsCollapsed == true;

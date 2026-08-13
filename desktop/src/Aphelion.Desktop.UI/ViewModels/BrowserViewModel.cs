@@ -28,7 +28,6 @@ public sealed partial class BrowserViewModel : ViewModelBase
     private int _sessionGeneration;
     private int _progressGeneration;
     private PageAddress? _lastStartedAddress;
-    private int _zoomToastGeneration;
 
     /// <summary>
     /// Whether this tab left New Tab to reach its current page, so "back" has
@@ -173,12 +172,11 @@ public sealed partial class BrowserViewModel : ViewModelBase
     public string ZoomLabel => $"{ZoomPercent}%";
 
     /// <summary>
-    /// Shown briefly over the page whenever the zoom level changes, then fades on
-    /// its own — the only feedback the zoom commands had before this was the
-    /// page silently resizing, which read as nothing having happened at all.
+    /// Requests window-level feedback whenever this browser's effective zoom
+    /// changes. The shell owns the toast lifetime so changing tabs or split-pane
+    /// focus cannot detach the visual from the event that produced it.
     /// </summary>
-    [ObservableProperty]
-    private bool _isZoomToastVisible;
+    public event EventHandler<ZoomFeedbackRequestedEventArgs>? ZoomFeedbackRequested;
 
     /// <summary>Simulated, monotonic navigation progress from 0 to 100.</summary>
     [ObservableProperty]
@@ -217,6 +215,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _sessionGeneration++;
         _session.NavigationStarted += OnNavigationStarted;
         _session.NavigationCompleted += OnNavigationCompleted;
+        _session.ZoomFactorChanged += OnZoomFactorChanged;
 
         RefreshHistoryState();
         ResumePendingNavigation();
@@ -541,6 +540,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
         _session.NavigationStarted -= OnNavigationStarted;
         _session.NavigationCompleted -= OnNavigationCompleted;
+        _session.ZoomFactorChanged -= OnZoomFactorChanged;
         _session = null;
         _lastStartedAddress = null;
         _sessionGeneration++;
@@ -627,38 +627,56 @@ public sealed partial class BrowserViewModel : ViewModelBase
     {
         var zoom = _siteZoom?.Resolve(_tab.Address) ?? PageZoom.Default;
         var appliedFactor = _session?.SetZoomFactor(zoom.Factor) ?? zoom.Factor;
-        ZoomPercent = PageZoom.FromPercent((int)Math.Round(appliedFactor * 100d)).Percent;
+        ZoomPercent = FromEngineFactor(appliedFactor).Percent;
     }
 
     private void SetZoom(PageZoom zoom)
     {
         var appliedFactor = _session?.SetZoomFactor(zoom.Factor) ?? zoom.Factor;
-        var appliedZoom = PageZoom.FromPercent((int)Math.Round(appliedFactor * 100d));
+        var appliedZoom = FromEngineFactor(appliedFactor);
         appliedZoom = _siteZoom?.Save(_tab.Address, appliedZoom) ?? appliedZoom;
         ZoomPercent = appliedZoom.Percent;
-        ShowZoomToast();
+        RequestZoomFeedback(appliedZoom.Percent);
     }
 
-    /// <summary>
-    /// Reveals the zoom toast and schedules it to fade after a few seconds.
-    /// </summary>
-    /// <remarks>
-    /// A generation counter, rather than cancelling a previous timer, because
-    /// zoom commands fire in quick bursts — three clicks on "+" must not each
-    /// start and stop their own delay. Only the delay started by the most recent
-    /// change is allowed to hide the toast; every earlier one finds its
-    /// generation stale and does nothing.
-    /// </remarks>
-    private async void ShowZoomToast()
+    private void OnZoomFactorChanged(object? sender, EngineZoomFactorChangedEventArgs e)
     {
-        IsZoomToastVisible = true;
-        var generation = ++_zoomToastGeneration;
-
-        await Task.Delay(TimeSpan.FromSeconds(5)).ConfigureAwait(true);
-
-        if (generation == _zoomToastGeneration)
+        if (!ReferenceEquals(sender, _session) || !double.IsFinite(e.Factor))
         {
-            IsZoomToastVisible = false;
+            return;
+        }
+
+        void Apply()
+        {
+            if (!ReferenceEquals(sender, _session))
+            {
+                return;
+            }
+
+            var zoom = FromEngineFactor(e.Factor);
+            zoom = _siteZoom?.Save(_tab.Address, zoom) ?? zoom;
+            ZoomPercent = zoom.Percent;
+            RequestZoomFeedback(zoom.Percent);
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            Apply();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(Apply);
         }
     }
+
+    private void RequestZoomFeedback(int percent) =>
+        ZoomFeedbackRequested?.Invoke(this, new ZoomFeedbackRequestedEventArgs(percent));
+
+    private static PageZoom FromEngineFactor(double factor) =>
+        PageZoom.FromPercent((int)Math.Round(factor * 100d, MidpointRounding.AwayFromZero));
+}
+
+public sealed class ZoomFeedbackRequestedEventArgs(int percent) : EventArgs
+{
+    public int Percent { get; } = percent;
 }
