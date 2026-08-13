@@ -4,6 +4,14 @@ using LibVLCSharp.Shared;
 namespace Aphelion.Desktop.UI.Services;
 
 /// <summary>Cross-platform adapter for the bundled tab-open sound.</summary>
+/// <remarks>
+/// Only Windows and macOS native LibVLC binaries are bundled (see
+/// <c>Aphelion.Desktop.UI.csproj</c>); Linux has none. The constructor can
+/// therefore throw on Linux, which is why <c>CompositionRoot</c> never
+/// registers this type directly — it tries to construct one and falls back to
+/// <see cref="NullTabSoundPlayer"/> on failure, so a missing audio backend
+/// costs a sound effect rather than the whole application.
+/// </remarks>
 internal sealed class LibVlcTabSoundPlayer : ITabSoundPlayer, IDisposable
 {
     private readonly LibVLC _engine;

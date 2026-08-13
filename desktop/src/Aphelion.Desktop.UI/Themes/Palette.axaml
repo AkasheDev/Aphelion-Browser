@@ -29,22 +29,25 @@
       <Color x:Key="FocusRing">#5A4FCF</Color>
       <Color x:Key="CloseHover">#D93544</Color>
 
-      <!-- New Tab is intentionally a dark, immersive canvas in both shell
-           variants; these semantic tokens keep every view free of literals. -->
-      <Color x:Key="NewTabBackdrop">#080A18</Color>
-      <Color x:Key="NewTabGlass">#B8141728</Color>
-      <Color x:Key="NewTabGlassHover">#D3222640</Color>
-      <Color x:Key="NewTabGlassBorder">#38FFFFFF</Color>
-      <Color x:Key="NewTabForeground">#F7F8FF</Color>
-      <Color x:Key="NewTabMuted">#AEB8D3</Color>
-      <Color x:Key="NewTabViolet">#806BFF</Color>
-      <Color x:Key="NewTabCyan">#42DDE8</Color>
-      <Color x:Key="NewTabWarm">#FFC978</Color>
-      <Color x:Key="NewTabPositive">#75E6B5</Color>
-      <Color x:Key="NewTabSceneScrim">#12000000</Color>
+      <!-- New Tab follows the shell theme like everything else; these semantic
+           tokens keep every view free of literals. The starfield and glass
+           surfaces read as a bright sky rather than deep space here — the
+           control drawing them (NewTabStarfield) takes its colours entirely
+           from these tokens, so nothing in that code is dark-specific. -->
+      <Color x:Key="NewTabBackdrop">#EEF0FA</Color>
+      <Color x:Key="NewTabGlass">#B8FFFFFF</Color>
+      <Color x:Key="NewTabGlassHover">#D3FFFFFF</Color>
+      <Color x:Key="NewTabGlassBorder">#381A1A38</Color>
+      <Color x:Key="NewTabForeground">#1A1A24</Color>
+      <Color x:Key="NewTabMuted">#5C5C7A</Color>
+      <Color x:Key="NewTabViolet">#5A4FCF</Color>
+      <Color x:Key="NewTabCyan">#0E9AA7</Color>
+      <Color x:Key="NewTabWarm">#E29A3C</Color>
+      <Color x:Key="NewTabPositive">#2FA679</Color>
+      <Color x:Key="NewTabSceneScrim">#06000000</Color>
       <Color x:Key="NewTabVignetteClear">#00000000</Color>
-      <Color x:Key="NewTabVignetteSoft">#09000000</Color>
-      <Color x:Key="NewTabVignetteEdge">#66000000</Color>
+      <Color x:Key="NewTabVignetteSoft">#05000000</Color>
+      <Color x:Key="NewTabVignetteEdge">#22000000</Color>
     </ResourceDictionary>
 
     <ResourceDictionary x:Key="Dark">

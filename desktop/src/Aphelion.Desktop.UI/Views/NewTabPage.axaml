@@ -50,14 +50,32 @@
   </UserControl.Resources>
   <Grid>
     <views:NewTabBackground IsVisible="{Binding !IsPrivate}" />
-    <Border Background="{DynamicResource NewTabBackdropBrush}" IsVisible="{Binding IsPrivate}" />
+    <views:NewTabPrivateBackground IsVisible="{Binding IsPrivate}" />
 
+    <!--
+      Weather resolves an approximate location from the public IP on its own,
+      before the user has asked for anything — the one thing on this page that
+      reaches the network unprompted. Both states stay reachable from the same
+      corner: on, the card refreshes on click and offers "Turn off" in its menu;
+      off, a small label takes its place and turns it back on.
+
+      Private mode carries neither: no weather card, no "off" label to turn it
+      back on from. The page stays as quiet as the rest of the private
+      experience rather than offering a network request it otherwise never
+      makes on its own.
+    -->
     <Button Classes="newtab-weather"
             Margin="0,20,24,0"
             HorizontalAlignment="Right"
             VerticalAlignment="Top"
             Command="{Binding Ambient.RefreshWeatherCommand}"
+            IsVisible="{Binding Ambient.IsWeatherEnabled}"
             ToolTip.Tip="{Binding Ambient.WeatherDescription}">
+      <Button.ContextMenu>
+        <ContextMenu>
+          <MenuItem Header="Turn off weather" Command="{Binding Ambient.ToggleWeatherCommand}" />
+        </ContextMenu>
+      </Button.ContextMenu>
       <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
         <StackPanel Spacing="1" VerticalAlignment="Center">
           <TextBlock Classes="newtab-weather-location" Text="{Binding Ambient.WeatherLocation}" />
@@ -72,6 +90,16 @@
         </Canvas>
         <TextBlock Classes="newtab-weather-temperature" Text="{Binding Ambient.TemperatureText}" />
       </StackPanel>
+    </Button>
+
+    <Button Classes="newtab-weather-off"
+            Margin="0,20,24,0"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Command="{Binding Ambient.ToggleWeatherCommand}"
+            IsVisible="{Binding ShowWeatherOffLabel}"
+            ToolTip.Tip="Turn weather back on">
+      <TextBlock Text="Weather off" />
     </Button>
 
     <StackPanel Width="820" Margin="32" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="28">
@@ -90,12 +118,20 @@
           <TextBlock Classes="newtab-greeting-headline" Text="{Binding Ambient.GreetingHeadline}" />
           <TextBlock Classes="newtab-greeting-prompt" Text="{Binding Ambient.GreetingPrompt}" />
         </StackPanel>
+        <!-- The same mark as the ordinary New Tab page, not a distinct glyph:
+             a private window is still Aphelion, just quieter. Colour comes from
+             Classes.private on Image.newtab-logo-image, which desaturates it
+             towards the muted tone rather than swapping in a different image. -->
         <StackPanel HorizontalAlignment="Center" Spacing="10" IsVisible="{Binding IsPrivate}">
-          <Canvas Width="72" Height="45" HorizontalAlignment="Center">
-            <Path Fill="{DynamicResource NewTabMutedBrush}"
-                  Data="M10,19 L18,8 H54 L62,19 H10 M23,8 L29,2 H43 L49,8 M18,22 A8,8 0 1 0 18,38 A8,8 0 1 0 18,22 M54,22 A8,8 0 1 0 54,38 A8,8 0 1 0 54,22 M26,30 H46" />
-          </Canvas>
+          <Image Classes="newtab-logo-image private"
+                 Width="76" Height="76"
+                 HorizontalAlignment="Center"
+                 Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
+                 RenderOptions.BitmapInterpolationMode="HighQuality" />
           <TextBlock Text="Private Mode" FontSize="30" FontWeight="SemiBold" Foreground="{DynamicResource NewTabForegroundBrush}" HorizontalAlignment="Center" />
+          <TextBlock Text="Aphelion won't save this window to your history or session. Cookies and site data are cleared when you close it."
+                     FontSize="13" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="420"
+                     Foreground="{DynamicResource NewTabMutedBrush}" HorizontalAlignment="Center" />
         </StackPanel>
         <Grid Name="NewTabSearchAnchor" Height="58" ClipToBounds="False">
           <Border Name="NewTabSearchSurface"
@@ -132,11 +168,24 @@
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>
+                      <Border Classes="newtab-engine-picker-divider" />
+                      <!-- The one setting that belongs beside the engine choice: it
+                           decides whether keystrokes go to that engine's suggestion
+                           endpoint before Enter is pressed. -->
+                      <Button Classes="newtab-engine-option" Command="{Binding Search.ToggleSuggestionsCommand}">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <TextBlock Grid.Column="0" Text="Search suggestions" FontSize="12.5" FontWeight="Medium"
+                                     Foreground="{DynamicResource NewTabForegroundBrush}" VerticalAlignment="Center" />
+                          <TextBlock Grid.Column="1" FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center"
+                                     Foreground="{DynamicResource NewTabMutedBrush}"
+                                     Text="{Binding Search.SuggestionsStateLabel}" />
+                        </Grid>
+                      </Button>
                     </StackPanel>
                   </Border>
                 </Popup>
               </Grid>
-              <TextBox Name="SearchBox" Grid.Column="1" Classes="newtab-search-box" Text="{Binding Search.SearchText}" PlaceholderText="Search the web or enter an address">
+              <TextBox Name="SearchBox" Grid.Column="1" Classes="newtab-search-box" Text="{Binding Search.SearchText}" PlaceholderText="Search the web or enter an address" GotFocus="OnSearchBoxGotFocus">
                 <TextBox.KeyBindings><KeyBinding Gesture="Enter" Command="{Binding Search.SearchCommand}" /></TextBox.KeyBindings>
               </TextBox>
               <Button Grid.Column="2" Classes="newtab-search-submit" Command="{Binding Search.SearchCommand}" ToolTip.Tip="Search">
@@ -144,9 +193,23 @@
               </Button>
             </Grid>
           </Border>
-          <Popup IsOpen="{Binding Search.HasSuggestions}"
+          <!--
+            IsLightDismissEnabled matters here in a way it does not for the
+            engine picker above: this page can leave the visual tree entirely
+            when the user switches tabs, and a Popup is its own top-level
+            window at the OS level — it does not close just because the page
+            that opened it is no longer showing. Without this, choosing a
+            different tab while suggestions were open left the list floating
+            over whatever page came next. NewTabSearchBoxViewModel also clears
+            Suggestions on IsVisibleChanged for the same reason from the other
+            side: the popup binds to HasSuggestions, so an empty list closes
+            it even if light dismiss did not fire.
+          -->
+          <Popup IsOpen="{Binding Search.HasSuggestions, Mode=OneWay}"
                  Placement="Bottom"
-                 PlacementTarget="{Binding ElementName=NewTabSearchAnchor}">
+                 PlacementTarget="{Binding ElementName=NewTabSearchAnchor}"
+                 IsLightDismissEnabled="True"
+                 Closed="OnSuggestionsPopupClosed">
             <Border Classes="newtab-suggestions"
                     Width="{Binding Bounds.Width, ElementName=NewTabSearchSurface}">
               <ItemsControl ItemsSource="{Binding Search.Suggestions}">

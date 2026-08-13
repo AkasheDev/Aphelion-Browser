@@ -28,6 +28,21 @@ public sealed partial class BrowserViewModel : ViewModelBase
     private int _sessionGeneration;
     private int _progressGeneration;
     private PageAddress? _lastStartedAddress;
+    private int _zoomToastGeneration;
+
+    /// <summary>
+    /// Whether this tab left New Tab to reach its current page, so "back" has
+    /// somewhere to land once the engine's own history runs out.
+    /// </summary>
+    /// <remarks>
+    /// The native web view never navigates to New Tab — it is a local surface
+    /// this application draws instead of a page, see <see cref="IsBlank"/> — so
+    /// New Tab is absent from <c>_session.CanGoBack</c> and its history entirely.
+    /// Without this, going back from the first page a tab visited did nothing:
+    /// the engine reported no further history, and the button simply had no
+    /// effect instead of returning to where the tab actually started.
+    /// </remarks>
+    private bool _cameFromNewTab;
 
     public BrowserViewModel(
         NavigateFromAddressBar navigateFromAddressBar,
@@ -36,7 +51,8 @@ public sealed partial class BrowserViewModel : ViewModelBase
         SearchEngineSelectorViewModel? searchEngines = null,
         ISearchSuggestionProvider? suggestions = null,
         ManageSiteZoom? siteZoom = null,
-        bool isPrivate = false)
+        bool isPrivate = false,
+        IPrivacyPreferenceStore? privacy = null)
     {
         _navigateFromAddressBar = navigateFromAddressBar
             ?? throw new ArgumentNullException(nameof(navigateFromAddressBar));
@@ -53,7 +69,8 @@ public sealed partial class BrowserViewModel : ViewModelBase
             suggestions,
             NavigateFromNewTab,
             NavigateTo,
-            isPrivate);
+            isPrivate,
+            privacy);
     }
 
     public NewTabPageViewModel NewTab { get; }
@@ -103,10 +120,19 @@ public sealed partial class BrowserViewModel : ViewModelBase
             return false;
         }
 
+        // Recorded before the domain tab loses IsBlank, since that is the only
+        // signal that this navigation's origin was New Tab rather than a link
+        // followed from an already-loaded page.
+        var leftNewTab = _tab.IsBlank;
         var navigated = _navigateFromAddressBar.Execute(_tab, _session, query);
 
         if (navigated)
         {
+            if (leftNewTab)
+            {
+                _cameFromNewTab = true;
+            }
+
             SyncFromTab();
         }
 
@@ -145,6 +171,14 @@ public sealed partial class BrowserViewModel : ViewModelBase
     private int _zoomPercent = PageZoom.DefaultPercent;
 
     public string ZoomLabel => $"{ZoomPercent}%";
+
+    /// <summary>
+    /// Shown briefly over the page whenever the zoom level changes, then fades on
+    /// its own — the only feedback the zoom commands had before this was the
+    /// page silently resizing, which read as nothing having happened at all.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isZoomToastVisible;
 
     /// <summary>Simulated, monotonic navigation progress from 0 to 100.</summary>
     [ObservableProperty]
@@ -214,8 +248,20 @@ public sealed partial class BrowserViewModel : ViewModelBase
             return;
         }
 
+        // Recorded before the domain tab loses IsBlank — see the remarks on
+        // _cameFromNewTab. This command is the address bar's Enter key, which is
+        // how most New-Tab-to-page navigations actually happen; the New Tab
+        // page's own search box goes through NavigateFromNewTab instead, but both
+        // need the same flag set the same way.
+        var leftNewTab = _tab.IsBlank;
+
         if (_navigateFromAddressBar.Execute(_tab, _session, AddressText))
         {
+            if (leftNewTab)
+            {
+                _cameFromNewTab = true;
+            }
+
             SyncFromTab();
         }
     }
@@ -227,7 +273,23 @@ public sealed partial class BrowserViewModel : ViewModelBase
     }
 
     [RelayCommand(CanExecute = nameof(CanGoBack))]
-    private void GoBack() => _session?.GoBack();
+    private void GoBack()
+    {
+        // The engine's own history never contains New Tab — it was never
+        // navigated to, only drawn locally — so once that history is exhausted,
+        // "back" from the first page a tab visited means returning there.
+        if (_session?.CanGoBack != true)
+        {
+            if (_cameFromNewTab)
+            {
+                ReturnToNewTab();
+            }
+
+            return;
+        }
+
+        _session.GoBack();
+    }
 
     [RelayCommand(CanExecute = nameof(CanGoForward))]
     private void GoForward() => _session?.GoForward();
@@ -311,7 +373,6 @@ public sealed partial class BrowserViewModel : ViewModelBase
         }
 
         SyncFromTab();
-        RefreshHistoryState();
 
         if (e.IsSuccess)
         {
@@ -447,13 +508,29 @@ public sealed partial class BrowserViewModel : ViewModelBase
         // PageTitle is derived from the tab rather than stored, so it has to be
         // raised by hand whenever the tab changes underneath it.
         OnPropertyChanged(nameof(PageTitle));
+
+        // Every caller of SyncFromTab that changes _cameFromNewTab or the tab's
+        // address needs CanGoBack recomputed; folding it in here means no call
+        // site can change one without the other; a bare SyncFromTab used to leave
+        // the Back button stuck disabled after a New Tab -> page navigation until
+        // something else happened to call RefreshHistoryState afterwards.
+        RefreshHistoryState();
     }
 
     private void RefreshHistoryState()
     {
-        CanGoBack = _session?.CanGoBack ?? false;
+        CanGoBack = (_session?.CanGoBack ?? false) || _cameFromNewTab;
         CanGoForward = _session?.CanGoForward ?? false;
     }
+
+    /// <summary>
+    /// Clears this tab's cookies if it is private and currently has an attached
+    /// engine surface. Called when the window holding it closes — see
+    /// <see cref="WindowManager.CreatePrivateWindow"/> — since a private tab that
+    /// never leaves its window otherwise never has a moment to clean up.
+    /// </summary>
+    public Task ClearPrivateBrowsingDataAsync() =>
+        _isPrivate && _session is { } session ? session.ClearBrowsingDataAsync() : Task.CompletedTask;
 
     private void DetachCurrentSession()
     {
@@ -529,7 +606,13 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _tab.ResetToBlank();
         ApplySiteZoom();
         ErrorPage.Hide();
+
+        // Back at New Tab, so there is nothing further back to return to until
+        // the next time it is left.
+        _cameFromNewTab = false;
+
         SyncFromTab();
+        RefreshHistoryState();
     }
 
     private void OnErrorPagePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -552,6 +635,29 @@ public sealed partial class BrowserViewModel : ViewModelBase
         zoom = _siteZoom?.Save(_tab.Address, zoom) ?? zoom;
         ZoomPercent = zoom.Percent;
         _session?.SetZoomFactor(zoom.Factor);
+        ShowZoomToast();
     }
 
+    /// <summary>
+    /// Reveals the zoom toast and schedules it to fade after a few seconds.
+    /// </summary>
+    /// <remarks>
+    /// A generation counter, rather than cancelling a previous timer, because
+    /// zoom commands fire in quick bursts — three clicks on "+" must not each
+    /// start and stop their own delay. Only the delay started by the most recent
+    /// change is allowed to hide the toast; every earlier one finds its
+    /// generation stale and does nothing.
+    /// </remarks>
+    private async void ShowZoomToast()
+    {
+        IsZoomToastVisible = true;
+        var generation = ++_zoomToastGeneration;
+
+        await Task.Delay(TimeSpan.FromSeconds(2.2)).ConfigureAwait(true);
+
+        if (generation == _zoomToastGeneration)
+        {
+            IsZoomToastVisible = false;
+        }
+    }
 }

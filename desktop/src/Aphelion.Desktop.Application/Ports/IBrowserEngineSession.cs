@@ -30,6 +30,18 @@ public interface IBrowserEngineSession
     bool StopLoading();
 
     /// <summary>
+    /// Removes every cookie this session's engine surface holds.
+    /// </summary>
+    /// <remarks>
+    /// The host platform's web view has no notion of a separate private profile —
+    /// see the remarks on <c>NativeWebViewSession</c> for why — so a private
+    /// window's isolation is enforced by clearing state rather than by never
+    /// sharing it. Best effort: a page that never loaded a session has nothing to
+    /// clear, and a failure here must not stop the window from closing.
+    /// </remarks>
+    Task ClearBrowsingDataAsync();
+
+    /// <summary>
     /// Runs a script in the page and returns its result as text.
     /// </summary>
     /// <remarks>

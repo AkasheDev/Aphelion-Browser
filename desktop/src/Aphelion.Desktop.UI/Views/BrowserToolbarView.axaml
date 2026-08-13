@@ -76,6 +76,47 @@
                  Value="{Binding Shell.FocusedBrowser.LoadingProgress}"
                  IsVisible="{Binding Shell.FocusedBrowser.IsLoadingProgressVisible}" />
 
+    <!--
+      Zoom feedback. An ordinary control rather than a Popup: two attempts at
+      placing a Popup (against BrowserHost, then against the window) both left
+      it never appearing, because a Popup needs a target whose size is already
+      settled and the obvious anchors here are not. Living inside the toolbar
+      sidesteps placement entirely — and the toolbar is the one strip of chrome
+      that is never covered by the page, so the usual reason for reaching for a
+      Popup (a native web view paints over anything Avalonia draws on top of it)
+      does not apply.
+
+      It shares row 0 with the navigation strip and floats over the right end of
+      the address box. Right-aligned with no width of its own, it adds nothing to
+      the row's measurement, so appearing and disappearing never nudges the
+      toolbar's layout; ZIndex keeps it above the address box it overlaps.
+
+      Bound to FocusedBrowser rather than ActiveBrowser so the toast tracks
+      whichever split pane the zoom commands are acting on.
+    -->
+    <Border Grid.Row="0"
+            Classes="zoom-toast"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Center"
+            Margin="0,0,16,0"
+            ZIndex="10"
+            IsVisible="{Binding Shell.FocusedBrowser.IsZoomToastVisible}">
+      <StackPanel Orientation="Horizontal" Spacing="2">
+        <Button Classes="icon small" ToolTip.Tip="Zoom out"
+                Command="{Binding Shell.FocusedBrowser.ZoomOutCommand}">
+          <Path Classes="glyph" Data="M2,6.5 H11" />
+        </Button>
+        <Button Classes="zoom-toast-label" ToolTip.Tip="Reset zoom"
+                Command="{Binding Shell.FocusedBrowser.ResetZoomCommand}">
+          <TextBlock Text="{Binding Shell.FocusedBrowser.ZoomLabel}" />
+        </Button>
+        <Button Classes="icon small" ToolTip.Tip="Zoom in"
+                Command="{Binding Shell.FocusedBrowser.ZoomInCommand}">
+          <Path Classes="glyph" Data="M6.5,2 V11 M2,6.5 H11" />
+        </Button>
+      </StackPanel>
+    </Border>
+
   </Grid>
 
 </UserControl>

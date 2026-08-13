@@ -22,14 +22,20 @@ public sealed partial class NewTabPageViewModel : ViewModelBase
         ISearchSuggestionProvider? suggestions,
         Func<string, bool> search,
         Action<PageAddress> navigate,
-        bool isPrivate = false)
+        bool isPrivate = false,
+        IPrivacyPreferenceStore? privacy = null)
     {
         _shortcuts = shortcuts;
         _navigate = navigate ?? throw new ArgumentNullException(nameof(navigate));
         Ambient = ambient;
         SearchEngines = searchEngines;
-        Search = new NewTabSearchBoxViewModel(suggestions, searchEngines, search);
+        Search = new NewTabSearchBoxViewModel(suggestions, searchEngines, search, privacy);
         IsPrivate = isPrivate;
+
+        if (Ambient is not null)
+        {
+            Ambient.PropertyChanged += OnAmbientPropertyChanged;
+        }
     }
 
     public NewTabAmbientViewModel? Ambient { get; }
@@ -41,6 +47,22 @@ public sealed partial class NewTabPageViewModel : ViewModelBase
     public bool IsPrivate { get; }
 
     public ObservableCollection<object> ShortcutTiles => IsPrivate ? EmptyTiles : _shortcuts?.Tiles ?? EmptyTiles;
+
+    /// <summary>
+    /// Whether the small "Weather off" label offering to turn it back on should
+    /// show. Private mode carries neither state of the weather card — see the
+    /// remarks in NewTabPage.axaml — so this is false there even though
+    /// <c>Ambient.IsWeatherEnabled</c> is also false.
+    /// </summary>
+    public bool ShowWeatherOffLabel => !IsPrivate && Ambient?.IsWeatherEnabled == false;
+
+    private void OnAmbientPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(NewTabAmbientViewModel.IsWeatherEnabled))
+        {
+            OnPropertyChanged(nameof(ShowWeatherOffLabel));
+        }
+    }
 
     [ObservableProperty]
     private bool _isEditorOpen;

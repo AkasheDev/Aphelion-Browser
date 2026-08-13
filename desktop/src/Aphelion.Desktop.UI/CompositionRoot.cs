@@ -32,7 +32,12 @@ internal static class CompositionRoot
         services.AddSingleton<ISearchSuggestionProvider, SearchEngineSuggestionProvider>();
         services.AddSingleton<ISearchEnginePreferenceStore, JsonSearchEnginePreferenceStore>();
         services.AddSingleton<ISiteZoomStore, JsonSiteZoomStore>();
-        services.AddSingleton<ITabSoundPlayer, LibVlcTabSoundPlayer>();
+        services.AddSingleton<IPrivacyPreferenceStore, JsonPrivacyPreferenceStore>();
+        // Constructed eagerly here, rather than registered by type, because its
+        // native engine is only bundled for Windows and macOS (see the type's
+        // remarks) — a platform without it must fall back to silence instead of
+        // failing to start.
+        services.AddSingleton<ITabSoundPlayer>(_ => CreateSoundPlayer());
         services.AddSingleton<ConfigurableSearchQueryBuilder>();
         services.AddSingleton<ISearchQueryBuilder>(sp =>
             sp.GetRequiredService<ConfigurableSearchQueryBuilder>());
@@ -70,5 +75,19 @@ internal static class CompositionRoot
         services.AddSingleton<MainWindowViewModel>();
 
         return services.BuildServiceProvider();
+    }
+
+    private static ITabSoundPlayer CreateSoundPlayer()
+    {
+        try
+        {
+            return new LibVlcTabSoundPlayer();
+        }
+        catch (Exception)
+        {
+            // No bundled native LibVLC for this platform, or it failed to load.
+            // Interaction sounds are a nicety; the browser must still start.
+            return new NullTabSoundPlayer();
+        }
     }
 }

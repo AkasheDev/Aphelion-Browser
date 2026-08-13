@@ -33,6 +33,7 @@ public partial class MainWindow : Window
         // press the drag handler needs.
         AddHandler(PointerReleasedEvent, OnPointerReleasedTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnNavigationShortcutTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerPressedEvent, OnOverflowDismissTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         HookPaneFocus();
     }
 
@@ -62,6 +63,7 @@ public partial class MainWindow : Window
         }
 
         UpdateSplitLayout();
+        UpdateOverflowLayout();
         UpdateBrowserPool();
     }
 
@@ -70,6 +72,11 @@ public partial class MainWindow : Window
         if (e.PropertyName == nameof(ShellViewModel.IsSplit))
         {
             UpdateSplitLayout();
+        }
+
+        if (e.PropertyName == nameof(ShellViewModel.IsOverflowOpen))
+        {
+            UpdateOverflowLayout();
         }
 
         if (e.PropertyName is nameof(ShellViewModel.ActiveBrowser)
@@ -154,6 +161,26 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Widens the Other Tabs drawer column while the drawer is open and
+    /// collapses it to nothing when it is not. Driven from code for the same
+    /// reason as the split column above — ColumnDefinitions cannot carry
+    /// bindings — and it has to be driven at all because hiding the drawer
+    /// Border alone left its column holding the drawer's width, showing a dead
+    /// strip beside the page.
+    /// </summary>
+    private void UpdateOverflowLayout()
+    {
+        if (this.FindControl<Grid>("ContentHost") is not { ColumnDefinitions.Count: 2 } host)
+        {
+            return;
+        }
+
+        host.ColumnDefinitions[1].Width = Shell?.IsOverflowOpen == true
+            ? new GridLength(344)
+            : new GridLength(0);
+    }
+
+    /// <summary>
     /// Clicking a pane gives it the focus, so the toolbar acts on it. Wired as a
     /// tunnelling handler on the window: a bubbling handler on the pane never
     /// fires, because the native web view consumes the event before it rises.
@@ -186,6 +213,13 @@ public partial class MainWindow : Window
     /// </summary>
     private void OnNavigationShortcutTunnel(object? sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Escape && e.KeyModifiers == KeyModifiers.None && Shell is { IsOverflowOpen: true } overflowShell)
+        {
+            overflowShell.CloseOverflowCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.N && (e.KeyModifiers == KeyModifiers.Control || e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)))
         {
             if (Shell?.WindowManager is WindowManager manager)
@@ -245,6 +279,35 @@ public partial class MainWindow : Window
 
         command.Execute(null);
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// Closes the "Other tabs" overflow drawer when a click lands outside it.
+    /// The drawer had no dismiss path at all before this: it only closed when
+    /// the toggle button was clicked again or a tab inside it was torn off, so
+    /// clicking the page behind it, another tab, or anywhere else left it
+    /// sitting open indefinitely. Wired as a tunnel handler, like HookPaneFocus
+    /// above, because a click on the hosted native web view never bubbles back
+    /// up to a normal handler.
+    /// </summary>
+    private void OnOverflowDismissTunnel(object? sender, PointerPressedEventArgs e)
+    {
+        if (Shell is not { IsOverflowOpen: true } shell || e.Source is not Visual source)
+        {
+            return;
+        }
+
+        if (this.FindControl<Border>("OverflowDrawer") is { } drawer && IsWithin(source, drawer))
+        {
+            return;
+        }
+
+        if (this.FindControl<Button>("OverflowToggle") is { } toggle && IsWithin(source, toggle))
+        {
+            return;
+        }
+
+        shell.CloseOverflowCommand.Execute(null);
     }
 
     /// <summary>True when <paramref name="candidate"/> is, or sits inside, <paramref name="container"/>.</summary>

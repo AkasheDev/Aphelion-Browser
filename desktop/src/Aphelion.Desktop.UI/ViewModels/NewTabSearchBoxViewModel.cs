@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Domain.Enums;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -12,17 +13,21 @@ public sealed partial class NewTabSearchBoxViewModel : ViewModelBase, IDisposabl
 {
     private readonly ISearchSuggestionProvider? _suggestions;
     private readonly SearchEngineSelectorViewModel? _engines;
+    private readonly IPrivacyPreferenceStore? _privacy;
     private readonly Func<string, bool> _search;
     private CancellationTokenSource? _request;
 
     public NewTabSearchBoxViewModel(
         ISearchSuggestionProvider? suggestions,
         SearchEngineSelectorViewModel? engines,
-        Func<string, bool> search)
+        Func<string, bool> search,
+        IPrivacyPreferenceStore? privacy = null)
     {
         _suggestions = suggestions;
         _engines = engines;
+        _privacy = privacy;
         _search = search ?? throw new ArgumentNullException(nameof(search));
+        _isSuggestionsEnabled = _privacy?.Load().SearchSuggestionsEnabled ?? true;
         Suggestions.CollectionChanged += OnSuggestionsChanged;
 
         if (_engines is not null)
@@ -44,7 +49,49 @@ public sealed partial class NewTabSearchBoxViewModel : ViewModelBase, IDisposabl
     [ObservableProperty]
     private string _searchText = string.Empty;
 
+    /// <summary>
+    /// Whether typed text may be sent to the selected search engine's suggestion
+    /// endpoint as it is typed. On by default; off clears and suppresses every
+    /// future request until turned back on.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SuggestionsStateLabel))]
+    private bool _isSuggestionsEnabled;
+
+    public string SuggestionsStateLabel => IsSuggestionsEnabled ? "On" : "Off";
+
     partial void OnSearchTextChanged(string value) => RequestSuggestions();
+
+    /// <summary>
+    /// Called when the search box regains focus (clicking back into it after
+    /// dismissing the suggestions popup, or returning to this tab). Typing
+    /// already re-requests suggestions via <see cref="OnSearchTextChanged"/>,
+    /// but clicking into a box that already has text left over from before
+    /// does not raise that event, so the popup stayed closed until the next
+    /// keystroke — this re-runs the same request for whatever text is
+    /// already there.
+    /// </summary>
+    public void RequestSuggestionsForFocus() => RequestSuggestions();
+
+    partial void OnIsSuggestionsEnabledChanged(bool value)
+    {
+        _privacy?.Save(_privacy.Load() with { SearchSuggestionsEnabled = value });
+
+        if (value)
+        {
+            RequestSuggestions();
+        }
+        else
+        {
+            _request?.Cancel();
+            _request?.Dispose();
+            _request = null;
+            ClearSuggestions();
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleSuggestions() => IsSuggestionsEnabled = !IsSuggestionsEnabled;
 
     [RelayCommand]
     private void Search()
@@ -83,7 +130,7 @@ public sealed partial class NewTabSearchBoxViewModel : ViewModelBase, IDisposabl
         _request?.Dispose();
         _request = null;
 
-        if (_suggestions is null || _engines is null || SearchText.Trim().Length < 2)
+        if (_suggestions is null || _engines is null || !IsSuggestionsEnabled || SearchText.Trim().Length < 2)
         {
             ClearSuggestions();
             return;
@@ -125,7 +172,58 @@ public sealed partial class NewTabSearchBoxViewModel : ViewModelBase, IDisposabl
         }
     }
 
-    private void ClearSuggestions() => Suggestions.Clear();
+    /// <summary>
+    /// Called when the page this search box belongs to stops being visible —
+    /// see the remarks on the suggestions Popup in NewTabPage.axaml. Cancels any
+    /// in-flight request too, so a reply that arrives after the tab is hidden
+    /// cannot repopulate the list and reopen the popup the user never asked for.
+    /// </summary>
+    public void ClearSuggestionsForHidden()
+    {
+        _request?.Cancel();
+        _request?.Dispose();
+        _request = null;
+        ClearSuggestions();
+    }
+
+    /// <summary>
+    /// Empties the list, tolerating a call that arrives while the collection is
+    /// already raising a change of its own.
+    /// </summary>
+    /// <remarks>
+    /// Suggestions are cleared from several directions — a keystroke, the popup
+    /// closing, the tab being hidden — and some of those fire from inside the
+    /// ItemsControl's own handling of a previous change to this same
+    /// collection. ObservableCollection refuses a nested mutation and throws
+    /// InvalidOperationException ("Cannot change ObservableCollection during a
+    /// CollectionChanged event"). Rather than making each caller reason about
+    /// whether it is nested, the clear is deferred to the next dispatcher pass
+    /// when that turns out to be the case.
+    /// </remarks>
+    private void ClearSuggestions()
+    {
+        if (Suggestions.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            Suggestions.Clear();
+        }
+        catch (InvalidOperationException)
+        {
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    if (Suggestions.Count > 0)
+                    {
+                        Suggestions.Clear();
+                    }
+                },
+                DispatcherPriority.Background);
+        }
+    }
 
     private void OnSuggestionsChanged(object? sender, NotifyCollectionChangedEventArgs e) =>
         OnPropertyChanged(nameof(HasSuggestions));

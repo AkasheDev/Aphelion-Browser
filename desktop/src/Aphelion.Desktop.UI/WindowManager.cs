@@ -51,9 +51,28 @@ internal sealed class WindowManager(IServiceProvider services)
         return window;
     }
 
+    /// <summary>
+    /// Opens a private window. "Private" here means every cookie its tabs wrote
+    /// is deleted the moment the window closes — see
+    /// <see cref="Aphelion.Desktop.BrowserEngine.NativeWebViewSession.ClearBrowsingDataAsync"/>
+    /// for why this is a clear-on-close guarantee rather than a separate storage
+    /// partition, which the host platform's web view does not expose publicly.
+    /// The session store is withheld either way, so nothing here is restored on
+    /// the next launch regardless.
+    /// </summary>
     public MainWindow CreatePrivateWindow()
     {
-        var factory = () => ActivatorUtilities.CreateInstance<BrowserViewModel>(_services, true);
+        // A private window gets its own ambient view model rather than the
+        // process-wide singleton DI would otherwise hand it, so weather off by
+        // default (see NewTabAmbientViewModel's private-instance behaviour) is
+        // this window's own setting: it cannot see or change what the ordinary
+        // windows have chosen, and nothing here outlives the window.
+        var privateAmbient = new NewTabAmbientViewModel(
+            _services.GetRequiredService<Aphelion.Desktop.Application.Ports.ICurrentWeatherProvider>(),
+            _services.GetRequiredService<Aphelion.Desktop.Application.Ports.IPrivacyPreferenceStore>(),
+            isPrivateInstance: true);
+
+        var factory = () => ActivatorUtilities.CreateInstance<BrowserViewModel>(_services, privateAmbient, true);
         var shell = new ShellViewModel(
             factory,
             this,
@@ -62,6 +81,15 @@ internal sealed class WindowManager(IServiceProvider services)
 
         var window = new MainWindow { DataContext = new MainWindowViewModel(shell), Title = "Private Mode — Aphelion" };
         Register(window);
+
+        window.Closing += (_, _) =>
+        {
+            foreach (var browser in shell.Browsers.ToList())
+            {
+                _ = browser.ClearPrivateBrowsingDataAsync();
+            }
+        };
+
         return window;
     }
 

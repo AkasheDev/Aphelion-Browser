@@ -11,17 +11,71 @@ public sealed partial class NewTabAmbientViewModel : ViewModelBase
     private static readonly TimeSpan WeatherRefreshInterval = TimeSpan.FromMinutes(30);
 
     private readonly ICurrentWeatherProvider _weather;
+    private readonly IPrivacyPreferenceStore _privacy;
     private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromMinutes(1) };
     private DateTimeOffset _lastWeatherRefresh = DateTimeOffset.MinValue;
 
-    public NewTabAmbientViewModel(ICurrentWeatherProvider weather)
+    /// <summary>
+    /// True for the instance a private window builds for itself rather than
+    /// sharing the process-wide one. Weather is off by default here — see
+    /// <see cref="IsWeatherEnabled"/> — and the choice is never read from or
+    /// written to <see cref="IPrivacyPreferenceStore"/>, so turning it on inside
+    /// a private window neither reveals nor is revealed by the ordinary
+    /// preference, and disappears when the window closes.
+    /// </summary>
+    private readonly bool _isPrivateInstance;
+
+    public NewTabAmbientViewModel(
+        ICurrentWeatherProvider weather,
+        IPrivacyPreferenceStore privacy,
+        bool isPrivateInstance = false)
     {
         _weather = weather ?? throw new ArgumentNullException(nameof(weather));
+        _privacy = privacy ?? throw new ArgumentNullException(nameof(privacy));
+        _isPrivateInstance = isPrivateInstance;
+        _isWeatherEnabled = !isPrivateInstance && _privacy.Load().WeatherEnabled;
         UpdateGreeting();
         _clock.Tick += OnClockTick;
         _clock.Start();
-        RefreshWeatherCommand.Execute(null);
+
+        if (_isWeatherEnabled)
+        {
+            RefreshWeatherCommand.Execute(null);
+        }
     }
+
+    /// <summary>
+    /// Whether the weather card is allowed to resolve an approximate location
+    /// from the public IP and query current conditions for it. On by default,
+    /// matching what shipped; off stops every future request, including the
+    /// periodic refresh, until turned back on.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isWeatherEnabled;
+
+    partial void OnIsWeatherEnabledChanged(bool value)
+    {
+        // A private window's choice for this session only — see
+        // _isPrivateInstance — must never touch the shared preference file.
+        if (!_isPrivateInstance)
+        {
+            _privacy.Save(_privacy.Load() with { WeatherEnabled = value });
+        }
+
+        if (value)
+        {
+            RefreshWeatherCommand.Execute(null);
+        }
+        else
+        {
+            WeatherLocation = "Weather";
+            TemperatureText = "--°";
+            WeatherDescription = "Weather is turned off";
+        }
+    }
+
+    [RelayCommand]
+    private void ToggleWeather() => IsWeatherEnabled = !IsWeatherEnabled;
 
     [ObservableProperty]
     private string _greetingHeadline = string.Empty;
@@ -44,7 +98,7 @@ public sealed partial class NewTabAmbientViewModel : ViewModelBase
     [RelayCommand]
     private async Task RefreshWeatherAsync()
     {
-        if (IsWeatherLoading)
+        if (IsWeatherLoading || !IsWeatherEnabled)
         {
             return;
         }

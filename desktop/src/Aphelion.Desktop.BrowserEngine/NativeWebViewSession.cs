@@ -68,6 +68,42 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
 
     public bool StopLoading() => _webView.Stop();
 
+    /// <summary>
+    /// Deletes every cookie the underlying adapter reports. This is the closest
+    /// this application can come to a private profile: Avalonia's public web view
+    /// surface — see the type remarks — exposes a cookie manager but not a
+    /// separate storage partition, so "private" here means "cleared on close"
+    /// rather than "never written".
+    /// </summary>
+    public async Task ClearBrowsingDataAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            var manager = _webView.TryGetCookieManager();
+
+            if (manager is null)
+            {
+                return;
+            }
+
+            foreach (var cookie in await manager.GetCookiesAsync().ConfigureAwait(true))
+            {
+                manager.DeleteCookie(cookie.Name, cookie.Domain, cookie.Path);
+            }
+        }
+        catch (Exception)
+        {
+            // Best effort. A window closing must never be blocked by cookie
+            // cleanup, and the adapter's cookie contract is not guaranteed on
+            // every platform.
+        }
+    }
+
     public async Task<string?> EvaluateAsync(string script)
     {
         if (_disposed)
