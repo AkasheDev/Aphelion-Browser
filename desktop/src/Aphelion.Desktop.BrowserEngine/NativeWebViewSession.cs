@@ -43,21 +43,24 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         _webView.Navigate(address.Value);
     }
 
-    public void SetZoomFactor(double factor)
+    public double SetZoomFactor(double factor)
     {
         if (_disposed)
         {
-            return;
+            return _zoomFactor;
         }
 
         _zoomFactor = Math.Clamp(factor, 0.25d, 5d);
 
-        if (TrySetNativeZoomFactor(_zoomFactor))
+        if (TrySetNativeZoomFactor(_zoomFactor, out var appliedFactor))
         {
-            return;
+            _zoomFactor = appliedFactor;
+            _ = RestoreDocumentZoomAsync();
+            return _zoomFactor;
         }
 
         _ = ApplyZoomAsync();
+        return _zoomFactor;
     }
 
     public bool GoBack() => _webView.GoBack();
@@ -132,7 +135,12 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     {
         // Apply again after a new document has arrived. Native zoom owns the
         // whole renderer; only engines without that facility use CSS fallback.
-        if (!TrySetNativeZoomFactor(_zoomFactor))
+        if (TrySetNativeZoomFactor(_zoomFactor, out var appliedFactor))
+        {
+            _zoomFactor = appliedFactor;
+            _ = RestoreDocumentZoomAsync();
+        }
+        else
         {
             _ = ApplyZoomAsync();
         }
@@ -156,7 +164,16 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         {
             var factor = _zoomFactor.ToString(System.Globalization.CultureInfo.InvariantCulture);
             await _webView.InvokeScript(
-                $"document.documentElement.style.zoom = '{factor}';").ConfigureAwait(true);
+                $$"""
+                (() => {
+                  const root = document.documentElement;
+                  if (!root) return;
+                  if (!root.hasAttribute('data-aphelion-original-zoom')) {
+                    root.setAttribute('data-aphelion-original-zoom', root.style.zoom || '');
+                  }
+                  root.style.zoom = '{{factor}}';
+                })();
+                """).ConfigureAwait(true);
         }
         catch (Exception)
         {
@@ -172,8 +189,10 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     /// layout distortion on Windows. Other engines retain the document fallback
     /// until their equivalent controller becomes publicly available.
     /// </summary>
-    private bool TrySetNativeZoomFactor(double factor)
+    private bool TrySetNativeZoomFactor(double factor, out double appliedFactor)
     {
+        appliedFactor = factor;
+
         try
         {
             var adapter = typeof(NativeWebView)
@@ -203,6 +222,20 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
                     }
 
                     setZoom.Invoke(controller, [factor]);
+                    DisableBuiltInZoomControls(adapter);
+
+                    var getZoom = field.FieldType.GetMethod(
+                        "GetZoomFactor",
+                        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                        binder: null,
+                        types: Type.EmptyTypes,
+                        modifiers: null);
+
+                    if (getZoom?.Invoke(controller, null) is double actual)
+                    {
+                        appliedFactor = Math.Clamp(actual, 0.25d, 5d);
+                    }
+
                     return true;
                 }
             }
@@ -214,6 +247,61 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Prevents the platform WebView from applying a second, invisible zoom on
+    /// Ctrl+wheel. Aphelion owns that gesture so persisted and displayed values
+    /// cannot drift away from the renderer.
+    /// </summary>
+    private static void DisableBuiltInZoomControls(object adapter)
+    {
+        try
+        {
+            MethodInfo? tryGetWebView = null;
+
+            for (var type = adapter.GetType(); type is not null && tryGetWebView is null; type = type.BaseType)
+            {
+                tryGetWebView = type.GetMethod(
+                    "TryGetWebView2",
+                    BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+            }
+
+            var webView = tryGetWebView?.Invoke(adapter, null);
+            var settings = webView?.GetType().GetMethod("GetSettings")?.Invoke(webView, null);
+            settings?.GetType().GetMethod("SetIsZoomControlEnabled")?.Invoke(settings, [false]);
+        }
+        catch (Exception)
+        {
+            // Other platform adapters do not expose WebView2 settings.
+        }
+    }
+
+    private async Task RestoreDocumentZoomAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        try
+        {
+            await _webView.InvokeScript(
+                """
+                (() => {
+                  const root = document.documentElement;
+                  if (!root || !root.hasAttribute('data-aphelion-original-zoom')) return;
+                  const original = root.getAttribute('data-aphelion-original-zoom');
+                  if (original) root.style.zoom = original;
+                  else root.style.removeProperty('zoom');
+                  root.removeAttribute('data-aphelion-original-zoom');
+                })();
+                """).ConfigureAwait(true);
+        }
+        catch (Exception)
+        {
+            // A navigation can replace the document while cleanup is pending.
+        }
     }
 
     /// <summary>

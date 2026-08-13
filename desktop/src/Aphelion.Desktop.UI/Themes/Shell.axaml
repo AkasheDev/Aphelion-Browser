@@ -402,10 +402,6 @@
     <Setter Property="BorderBrush" Value="{DynamicResource NewTabVioletBrush}" />
   </Style>
 
-  <Style Selector="Border.newtab-search.suggestions-open">
-    <Setter Property="CornerRadius" Value="29,29,0,0" />
-  </Style>
-
   <Style Selector="Button.newtab-engine-trigger">
     <Setter Property="Width" Value="42" />
     <Setter Property="Height" Value="42" />
@@ -453,21 +449,33 @@
   </Style>
 
   <Style Selector="Border.newtab-suggestions">
-    <Setter Property="Padding" Value="6,5,6,6" />
+    <Setter Property="Padding" Value="7" />
     <Setter Property="Margin" Value="0" />
-    <Setter Property="CornerRadius" Value="0,0,18,18" />
+    <Setter Property="CornerRadius" Value="20" />
     <Setter Property="Background" Value="{DynamicResource NewTabBackdropBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource NewTabGlassBorderBrush}" />
-    <Setter Property="BorderThickness" Value="1,0,1,1" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BoxShadow" Value="0 14 36 0 #66000000" />
   </Style>
 
   <Style Selector="Button.newtab-suggestion">
     <Setter Property="HorizontalAlignment" Value="Stretch" />
     <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-    <Setter Property="Padding" Value="13,10" />
+    <Setter Property="Padding" Value="10,7" />
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="CornerRadius" Value="9" />
+  </Style>
+
+  <Style Selector="Border.newtab-suggestion-icon">
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="CornerRadius" Value="15" />
+    <Setter Property="Background" Value="{DynamicResource NewTabGlassBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource NewTabGlassBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
   </Style>
 
   <Style Selector="Button.newtab-suggestion:pointerover /template/ ContentPresenter">

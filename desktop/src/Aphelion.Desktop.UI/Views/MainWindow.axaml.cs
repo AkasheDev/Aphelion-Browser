@@ -33,6 +33,7 @@ public partial class MainWindow : Window
         // press the drag handler needs.
         AddHandler(PointerReleasedEvent, OnPointerReleasedTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnNavigationShortcutTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerWheelChangedEvent, OnZoomWheelTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
         AddHandler(PointerPressedEvent, OnOverflowDismissTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         HookPaneFocus();
     }
@@ -277,6 +278,20 @@ public partial class MainWindow : Window
             return;
         }
 
+        command.Execute(null);
+        e.Handled = true;
+    }
+
+    private void OnZoomWheelTunnel(object? sender, PointerWheelEventArgs e)
+    {
+        if ((e.KeyModifiers & KeyModifiers.Control) == 0 ||
+            Shell?.FocusedBrowser is not { } browser ||
+            Math.Abs(e.Delta.Y) < double.Epsilon)
+        {
+            return;
+        }
+
+        var command = e.Delta.Y > 0 ? browser.ZoomInCommand : browser.ZoomOutCommand;
         command.Execute(null);
         e.Handled = true;
     }

@@ -16,8 +16,11 @@ public interface IBrowserEngineSession
 
     bool CanGoForward { get; }
 
-    /// <summary>Applies a page scale without changing its navigation state.</summary>
-    void SetZoomFactor(double factor);
+    /// <summary>
+    /// Applies a page scale without changing its navigation state and returns
+    /// the factor the engine actually accepted.
+    /// </summary>
+    double SetZoomFactor(double factor);
 
     void Navigate(PageAddress address);
 

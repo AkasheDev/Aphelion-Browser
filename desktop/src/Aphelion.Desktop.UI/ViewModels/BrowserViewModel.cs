@@ -626,15 +626,16 @@ public sealed partial class BrowserViewModel : ViewModelBase
     private void ApplySiteZoom()
     {
         var zoom = _siteZoom?.Resolve(_tab.Address) ?? PageZoom.Default;
-        ZoomPercent = zoom.Percent;
-        _session?.SetZoomFactor(zoom.Factor);
+        var appliedFactor = _session?.SetZoomFactor(zoom.Factor) ?? zoom.Factor;
+        ZoomPercent = PageZoom.FromPercent((int)Math.Round(appliedFactor * 100d)).Percent;
     }
 
     private void SetZoom(PageZoom zoom)
     {
-        zoom = _siteZoom?.Save(_tab.Address, zoom) ?? zoom;
-        ZoomPercent = zoom.Percent;
-        _session?.SetZoomFactor(zoom.Factor);
+        var appliedFactor = _session?.SetZoomFactor(zoom.Factor) ?? zoom.Factor;
+        var appliedZoom = PageZoom.FromPercent((int)Math.Round(appliedFactor * 100d));
+        appliedZoom = _siteZoom?.Save(_tab.Address, appliedZoom) ?? appliedZoom;
+        ZoomPercent = appliedZoom.Percent;
         ShowZoomToast();
     }
 
@@ -653,7 +654,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         IsZoomToastVisible = true;
         var generation = ++_zoomToastGeneration;
 
-        await Task.Delay(TimeSpan.FromSeconds(2.2)).ConfigureAwait(true);
+        await Task.Delay(TimeSpan.FromSeconds(5)).ConfigureAwait(true);
 
         if (generation == _zoomToastGeneration)
         {

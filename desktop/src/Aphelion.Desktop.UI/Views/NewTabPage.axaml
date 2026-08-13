@@ -135,8 +135,7 @@
         </StackPanel>
         <Grid Name="NewTabSearchAnchor" Height="58" ClipToBounds="False">
           <Border Name="NewTabSearchSurface"
-                  Classes="newtab-search"
-                  Classes.suggestions-open="{Binding Search.HasSuggestions}">
+                  Classes="newtab-search">
             <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="5">
               <Grid>
                 <Button Name="SearchEngineButton"
@@ -208,6 +207,7 @@
           <Popup IsOpen="{Binding Search.HasSuggestions, Mode=OneWay}"
                  Placement="Bottom"
                  PlacementTarget="{Binding ElementName=NewTabSearchAnchor}"
+                 VerticalOffset="10"
                  IsLightDismissEnabled="True"
                  Closed="OnSuggestionsPopupClosed">
             <Border Classes="newtab-suggestions"
@@ -217,9 +217,11 @@
                   <DataTemplate x:DataType="x:String">
                     <Button Classes="newtab-suggestion" Click="OnSearchSuggestionSelected">
                       <Grid ColumnDefinitions="Auto,*" ColumnSpacing="11">
-                        <Path Width="14" Height="14" Stretch="Uniform" Stroke="{DynamicResource NewTabMutedBrush}"
-                              StrokeThickness="1.5" VerticalAlignment="Center"
-                              Data="M6.2,1 A5.2,5.2 0 1 0 6.2,11.4 A5.2,5.2 0 1 0 6.2,1 M10.1,10.1 L14,14" />
+                        <Border Classes="newtab-suggestion-icon">
+                          <Path Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource NewTabMutedBrush}"
+                                StrokeThickness="1.5" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                Data="M6.2,1 A5.2,5.2 0 1 0 6.2,11.4 A5.2,5.2 0 1 0 6.2,1 M10.1,10.1 L14,14" />
+                        </Border>
                         <TextBlock Grid.Column="1" Text="{Binding}" FontSize="13" FontWeight="Medium"
                                    Foreground="{DynamicResource NewTabForegroundBrush}" TextTrimming="CharacterEllipsis"
                                    VerticalAlignment="Center" />
