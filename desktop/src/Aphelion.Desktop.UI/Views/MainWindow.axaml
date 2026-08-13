@@ -408,6 +408,52 @@
 
         </Panel>
       </Border>
+
+      <!--
+        A hosted WebView is a native surface and paints above ordinary Avalonia
+        children. This one-pixel target gives the zoom feedback a stable,
+        layout-owned position while Popup creates a separate native top level
+        above that surface. Its column follows the focused split pane in
+        code-behind; resize, fullscreen and splitter changes need no screen
+        coordinate calculations.
+
+        The outer margin belongs to the popup content so its shadow is never
+        clipped. Together with the target offset it leaves the visible card 14px
+        from the page's top and right edges.
+      -->
+      <Border Grid.Column="0"
+              Name="ZoomFeedbackAnchor"
+              Width="1" Height="1"
+              Margin="0,14,14,0"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Top">
+        <Popup PlacementTarget="{Binding #ZoomFeedbackAnchor}"
+               Placement="LeftEdgeAlignedTop"
+               ShouldUseOverlayLayer="False"
+               TakesFocusFromNativeControl="False"
+               IsLightDismissEnabled="False"
+               WindowManagerAddShadowHint="False"
+               IsOpen="{Binding Shell.ZoomFeedback.IsVisible}">
+          <Border Classes="zoom-toast"
+                  Opacity="1"
+                  IsHitTestVisible="True">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <Button Classes="icon small" ToolTip.Tip="Zoom out"
+                      Command="{Binding Shell.FocusedBrowser.ZoomOutCommand}">
+                <Path Classes="glyph" Data="M2,6.5 H11" />
+              </Button>
+              <Button Classes="zoom-toast-label" ToolTip.Tip="Reset zoom"
+                      Command="{Binding Shell.FocusedBrowser.ResetZoomCommand}">
+                <TextBlock Text="{Binding Shell.ZoomFeedback.Label}" />
+              </Button>
+              <Button Classes="icon small" ToolTip.Tip="Zoom in"
+                      Command="{Binding Shell.FocusedBrowser.ZoomInCommand}">
+                <Path Classes="glyph" Data="M6.5,2 V11 M2,6.5 H11" />
+              </Button>
+            </StackPanel>
+          </Border>
+        </Popup>
+      </Border>
       </Grid>
 
       <!-- Native web surfaces cannot sit underneath Avalonia overlays. Reserving

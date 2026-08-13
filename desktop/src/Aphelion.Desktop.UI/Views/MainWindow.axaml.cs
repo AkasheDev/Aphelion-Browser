@@ -75,6 +75,7 @@ public partial class MainWindow : Window
 
         UpdateSplitLayout();
         UpdateOverflowLayout();
+        UpdateZoomFeedbackAnchor();
         UpdateBrowserPool();
     }
 
@@ -83,6 +84,12 @@ public partial class MainWindow : Window
         if (e.PropertyName == nameof(ShellViewModel.IsSplit))
         {
             UpdateSplitLayout();
+        }
+
+        if (e.PropertyName is nameof(ShellViewModel.IsSplit)
+            or nameof(ShellViewModel.IsRightPaneFocused))
+        {
+            UpdateZoomFeedbackAnchor();
         }
 
         if (e.PropertyName == nameof(ShellViewModel.IsOverflowOpen))
@@ -169,6 +176,23 @@ public partial class MainWindow : Window
         host.ColumnDefinitions[2].Width = Shell?.IsSplit == true
             ? new GridLength(1, GridUnitType.Star)
             : new GridLength(0);
+    }
+
+    /// <summary>
+    /// Keeps zoom feedback over the page controlled by the shared toolbar. The
+    /// anchor participates in the same grid as both panes, so the native popup
+    /// follows resizing and splitter movement without manual pixel placement.
+    /// </summary>
+    private void UpdateZoomFeedbackAnchor()
+    {
+        if (this.FindControl<Border>("ZoomFeedbackAnchor") is not { } anchor)
+        {
+            return;
+        }
+
+        Grid.SetColumn(
+            anchor,
+            Shell is { IsSplit: true, IsRightPaneFocused: true } ? 2 : 0);
     }
 
     /// <summary>
