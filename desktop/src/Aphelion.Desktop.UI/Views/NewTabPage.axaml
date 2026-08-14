@@ -154,9 +154,33 @@
                  Width="76" Height="76"
                  HorizontalAlignment="Center"
                  RenderOptions.BitmapInterpolationMode="HighQuality" />
-          <TextBlock Text="Private Mode" FontSize="30" FontWeight="SemiBold" Foreground="{DynamicResource NewTabForegroundBrush}" HorizontalAlignment="Center" />
-          <TextBlock Text="Aphelion won't save this window to your history or session. Cookies and site data are cleared when you close it."
-                     FontSize="13" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="420"
+          <!-- Set as a wordmark rather than a heading, in the splash's own
+               language: wide tracking, light weight, upper case. Private mode has
+               no weather, shortcuts or greeting to carry the page, so the type is
+               the design — and it states itself quietly, which is the register
+               the whole mode is in. The padding takes back the trailing letter
+               space, which tracking adds after the last glyph too. -->
+          <TextBlock Text="PRIVATE MODE"
+                     FontSize="25" FontWeight="Light" LetterSpacing="8"
+                     Padding="8,0,0,0"
+                     Foreground="{DynamicResource NewTabForegroundBrush}"
+                     HorizontalAlignment="Center" />
+
+          <!-- A hairline under the wordmark, fading out at both ends so it reads
+               as a rule the page drew rather than a box edge. -->
+          <Border Height="1" Width="150" Margin="0,2,0,4" HorizontalAlignment="Center">
+            <Border.Background>
+              <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+                <GradientStop Offset="0" Color="#00FFFFFF" />
+                <GradientStop Offset="0.5" Color="#33FFFFFF" />
+                <GradientStop Offset="1" Color="#00FFFFFF" />
+              </LinearGradientBrush>
+            </Border.Background>
+          </Border>
+
+          <TextBlock Text="Nothing here is kept. This window leaves no history, and its cookies and site data go when you close it."
+                     FontSize="13" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="370"
+                     LineHeight="21"
                      Foreground="{DynamicResource NewTabMutedBrush}" HorizontalAlignment="Center" />
         </StackPanel>
         <Grid Name="NewTabSearchAnchor" Height="58" ClipToBounds="False">
