@@ -368,8 +368,10 @@
        (only blur and drop shadow), so the grey read comes from opacity alone —
        low enough that the brand colour recedes, high enough that it is still
        recognisably the logo rather than a silhouette. -->
+  <!-- Held back rather than drawn at full strength: the mark is the brightest
+       thing on an otherwise unlit page, and private mode should stay quiet. -->
   <Style Selector="Image.newtab-logo-image.private">
-    <Setter Property="Opacity" Value="0.4" />
+    <Setter Property="Opacity" Value="0.72" />
   </Style>
 
   <Style Selector="TextBlock.newtab-greeting-headline">
@@ -408,6 +410,15 @@
         <BrushTransition Property="BorderBrush" Duration="0:0:0.16" />
       </Transitions>
     </Setter>
+  </Style>
+
+  <!-- The bar had no hover of its own, so pointing at it did nothing while the
+       TextBox inside it lit up with the stock theme's own hover — brighter than
+       anything around it, and untouched by the palette. Both are answered here:
+       the bar lifts, and the box is held transparent in every state so only the
+       bar responds. -->
+  <Style Selector="Border.newtab-search:pointerover">
+    <Setter Property="Background" Value="{DynamicResource NewTabGlassHoverBrush}" />
   </Style>
 
   <Style Selector="Border.newtab-search:focus-within">
@@ -551,6 +562,18 @@
   </Style>
 
   <Style Selector="TextBox.newtab-search-box /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <!-- The stock TextBox theme repaints this on hover and on focus, which showed
+       through the bar as a lighter rectangle inside a rounded pill. -->
+  <Style Selector="TextBox.newtab-search-box:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="TextBox.newtab-search-box:focus /template/ Border#PART_BorderElement">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="BorderThickness" Value="0" />
   </Style>

@@ -28,6 +28,7 @@ public partial class NewTabPage : UserControl
     {
         InitializeComponent();
         AddHandler(PointerPressedEvent, OnPagePointerPressed, RoutingStrategies.Tunnel);
+        PrivateLogo.Source = MonochromeLogo.Image;
 
     }
 

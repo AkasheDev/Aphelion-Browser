@@ -146,10 +146,13 @@
              Classes.private on Image.newtab-logo-image, which desaturates it
              towards the muted tone rather than swapping in a different image. -->
         <StackPanel HorizontalAlignment="Center" Spacing="10" IsVisible="{Binding IsPrivate}">
-          <Image Classes="newtab-logo-image private"
+          <!-- The mark in greys. Source is set in the code-behind from
+               MonochromeLogo, which converts the colour asset once — see there
+               for why it is not masked or shipped as a second file. -->
+          <Image Name="PrivateLogo"
+                 Classes="newtab-logo-image private"
                  Width="76" Height="76"
                  HorizontalAlignment="Center"
-                 Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
                  RenderOptions.BitmapInterpolationMode="HighQuality" />
           <TextBlock Text="Private Mode" FontSize="30" FontWeight="SemiBold" Foreground="{DynamicResource NewTabForegroundBrush}" HorizontalAlignment="Center" />
           <TextBlock Text="Aphelion won't save this window to your history or session. Cookies and site data are cleared when you close it."

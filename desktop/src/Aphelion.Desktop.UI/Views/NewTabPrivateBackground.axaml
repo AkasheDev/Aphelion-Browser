@@ -5,46 +5,13 @@
              ClipToBounds="True">
 
   <!--
-    Private mode's own backdrop: quiet on purpose, where the ordinary New Tab
-    page is a starfield. A tiled hairline grid rather than the starfield's
-    animated canvas — nothing here is drawn per frame, matching the page's own
-    stillness (no weather, no shortcuts, no greeting).
+    Private mode's backdrop: one flat, near-black field, where the ordinary New
+    Tab page has its starfield. It used to carry a tiled hairline grid and a
+    vignette; both are gone. Texture is decoration, and decoration is the thing
+    private mode has least use for — the page states plainly that nothing here
+    is being kept, and the backdrop should say the same by showing nothing at
+    all. Nothing is drawn per frame, matching the page's own stillness: no
+    weather, no shortcuts, no greeting.
   -->
-  <Grid Background="{DynamicResource NewTabBackdropBrush}">
-
-    <Border Opacity="0.5">
-      <Border.Background>
-        <DrawingBrush TileMode="Tile"
-                      Stretch="None"
-                      DestinationRect="0,0,48,48"
-                      SourceRect="0,0,48,48">
-          <DrawingBrush.Drawing>
-            <GeometryDrawing>
-              <GeometryDrawing.Pen>
-                <Pen Thickness="1" Brush="{DynamicResource NewTabGlassBorderBrush}" />
-              </GeometryDrawing.Pen>
-              <GeometryDrawing.Geometry>
-                <GeometryGroup>
-                  <RectangleGeometry Rect="0,0,48,48" />
-                </GeometryGroup>
-              </GeometryDrawing.Geometry>
-            </GeometryDrawing>
-          </DrawingBrush.Drawing>
-        </DrawingBrush>
-      </Border.Background>
-    </Border>
-
-    <!-- Deepens the corners, exactly as the ordinary page's vignette does, so
-         the grid does not read as flat wallpaper. -->
-    <Border Opacity="0.5">
-      <Border.Background>
-        <RadialGradientBrush Center="50%,46%" GradientOrigin="50%,46%" RadiusX="75%" RadiusY="78%">
-          <GradientStop Offset="0" Color="{DynamicResource NewTabVignetteClear}" />
-          <GradientStop Offset="0.6" Color="{DynamicResource NewTabVignetteSoft}" />
-          <GradientStop Offset="1" Color="{DynamicResource NewTabVignetteEdge}" />
-        </RadialGradientBrush>
-      </Border.Background>
-    </Border>
-
-  </Grid>
+  <Grid Background="{DynamicResource NewTabBackdropBrush}" />
 </UserControl>

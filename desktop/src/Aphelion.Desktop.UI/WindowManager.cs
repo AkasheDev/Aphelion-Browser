@@ -3,6 +3,7 @@ using Aphelion.Desktop.UI.ViewModels;
 using Aphelion.Desktop.UI.Views;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aphelion.Desktop.UI;
@@ -91,6 +92,15 @@ internal sealed class WindowManager(IServiceProvider services)
             isPrivateWindow: true);
 
         var window = new MainWindow { DataContext = new MainWindowViewModel(shell), Title = "Private Mode — Aphelion" };
+
+        // Merged into this window rather than swapped application-wide: a private
+        // window darkens itself while the ordinary windows beside it carry on
+        // unchanged. Window resources are found before the application's, so this
+        // wins for everything drawn inside it.
+        window.Resources.MergedDictionaries.Add(
+            (ResourceDictionary)AvaloniaXamlLoader.Load(
+                new Uri("avares://Aphelion.Desktop.UI/Themes/PrivatePalette.axaml")));
+
         Register(window);
 
         window.Closing += (_, _) =>
