@@ -75,7 +75,13 @@ public partial class App : Avalonia.Application
         services.GetRequiredService<WindowManager>().Register(mainWindow);
 
         desktop.MainWindow = mainWindow;
-        desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnMainWindowClose;
+
+        // Every browser window is equal once it exists: tearing a tab or a group
+        // out makes a window that outlives the one it came from, so the browser
+        // closes with its last window rather than with this first one. Tying
+        // shutdown to the main window took the other windows down with it, losing
+        // whatever was open in them.
+        desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnLastWindowClose;
 
         mainWindow.Show();
         splash.Close();
