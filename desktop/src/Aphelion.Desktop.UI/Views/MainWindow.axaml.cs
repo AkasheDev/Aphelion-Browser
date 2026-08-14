@@ -203,10 +203,28 @@ public partial class MainWindow : Window
             return;
         }
 
-        host.ColumnDefinitions[2].Width = Shell?.IsSplit == true
+        var split = Shell?.IsSplit == true;
+
+        host.ColumnDefinitions[2].Width = split
             ? new GridLength(1, GridUnitType.Star)
             : new GridLength(0);
+
+        // The floor the divider stops at. It belongs on the columns, not on the
+        // panes: the splitter resizes columns, and a pane asking for more room
+        // than its column has would simply be clipped. Fixed rather than a share
+        // of the window, so a pane is the same size on a television as it is on a
+        // laptop at its smallest — a page needs the width a page needs.
+        var floor = split ? MinimumPaneWidth : 0;
+        host.ColumnDefinitions[0].MinWidth = floor;
+        host.ColumnDefinitions[2].MinWidth = floor;
     }
+
+    /// <summary>
+    /// The narrowest a split pane may be dragged. Only applied while split: on
+    /// its own a pane is the whole window and must follow it down to the
+    /// window's own minimum.
+    /// </summary>
+    private const double MinimumPaneWidth = 345;
 
     /// <summary>
     /// Keeps zoom feedback over the page controlled by the shared toolbar. The
