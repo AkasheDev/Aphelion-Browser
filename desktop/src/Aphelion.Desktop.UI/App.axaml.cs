@@ -40,6 +40,15 @@ public partial class App : Avalonia.Application
         var splash = new SplashWindow { DataContext = splashViewModel };
         splash.Show();
 
+        // Started with --splash, the splash is the whole application: a slow,
+        // looping sweep so its orbit can actually be watched. A real start is
+        // over in about a second, which is not long enough to judge it by.
+        if (Environment.GetCommandLineArgs().Contains("--splash"))
+        {
+            await PreviewSplashAsync(splashViewModel, splash);
+            return;
+        }
+
         try
         {
             var progress = new Progress<StartupProgress>(report =>
@@ -85,6 +94,29 @@ public partial class App : Avalonia.Application
 
         mainWindow.Show();
         splash.Close();
+    }
+
+    /// <summary>
+    /// Drives the splash's progress from nought to full and round again until the
+    /// window is closed. A development aid for looking at the orbit, reached only
+    /// through the --splash argument.
+    /// </summary>
+    private static async Task PreviewSplashAsync(SplashViewModel model, SplashWindow splash)
+    {
+        var closed = false;
+        splash.Closed += (_, _) => closed = true;
+
+        while (!closed)
+        {
+            for (var percent = 0; percent <= 100 && !closed; percent++)
+            {
+                model.ProgressPercent = percent;
+                model.StatusText = $"Splash preview — {percent}%";
+                await Task.Delay(70);
+            }
+
+            await Task.Delay(900);
+        }
     }
 
     private void OnShutdownRequested(object? sender, ShutdownRequestedEventArgs e)

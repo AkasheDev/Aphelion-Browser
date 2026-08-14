@@ -62,7 +62,6 @@ public partial class SplashWindow : Window
     private readonly Path _swept = new();
     private readonly Path _headGlow = new();
     private readonly Path _head = new();
-    private readonly Ellipse _aphelionRing = new();
     private readonly Ellipse _bodyHalo = new();
     private readonly Ellipse _body = new();
 
@@ -295,15 +294,6 @@ public partial class SplashWindow : Window
         _head.Opacity = 0.95;
         _head.StrokeLineCap = PenLineCap.Round;
 
-        // The destination, waiting. It brightens as the body closes on it.
-        _aphelionRing.Width = 15;
-        _aphelionRing.Height = 15;
-        _aphelionRing.Stroke = new SolidColorBrush(Color.Parse("#8C83FF"));
-        _aphelionRing.StrokeThickness = 1.2;
-        _aphelionRing.Opacity = 0.25;
-        Canvas.SetLeft(_aphelionRing, CentreX - RadiusX - 7.5);
-        Canvas.SetTop(_aphelionRing, CentreY - 7.5);
-
         _bodyHalo.Width = 40;
         _bodyHalo.Height = 40;
         _bodyHalo.Fill = new RadialGradientBrush
@@ -330,7 +320,6 @@ public partial class SplashWindow : Window
         };
 
         canvas.Children.Add(_track);
-        canvas.Children.Add(_aphelionRing);
         canvas.Children.Add(_sweptGlow);
         canvas.Children.Add(_swept);
         canvas.Children.Add(_headGlow);
@@ -359,19 +348,16 @@ public partial class SplashWindow : Window
         Canvas.SetTop(_body, position.Y - (_body.Height / 2));
         Canvas.SetLeft(_bodyHalo, position.X - (_bodyHalo.Width / 2));
         Canvas.SetTop(_bodyHalo, position.Y - (_bodyHalo.Height / 2));
-
-        // The destination lights up over the final stretch of the journey.
-        _aphelionRing.Opacity = 0.25 + (Math.Pow(clamped, 3) * 0.75);
     }
 
     /// <summary>
-    /// Where the body sits at a given progress. Progress runs from the near side
-    /// of the orbit, through the top, to the aphelion at the far side — so
-    /// finishing and arriving are the same moment.
+    /// Where the body sits at a given progress. Progress carries it once all the
+    /// way round the logo, so it finishes where it set out — a lap completed
+    /// rather than abandoned at the far side.
     /// </summary>
     private static Point PointAt(double progress)
     {
-        var angle = progress * Math.PI;
+        var angle = progress * Math.Tau;
 
         // Y is negated because the screen's runs downwards, and the body should
         // climb over the top of the orbit rather than dip under it.
@@ -395,7 +381,9 @@ public partial class SplashWindow : Window
             return null;
         }
 
-        var steps = Math.Max(2, (int)Math.Ceiling(ArcResolution * span));
+        // Doubled because a lap is twice the arc it used to be, and the same
+        // number of points spread over it would show as a polygon.
+        var steps = Math.Max(2, (int)Math.Ceiling(ArcResolution * 2 * span));
         var points = new Points();
 
         for (var i = 0; i <= steps; i++)

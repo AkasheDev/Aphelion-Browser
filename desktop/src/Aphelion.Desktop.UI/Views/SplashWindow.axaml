@@ -83,8 +83,13 @@
       </Style.Animations>
     </Style>
 
-    <!-- The star's corona, breathing against the logo so the centre glows. -->
-    <Style Selector="Ellipse.corona">
+    <!-- The star's corona, breathing against the logo so the centre glows. Blurred
+         well past the mark's edges so it reads as light coming off it. -->
+    <Style Selector="Image.corona">
+      <Setter Property="Effect"><BlurEffect Radius="26" /></Setter>
+    </Style>
+
+    <Style Selector="Image.corona">
       <Style.Animations>
         <Animation Duration="0:0:4.2" IterationCount="Infinite" PlaybackDirection="Alternate"
                    Easing="SineEaseInOut">
@@ -220,17 +225,15 @@
              Width="260" Height="260"
              HorizontalAlignment="Left" VerticalAlignment="Top">
 
-        <Ellipse Classes="corona"
-                 HorizontalAlignment="Center" VerticalAlignment="Center"
-                 Width="260" Height="260">
-          <Ellipse.Fill>
-            <RadialGradientBrush>
-              <GradientStop Offset="0" Color="#8A7C5CFF" />
-              <GradientStop Offset="0.42" Color="#3D6A4FD8" />
-              <GradientStop Offset="1" Color="#006A4FD8" />
-            </RadialGradientBrush>
-          </Ellipse.Fill>
-        </Ellipse>
+        <!-- The glow is a blurred copy of the mark rather than a circle behind
+             it, so the light follows the logo's own outline instead of haloing a
+             shape it does not have. The same thing the New Tab page does with
+             Image.newtab-logo-glow. -->
+        <Image Classes="corona"
+               Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
+               Width="128" Height="128"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               RenderOptions.BitmapInterpolationMode="HighQuality" />
 
         <Image Classes="logo"
                Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
