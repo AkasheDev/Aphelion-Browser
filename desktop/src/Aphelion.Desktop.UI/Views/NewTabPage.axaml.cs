@@ -10,10 +10,32 @@ namespace Aphelion.Desktop.UI.Views;
 
 public partial class NewTabPage : UserControl
 {
+    /// <summary>
+    /// Below this the page is too narrow to carry the weather corner as well as
+    /// the logo beneath it. Half of the smallest window, near enough: a split
+    /// pane and a minimum-width window are the two places it has to hold up.
+    /// </summary>
+    private const double WeatherCornerMinimumWidth = 560;
+
+    /// <summary>
+    /// Below this the upper half cannot hold the logo, the greeting and the
+    /// search box without the shortcut row beneath them running into the box.
+    /// The row goes rather than overlaps; the page keeps what it is for.
+    /// </summary>
+    private const double ShortcutRowMinimumHeight = 540;
+
     public NewTabPage()
     {
         InitializeComponent();
         AddHandler(PointerPressedEvent, OnPagePointerPressed, RoutingStrategies.Tunnel);
+
+    }
+
+    /// <summary>Drops the parts the page has no room for at its current size.</summary>
+    private void ApplyRoomForExtras()
+    {
+        WeatherCorner.IsVisible = Bounds.Width >= WeatherCornerMinimumWidth;
+        ShortcutRow.IsVisible = Bounds.Height >= ShortcutRowMinimumHeight;
     }
 
     protected override void OnLoaded(RoutedEventArgs e)
@@ -34,6 +56,15 @@ public partial class NewTabPage : UserControl
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+
+        // Bounds rather than SizeChanged: this reports the first layout too, so a
+        // page that opens already narrow — which is what a split pane is — is
+        // fitted straight away instead of only once something resizes it.
+        if (change.Property == BoundsProperty)
+        {
+            ApplyRoomForExtras();
+            return;
+        }
 
         if (change.Property != IsVisibleProperty || VisualRoot is null)
         {

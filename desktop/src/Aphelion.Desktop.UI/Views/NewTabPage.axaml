@@ -65,6 +65,12 @@
       experience rather than offering a network request it otherwise never
       makes on its own.
     -->
+    <!-- The corner is dropped outright once the page is narrow — in split view,
+         or a window at its smallest — where it would otherwise sit on top of the
+         logo. Held in a panel of its own because both buttons bind IsVisible for
+         their own reasons, and a local binding wins over anything a style could
+         say about width. -->
+    <Panel Name="WeatherCorner" HorizontalAlignment="Right" VerticalAlignment="Top">
     <Button Classes="newtab-weather"
             Margin="0,20,24,0"
             HorizontalAlignment="Right"
@@ -102,6 +108,7 @@
             ToolTip.Tip="Turn weather back on">
       <TextBlock Text="Weather off" />
     </Button>
+    </Panel>
 
     <!--
       Two rows, both half the page. The masthead and the search box sit at the
@@ -110,7 +117,12 @@
       entire lower half to itself and scrolls if it needs more, which is what
       keeps it inside the window — the box no longer has to move to make room.
     -->
-    <Grid Width="820" Margin="32" HorizontalAlignment="Center" RowDefinitions="*,*">
+    <!-- Stretch with a cap rather than a fixed width: the page is also drawn at
+         half the window in split view and in a window dragged down to its
+         minimum, and a fixed 820 simply ran off both sides there. Stretching
+         fills whatever room there is and the cap centres it once there is more
+         than the layout wants. -->
+    <Grid MaxWidth="820" Margin="16,32" HorizontalAlignment="Stretch" RowDefinitions="*,*">
 
       <StackPanel Grid.Row="0" VerticalAlignment="Bottom" Spacing="18">
         <Grid Classes="newtab-logo-mark" HorizontalAlignment="Center" IsHitTestVisible="False"
@@ -123,10 +135,12 @@
                  Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
                  RenderOptions.BitmapInterpolationMode="HighQuality" />
         </Grid>
-        <StackPanel Classes="newtab-greeting" Orientation="Horizontal" Spacing="9" HorizontalAlignment="Center" IsVisible="{Binding !IsPrivate}">
-          <TextBlock Classes="newtab-greeting-headline" Text="{Binding Ambient.GreetingHeadline}" />
+        <!-- Wraps rather than sits on one line: the two halves of the greeting
+             go one above the other when the page is too narrow for both. -->
+        <WrapPanel Classes="newtab-greeting" HorizontalAlignment="Center" IsVisible="{Binding !IsPrivate}">
+          <TextBlock Classes="newtab-greeting-headline" Margin="0,0,9,0" Text="{Binding Ambient.GreetingHeadline}" />
           <TextBlock Classes="newtab-greeting-prompt" Text="{Binding Ambient.GreetingPrompt}" />
-        </StackPanel>
+        </WrapPanel>
         <!-- The same mark as the ordinary New Tab page, not a distinct glyph:
              a private window is still Aphelion, just quieter. Colour comes from
              Classes.private on Image.newtab-logo-image, which desaturates it
@@ -248,9 +262,12 @@
       </ScrollViewer>
 
       <!-- Shares the lower half with the suggestion list, which takes over the
-           space while it is showing. -->
-      <ItemsControl Grid.Row="1"
-                    ItemsSource="{Binding ShortcutTiles}"
+           space while it is showing. Wrapped so the page can withdraw the whole
+           row when it is too short to hold it clear of the search box; the
+           ItemsControl binds IsVisible for its own reasons and a local binding
+           would win over anything set from outside. -->
+      <Panel Grid.Row="1" Name="ShortcutRow">
+      <ItemsControl ItemsSource="{Binding ShortcutTiles}"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Top"
                     Margin="0,28,0,0"
@@ -281,10 +298,12 @@
           </DataTemplate>
         </ItemsControl.DataTemplates>
       </ItemsControl>
+      </Panel>
     </Grid>
 
     <Border Background="#99000000" IsVisible="{Binding IsEditorOpen}">
-      <Border Classes="newtab-glass" Width="420" Padding="24" HorizontalAlignment="Center" VerticalAlignment="Center">
+      <Border Classes="newtab-glass" MaxWidth="420" Margin="24" Padding="24"
+              HorizontalAlignment="Stretch" VerticalAlignment="Center">
         <StackPanel Spacing="16">
           <TextBlock Text="{Binding EditorHeading}" FontSize="20" FontWeight="SemiBold" Foreground="{DynamicResource NewTabForegroundBrush}" />
           <StackPanel Spacing="7"><TextBlock Classes="newtab-muted" Text="Name" FontSize="12" /><TextBox Text="{Binding EditorName}" MaxLength="32" PlaceholderText="Shortcut name" /></StackPanel>

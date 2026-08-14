@@ -336,7 +336,7 @@
     <Setter Property="Foreground" Value="{DynamicResource NewTabMutedBrush}" />
   </Style>
 
-  <Style Selector="StackPanel.newtab-greeting">
+  <Style Selector="WrapPanel.newtab-greeting">
     <Setter Property="Opacity" Value="0.96" />
   </Style>
 
