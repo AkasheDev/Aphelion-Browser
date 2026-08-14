@@ -818,9 +818,18 @@
 
   <!-- ===== Bookmarks ===== -->
 
+  <!-- A star that means "saved" is yellow and filled in every browser there is,
+       and it is the same yellow in a private window: this one marks a bookmark,
+       which private mode keeps and does not hide. Literal rather than a palette
+       token for exactly that reason — the private palette must not drain it. -->
   <Style Selector="Button.icon.bookmarked Path.glyph">
-    <Setter Property="Fill" Value="{DynamicResource BrandPrimaryBrush}" />
-    <Setter Property="Stroke" Value="{DynamicResource BrandPrimaryBrush}" />
+    <Setter Property="Fill" Value="#F5C242" />
+    <Setter Property="Stroke" Value="#F5C242" />
+  </Style>
+
+  <Style Selector="Button.icon.bookmarked:pointerover Path.glyph">
+    <Setter Property="Stroke" Value="#FFD766" />
+    <Setter Property="Fill" Value="#FFD766" />
   </Style>
 
   <!-- Continuous with the toolbar above it: same ground, no dividing line, so
