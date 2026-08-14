@@ -30,18 +30,45 @@ public sealed partial class BrowserViewModel : ViewModelBase
     private PageAddress? _lastStartedAddress;
 
     /// <summary>
-    /// Whether this tab left New Tab to reach its current page, so "back" has
-    /// somewhere to land once the engine's own history runs out.
+    /// How many engine history steps this tab has taken since it last left New
+    /// Tab, or <see cref="NotAnchoredToNewTab"/> when it is not sitting above a
+    /// New Tab at all.
     /// </summary>
     /// <remarks>
     /// The native web view never navigates to New Tab — it is a local surface
     /// this application draws instead of a page, see <see cref="IsBlank"/> — so
-    /// New Tab is absent from <c>_session.CanGoBack</c> and its history entirely.
-    /// Without this, going back from the first page a tab visited did nothing:
-    /// the engine reported no further history, and the button simply had no
-    /// effect instead of returning to where the tab actually started.
+    /// New Tab is absent from the engine's history entirely, and the engine
+    /// cannot be asked where the boundary is. Counting the steps is what puts it
+    /// back: at zero, the page below the current one is New Tab.
+    ///
+    /// A plain "did this tab come from New Tab" flag was not enough. Returning to
+    /// New Tab leaves the engine's own history untouched, so the next navigation
+    /// stacked on top of entries from before, and stepping back walked into those
+    /// stale pages instead of ever reaching New Tab again.
     /// </remarks>
-    private bool _cameFromNewTab;
+    private int _newTabDepth = NotAnchoredToNewTab;
+
+    private const int NotAnchoredToNewTab = -1;
+
+    /// <summary>
+    /// The page this tab stepped back from when it returned to New Tab, kept so
+    /// going forward can return to it. Cleared as soon as the tab navigates
+    /// somewhere else, which is what discards a forward entry in any browser.
+    /// </summary>
+    private BlankStepBack? _newTabForward;
+
+    /// <summary>
+    /// Set around a history traversal this view model asked for, so the
+    /// navigation it raises is not mistaken for a step further from New Tab.
+    /// </summary>
+    private bool _isTraversing;
+
+    /// <summary>What returning forward from New Tab has to put back on the tab.</summary>
+    private sealed record BlankStepBack(
+        PageAddress Address,
+        string? Title,
+        string? SearchTerm,
+        PageAddress? FaviconAddress);
 
     public BrowserViewModel(
         NavigateFromAddressBar navigateFromAddressBar,
@@ -127,15 +154,30 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
         if (navigated)
         {
-            if (leftNewTab)
-            {
-                _cameFromNewTab = true;
-            }
-
+            NoteNavigationAway(leftNewTab);
             SyncFromTab();
         }
 
         return navigated;
+    }
+
+    /// <summary>
+    /// Records a navigation the user asked for: leaving New Tab anchors the tab
+    /// to it, and any other navigation is one more step away from wherever it is
+    /// anchored. Either way the forward entry New Tab held is now gone.
+    /// </summary>
+    private void NoteNavigationAway(bool leftNewTab)
+    {
+        _newTabForward = null;
+
+        if (leftNewTab)
+        {
+            _newTabDepth = 0;
+        }
+        else if (_newTabDepth >= 0)
+        {
+            _newTabDepth++;
+        }
     }
 
     /// <summary>
@@ -256,11 +298,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
         if (_navigateFromAddressBar.Execute(_tab, _session, AddressText))
         {
-            if (leftNewTab)
-            {
-                _cameFromNewTab = true;
-            }
-
+            NoteNavigationAway(leftNewTab);
             SyncFromTab();
         }
     }
@@ -274,24 +312,64 @@ public sealed partial class BrowserViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanGoBack))]
     private void GoBack()
     {
-        // The engine's own history never contains New Tab — it was never
-        // navigated to, only drawn locally — so once that history is exhausted,
-        // "back" from the first page a tab visited means returning there.
-        if (_session?.CanGoBack != true)
+        // Sitting directly above New Tab, that is what back means — checked before
+        // the engine, because the engine may still hold pages from before this tab
+        // last returned to New Tab, and walking into those would step past the
+        // boundary rather than onto it.
+        if (_newTabDepth == 0)
         {
-            if (_cameFromNewTab)
-            {
-                ReturnToNewTab();
-            }
-
+            ReturnToNewTab();
             return;
         }
 
+        if (_session?.CanGoBack != true)
+        {
+            return;
+        }
+
+        if (_newTabDepth > 0)
+        {
+            _newTabDepth--;
+        }
+
+        _isTraversing = true;
         _session.GoBack();
     }
 
     [RelayCommand(CanExecute = nameof(CanGoForward))]
-    private void GoForward() => _session?.GoForward();
+    private void GoForward()
+    {
+        // Forward out of New Tab is the mirror of the step that got here: the
+        // engine never moved, so the page it is still showing only has to be put
+        // back on the tab.
+        if (_tab.IsBlank && _newTabForward is { } resume)
+        {
+            _tab.RestoreFromBlank(
+                resume.Address,
+                resume.Title,
+                resume.SearchTerm,
+                resume.FaviconAddress);
+
+            _newTabForward = null;
+            _newTabDepth = 0;
+            ApplySiteZoom();
+            SyncFromTab();
+            return;
+        }
+
+        if (_session?.CanGoForward != true)
+        {
+            return;
+        }
+
+        if (_newTabDepth >= 0)
+        {
+            _newTabDepth++;
+        }
+
+        _isTraversing = true;
+        _session.GoForward();
+    }
 
     [RelayCommand]
     private void Reload()
@@ -327,6 +405,21 @@ public sealed partial class BrowserViewModel : ViewModelBase
         // Mirror it into the tab so the address bar tracks where we actually are.
         if (PageAddress.TryCreate(e.RequestedUrl, out var address) && address is not null)
         {
+            // A step the page took for itself is one more step from New Tab, and
+            // it drops whatever was ahead. A traversal this view model asked for
+            // has already accounted for itself, and a redirect replaces the entry
+            // it came from rather than adding one.
+            var isRedirect = _lastStartedAddress is not null && _tab.LoadState == TabLoadState.Loading;
+
+            if (_isTraversing)
+            {
+                _isTraversing = false;
+            }
+            else if (!isRedirect)
+            {
+                NoteNavigationAway(_tab.IsBlank);
+            }
+
             _lastStartedAddress = address;
             _tab.BeginNavigation(address);
             ApplySiteZoom();
@@ -525,8 +618,11 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
     private void RefreshHistoryState()
     {
-        CanGoBack = (_session?.CanGoBack ?? false) || _cameFromNewTab;
-        CanGoForward = _session?.CanGoForward ?? false;
+        // New Tab is a place this tab can be but the engine cannot report, so both
+        // directions add it to whatever the engine knows.
+        CanGoBack = (_session?.CanGoBack ?? false) || _newTabDepth == 0;
+        CanGoForward = (_session?.CanGoForward ?? false) ||
+            (_tab.IsBlank && _newTabForward is not null);
     }
 
     /// <summary>
@@ -610,13 +706,20 @@ public sealed partial class BrowserViewModel : ViewModelBase
     private void ReturnToNewTab()
     {
         _session?.StopLoading();
+
+        // Kept before the reset clears it, so forward can put the tab back on the
+        // page the engine is still showing.
+        _newTabForward = _tab.Address is { } leaving
+            ? new BlankStepBack(leaving, _tab.Title, _tab.SearchTerm, _tab.FaviconAddress)
+            : null;
+
         _tab.ResetToBlank();
         ApplySiteZoom();
         ErrorPage.Hide();
 
         // Back at New Tab, so there is nothing further back to return to until
         // the next time it is left.
-        _cameFromNewTab = false;
+        _newTabDepth = NotAnchoredToNewTab;
 
         SyncFromTab();
         RefreshHistoryState();

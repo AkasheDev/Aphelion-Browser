@@ -126,6 +126,32 @@ public sealed class BrowserTab
         FailureReason = null;
     }
 
+    /// <summary>
+    /// Returns a tab that stepped back to New Tab to the page it came from.
+    /// </summary>
+    /// <remarks>
+    /// Stepping back to New Tab never moves the engine — New Tab is drawn over a
+    /// surface that is still showing the page — so going forward again restores
+    /// what the tab knew rather than navigating anywhere. Reloading instead would
+    /// discard the page's scroll position and post state, and would push a second
+    /// history entry for a page the engine never left.
+    /// </remarks>
+    public void RestoreFromBlank(
+        PageAddress address,
+        string? title,
+        string? searchTerm,
+        PageAddress? faviconAddress)
+    {
+        ArgumentNullException.ThrowIfNull(address);
+
+        Address = address;
+        Title = title ?? string.Empty;
+        SearchTerm = string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm;
+        FaviconAddress = faviconAddress;
+        LoadState = TabLoadState.Idle;
+        FailureReason = null;
+    }
+
     public void UpdateTitle(string? title)
     {
         if (Address is not null && !string.IsNullOrWhiteSpace(title))
