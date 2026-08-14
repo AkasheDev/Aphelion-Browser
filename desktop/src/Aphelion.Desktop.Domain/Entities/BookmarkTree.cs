@@ -27,19 +27,83 @@ public sealed class BookmarkTree
         ArgumentNullException.ThrowIfNull(parent);
         ArgumentNullException.ThrowIfNull(address);
 
+        if (!ContainsFolder(parent))
+        {
+            throw new ArgumentException("The destination folder does not belong to this bookmark tree.", nameof(parent));
+        }
+
         var bookmark = new Bookmark(BookmarkNodeId.New(), name, address, faviconAddress);
         Attach(parent, bookmark, index);
         return bookmark;
     }
 
-    public BookmarkFolder AddFolder(BookmarkFolder parent, string name, int? index = null)
+    /// <summary>
+    /// Records a New Tab slot inside a saved group. Only saved groups reopen
+    /// their children as tabs, so only they have anywhere to put one.
+    /// </summary>
+    public BlankPage AddBlankPage(BookmarkFolder parent, string name = "New tab", int? index = null)
     {
         ArgumentNullException.ThrowIfNull(parent);
 
-        var folder = new BookmarkFolder(BookmarkNodeId.New(), name);
+        if (!ContainsFolder(parent))
+        {
+            throw new ArgumentException("The destination folder does not belong to this bookmark tree.", nameof(parent));
+        }
+
+        if (!parent.IsSavedGroup)
+        {
+            throw new ArgumentException("A New Tab slot belongs only to a saved tab group.", nameof(parent));
+        }
+
+        var blank = new BlankPage(BookmarkNodeId.New(), name);
+        Attach(parent, blank, index);
+        return blank;
+    }
+
+    /// <summary>
+    /// The pages of a saved group in order, New Tab slots included. Saved groups
+    /// hold only pages, so this is every child of one.
+    /// </summary>
+    public static IReadOnlyList<BookmarkNode> PagesOf(BookmarkFolder folder)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+        return folder.Children.Where(child => child is Bookmark or BlankPage).ToList();
+    }
+
+    /// <summary>The address a saved-group page reopens at, or null for a New Tab.</summary>
+    public static PageAddress? AddressOf(BookmarkNode page) => (page as Bookmark)?.Address;
+
+    public BookmarkFolder AddFolder(
+        BookmarkFolder parent,
+        string name,
+        int? index = null,
+        GroupColor? groupColor = null,
+        SavedTabGroupId? savedGroupId = null)
+    {
+        ArgumentNullException.ThrowIfNull(parent);
+
+        if (!ContainsFolder(parent))
+        {
+            throw new ArgumentException("The destination folder does not belong to this bookmark tree.", nameof(parent));
+        }
+
+        var isSavedGroup = groupColor is not null || savedGroupId is not null;
+
+        if ((isSavedGroup && !ReferenceEquals(parent, Root)) ||
+            (!isSavedGroup && parent.IsSavedGroup))
+        {
+            throw new InvalidOperationException(
+                "Saved tab groups are flat, top-level bookmark-bar records.");
+        }
+
+        var folder = new BookmarkFolder(BookmarkNodeId.New(), name, groupColor, savedGroupId);
         Attach(parent, folder, index);
         return folder;
     }
+
+    /// <summary>The saved tab groups, which sit among the bar's top-level rows.</summary>
+    public IEnumerable<BookmarkFolder> SavedGroups =>
+        Root.Children.OfType<BookmarkFolder>().Where(folder => folder.IsSavedGroup);
 
     /// <summary>Removes a node and, for a folder, everything beneath it.</summary>
     public bool RemoveNode(BookmarkNodeId id)
@@ -87,6 +151,7 @@ public sealed class BookmarkTree
         ArgumentNullException.ThrowIfNull(newParent);
 
         if (id == newParent.Id ||
+            !ContainsFolder(newParent) ||
             !_parentOf.TryGetValue(id, out var currentParent) ||
             FindNode(id) is not { } node)
         {
@@ -94,6 +159,12 @@ public sealed class BookmarkTree
         }
 
         if (node is BookmarkFolder folder && IsAncestorOf(folder, newParent))
+        {
+            return false;
+        }
+
+        if (newParent.IsSavedGroup ||
+            node is BookmarkFolder { IsSavedGroup: true } && !ReferenceEquals(newParent, Root))
         {
             return false;
         }
@@ -144,7 +215,34 @@ public sealed class BookmarkTree
     /// star, which shows filled when the open page is already bookmarked.
     /// </summary>
     public Bookmark? FindByAddress(PageAddress address) =>
-        address is null ? null : Descendants(Root).OfType<Bookmark>().FirstOrDefault(b => b.Address.Equals(address));
+        address is null
+            ? null
+            : OrdinaryBookmarksBeneath(Root).FirstOrDefault(bookmark => bookmark.Address.Equals(address));
+
+    /// <summary>
+    /// Ordinary bookmarks below a folder, excluding saved-group records and
+    /// everything beneath them. A saved group's pages describe its restorable
+    /// tab set; they are not bookmarks chosen with the toolbar star.
+    /// </summary>
+    private static IEnumerable<Bookmark> OrdinaryBookmarksBeneath(BookmarkFolder folder)
+    {
+        foreach (var child in folder.Children)
+        {
+            if (child is Bookmark bookmark)
+            {
+                yield return bookmark;
+                continue;
+            }
+
+            if (child is BookmarkFolder { IsSavedGroup: false } nested)
+            {
+                foreach (var descendant in OrdinaryBookmarksBeneath(nested))
+                {
+                    yield return descendant;
+                }
+            }
+        }
+    }
 
     /// <summary>Every node beneath <paramref name="folder"/>, depth first.</summary>
     public static IEnumerable<BookmarkNode> Descendants(BookmarkFolder folder)
@@ -169,6 +267,17 @@ public sealed class BookmarkTree
     {
         parent.InsertChild(index ?? parent.Children.Count, node);
         _parentOf[node.Id] = parent;
+    }
+
+    private bool ContainsFolder(BookmarkFolder folder)
+    {
+        if (ReferenceEquals(folder, Root))
+        {
+            return true;
+        }
+
+        return _parentOf.TryGetValue(folder.Id, out var parent) &&
+            parent.Children.Any(child => ReferenceEquals(child, folder));
     }
 
     private void Forget(BookmarkNode node)

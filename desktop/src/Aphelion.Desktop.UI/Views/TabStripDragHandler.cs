@@ -49,6 +49,17 @@ internal sealed class TabStripDragHandler
     private readonly Func<ShellViewModel?> _shell;
 
     private TabItemViewModel? _dragging;
+
+    /// <summary>
+    /// The group chip being dragged, when the press landed on one. A group moves
+    /// as a whole run rather than as a member, so it is tracked separately from
+    /// the dragged tab and never both at once.
+    /// </summary>
+    private GroupHeaderViewModel? _draggingGroup;
+
+    /// <summary>Where the dragged group's run was last placed, to avoid re-dropping.</summary>
+    private int _lastGroupIndex = -1;
+
     private Point _pressOrigin;
     private bool _isDragging;
     private TabId? _lastBeforeId;
@@ -94,7 +105,20 @@ internal sealed class TabStripDragHandler
             return;
         }
 
-        // Buttons — the close button, the group chips — own their own clicks.
+        // A group chip is a Button, so its click is its own — but a press that
+        // travels is a drag of the whole run. Recorded here and only acted on once
+        // the pointer has moved, which leaves a plain click collapsing the group
+        // as before.
+        if (GroupUnder(e.Source as Visual) is { } chip)
+        {
+            _draggingGroup = chip;
+            _pressOrigin = e.GetPosition(_strip);
+            _isDragging = false;
+            _lastGroupIndex = -1;
+            return;
+        }
+
+        // Buttons — the close button — own their own clicks.
         if (e.Source is Visual source && source.FindAncestorOfType<Button>(includeSelf: true) is not null)
         {
             return;
@@ -105,8 +129,105 @@ internal sealed class TabStripDragHandler
         _isDragging = false;
     }
 
+    /// <summary>
+    /// Slides a whole group run along the strip as the pointer moves, the way a
+    /// dragged tab slides between its neighbours.
+    /// </summary>
+    private void DragGroup(PointerEventArgs e)
+    {
+        if (_draggingGroup is not { } chip || _shell() is not { } shell)
+        {
+            return;
+        }
+
+        var position = e.GetPosition(_strip);
+
+        if (!_isDragging)
+        {
+            if (Math.Abs(position.X - _pressOrigin.X) < DragThreshold &&
+                Math.Abs(position.Y - _pressOrigin.Y) < DragThreshold)
+            {
+                return;
+            }
+
+            _isDragging = true;
+        }
+
+        // Pulled clear of the strip the drag is on its way somewhere else — the
+        // bookmark bar, or a window of its own. Reordering the run under the
+        // pointer on the way past would shuffle the strip for a gesture that was
+        // never about the strip.
+        if (position.Y < -TearOffMargin || position.Y > _strip.Bounds.Height + TearOffMargin)
+        {
+            return;
+        }
+
+        var index = GroupIndexAt(position.X, chip.Id);
+
+        if (index == _lastGroupIndex)
+        {
+            return;
+        }
+
+        var before = CaptureLefts();
+
+        shell.DropGroup(chip.Id, index);
+        _lastGroupIndex = index;
+
+        // Layout has to settle before the new positions can be measured, so the
+        // neighbours can be animated from where they were.
+        _strip.UpdateLayout();
+        AnimateFrom(before);
+    }
+
+    /// <summary>
+    /// Where a group dropped at <paramref name="x"/> belongs, counted in tabs that
+    /// are not its own — which is the position
+    /// <see cref="Domain.Entities.BrowsingSession.MoveGroup"/> works in.
+    /// </summary>
+    private int GroupIndexAt(double x, Domain.ValueObjects.TabGroupId groupId)
+    {
+        var index = 0;
+
+        foreach (var container in _strip.GetRealizedContainers())
+        {
+            if (container.DataContext is not TabItemViewModel tab ||
+                tab.Tab.GroupId == groupId ||
+                container.TranslatePoint(default, _strip) is not { } origin)
+            {
+                continue;
+            }
+
+            if (x > origin.X + container.Bounds.Width / 2)
+            {
+                index++;
+            }
+        }
+
+        return index;
+    }
+
+    private static GroupHeaderViewModel? GroupUnder(Visual? visual)
+    {
+        for (var element = visual as StyledElement; element is not null; element = element.Parent)
+        {
+            if (element.DataContext is GroupHeaderViewModel chip)
+            {
+                return chip;
+            }
+        }
+
+        return null;
+    }
+
     private void OnPointerMoved(object? sender, PointerEventArgs e)
     {
+        if (_draggingGroup is not null)
+        {
+            DragGroup(e);
+            return;
+        }
+
         if (_dragging is null || _shell() is not { } shell)
         {
             return;
@@ -207,12 +328,29 @@ internal sealed class TabStripDragHandler
     private void EndDrag(PointerReleasedEventArgs? release)
     {
         var dragged = _dragging;
+        var draggedGroup = _draggingGroup;
         var wasDragging = _isDragging;
 
         _dragging = null;
+        _draggingGroup = null;
         _isDragging = false;
+        _lastGroupIndex = -1;
 
         Manager?.ClearDropPreview();
+
+        if (draggedGroup is not null)
+        {
+            // Reordering inside the strip has already happened live as the pointer
+            // moved. What is left is a release that landed somewhere else, and
+            // stopping the chip's own click from collapsing the group as well.
+            if (wasDragging && release is not null)
+            {
+                release.Handled = true;
+                CompleteGroupDrop(draggedGroup, release);
+            }
+
+            return;
+        }
 
         if (dragged is null)
         {
@@ -230,6 +368,52 @@ internal sealed class TabStripDragHandler
         if (wasDragging && release is not null)
         {
             CompleteAcrossWindows(dragged, release);
+        }
+    }
+
+    /// <summary>
+    /// Handles a group released away from the strip: onto the bookmark bar, which
+    /// files its chip there, or clear of everything, which gives it a window.
+    /// </summary>
+    private void CompleteGroupDrop(GroupHeaderViewModel chip, PointerReleasedEventArgs e)
+    {
+        if (_shell() is not { } shell ||
+            shell.Bookmarks is not { } bookmarks ||
+            TopLevel.GetTopLevel(_strip) is not MainWindow owner)
+        {
+            return;
+        }
+
+        var local = e.GetPosition(_strip);
+
+        // Still over the strip: the live reorder already placed it.
+        if (local.Y >= -TearOffMargin && local.Y <= _strip.Bounds.Height + TearOffMargin)
+        {
+            return;
+        }
+
+        if (bookmarks.SavedGroupRowIdFor(shell, chip.Id.ToString()) is not { } rowId)
+        {
+            return;
+        }
+
+        // The bar is tested before the tear-off, since it lies below the strip and
+        // so is always past the tear margin. Dropping onto it means "put the chip
+        // here", not "give this group a window".
+        var screen = owner.PointToScreen(e.GetPosition(owner));
+
+        if (owner.GetVisualDescendants().OfType<BookmarkBarView>().FirstOrDefault() is { } bar &&
+            bar.TryDropSavedGroup(screen, rowId))
+        {
+            return;
+        }
+
+        // Clear of the window's chrome entirely: the group leaves for one of its
+        // own, taking its tabs with it. Reopening it in a new window is already how
+        // a saved group is transferred, so the tear-off borrows that path whole.
+        if (bookmarks.Tree.FindFolder(rowId) is { } folder)
+        {
+            shell.OpenSavedGroup(folder, BookmarkOpenTarget.NewWindow);
         }
     }
 

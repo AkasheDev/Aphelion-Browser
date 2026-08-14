@@ -3,6 +3,7 @@ using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Domain.Entities;
 using Aphelion.Desktop.Domain.ValueObjects;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -37,7 +38,7 @@ public sealed partial class BookmarkNodeViewModel : ViewModelBase
         _name = node.Name;
         IsInFolder = isInFolder;
 
-        if (node is BookmarkFolder folder)
+        if (node is BookmarkFolder { IsSavedGroup: false } folder)
         {
             Children = [];
             SyncChildren(folder);
@@ -61,9 +62,11 @@ public sealed partial class BookmarkNodeViewModel : ViewModelBase
 
     /// <summary>
     /// Whether to draw the chevron pointing at the submenu. Only inside a
-    /// dropdown: on the bar the folder glyph already identifies the row.
+    /// dropdown: on the bar the folder glyph already identifies the row. A saved
+    /// group never shows one, since clicking it reopens its pages rather than
+    /// expanding into a menu.
     /// </summary>
-    public bool ShowsSideChevron => IsFolder && IsInFolder;
+    public bool ShowsSideChevron => CanExpandAsFolder && IsInFolder;
 
     /// <summary>
     /// Leaves room for the drop marker that sits in front of the row, on
@@ -85,6 +88,110 @@ public sealed partial class BookmarkNodeViewModel : ViewModelBase
 
     public bool IsFolder => Node is BookmarkFolder;
 
+    /// <summary>Whether this row is a saved tab group rather than a plain folder.</summary>
+    public bool IsSavedGroup => Node is BookmarkFolder { IsSavedGroup: true };
+
+    /// <summary>Only ordinary folders own a dropdown; saved groups reopen tabs.</summary>
+    public bool CanExpandAsFolder => IsFolder && !IsSavedGroup;
+
+    /// <summary>The colour a saved group is drawn in, or null for anything else.</summary>
+    public IBrush? GroupBrush => Node is BookmarkFolder { GroupColor: { } color }
+        ? GroupBrushes.For(color)
+        : null;
+
+    /// <summary>
+    /// Whether this saved group is currently open in some window's tab strip.
+    /// Its row is outlined in the group's colour while it is, so the bar shows
+    /// which groups are already live and which are only stored.
+    /// </summary>
+    public bool IsLive => IsSavedGroup && Owner.IsLiveAnywhere(Node.Id);
+
+    /// <summary>
+    /// The outline a live saved group wears, and a transparent brush otherwise.
+    /// The ring is drawn at a constant thickness and only changes colour, so a
+    /// group going live never reflows the row beside it.
+    /// </summary>
+    public IBrush LiveRingBrush => IsLive && GroupBrush is { } brush
+        ? brush
+        : Brushes.Transparent;
+
+    /// <summary>
+    /// The context menu of a saved group: its actions, then the pages it would
+    /// reopen, as Chrome lists them.
+    /// </summary>
+    /// <remarks>
+    /// Built on demand rather than kept, so the list is whatever the group holds
+    /// at the moment it is opened. The page rows are real row view models, which
+    /// is what lets each one carry its own favicon as it loads.
+    /// </remarks>
+    public IReadOnlyList<GroupMenuEntryViewModel> GroupMenu
+    {
+        get
+        {
+            if (Node is not BookmarkFolder { IsSavedGroup: true } group)
+            {
+                return [];
+            }
+
+            var entries = new List<GroupMenuEntryViewModel>
+            {
+                GroupMenuEntryViewModel.Action("Open group", Owner.OpenInCommand, OpenHere),
+                GroupMenuEntryViewModel.Action("Open group in new window", Owner.OpenInCommand, OpenNewWindow),
+                GroupMenuEntryViewModel.Separator(),
+                GroupMenuEntryViewModel.Action("Rename…", Owner.BeginRenameCommand, this),
+                GroupMenuEntryViewModel.Action("Delete group", Owner.DeleteGroupCommand, this),
+            };
+
+            var pages = BookmarkTree.PagesOf(group);
+
+            if (pages.Count == 0)
+            {
+                return entries;
+            }
+
+            entries.Add(GroupMenuEntryViewModel.Separator());
+            entries.Add(GroupMenuEntryViewModel.Heading("Tabs in group"));
+
+            foreach (var page in pages)
+            {
+                var row = new BookmarkNodeViewModel(page, Owner, _favicons, isInFolder: true);
+
+                // A page opens on its own; a New Tab slot has no address of its
+                // own, so it reopens the group it belongs to rather than sitting
+                // in the list as a row that does nothing.
+                entries.Add(GroupMenuEntryViewModel.ForPage(
+                    row,
+                    Owner.OpenInCommand,
+                    page is Bookmark ? row.OpenNewTab : OpenHere));
+            }
+
+            return entries;
+        }
+    }
+
+    /// <summary>Re-reads <see cref="IsLive"/> after tabs or groups change.</summary>
+    public void RefreshIsLive()
+    {
+        OnPropertyChanged(nameof(IsLive));
+        OnPropertyChanged(nameof(LiveRingBrush));
+    }
+
+    /// <summary>How many pages a saved group would reopen, for its menu.</summary>
+    public int PageCount => Node switch
+    {
+        // New Tab slots are tabs the group will reopen, so they count toward what
+        // the menu promises.
+        BookmarkFolder { IsSavedGroup: true } savedGroup =>
+            BookmarkTree.PagesOf(savedGroup).Count,
+        BookmarkFolder folder => BookmarkTree.Descendants(folder).OfType<Bookmark>().Count(),
+        _ => 0,
+    };
+
+    public string GroupToolTip => $"{Name} · {PageCount} {(PageCount == 1 ? "tab" : "tabs")}";
+
+    /// <summary>Ordinary folders show the folder glyph; saved groups show a dot.</summary>
+    public bool ShowsFolderGlyph => IsFolder && !IsSavedGroup;
+
     /// <summary>The folder's contents, or null for a bookmark.</summary>
     public ObservableCollection<BookmarkNodeViewModel>? Children { get; }
 
@@ -101,20 +208,6 @@ public sealed partial class BookmarkNodeViewModel : ViewModelBase
     [ObservableProperty]
     private bool _isOpen;
 
-    /// <summary>
-    /// Whether a drag would land in front of this row, drawn as a marker to its
-    /// left.
-    /// </summary>
-    [ObservableProperty]
-    private bool _isDropBefore;
-
-    /// <summary>
-    /// Whether a drag would be filed into this folder, drawn by highlighting the
-    /// whole row.
-    /// </summary>
-    [ObservableProperty]
-    private bool _isDropTarget;
-
     /// <summary>The address shown as a tooltip, empty for a folder.</summary>
     public string AddressText => Node is Bookmark bookmark ? bookmark.Address.ToString() : string.Empty;
 
@@ -124,13 +217,53 @@ public sealed partial class BookmarkNodeViewModel : ViewModelBase
     /// </summary>
     public IReadOnlyList<BookmarkMoveTargetViewModel> MoveTargets => Owner.BuildMoveTargets(this);
 
+    // The open menu. A folder opens everything it holds, so its entries say how
+    // many pages that is; a single bookmark needs no count.
+    private string Suffix => IsFolder ? $" all ({PageCount})" : string.Empty;
+
+    public string OpenHereLabel => IsFolder ? $"Open{Suffix}" : "Open";
+
+    public string OpenNewTabLabel => IsFolder ? $"Open{Suffix} in new tabs" : "Open in new tab";
+
+    public string OpenNewWindowLabel => IsFolder ? $"Open{Suffix} in new window" : "Open in new window";
+
+    public string OpenPrivateLabel => IsFolder ? $"Open{Suffix} in private window" : "Open in private window";
+
+    public BookmarkOpenRequest OpenHere => new(this, BookmarkOpenTarget.CurrentTab);
+
+    public BookmarkOpenRequest OpenNewTab => new(this, BookmarkOpenTarget.NewTab);
+
+    public BookmarkOpenRequest OpenNewWindow => new(this, BookmarkOpenTarget.NewWindow);
+
+    public BookmarkOpenRequest OpenPrivate => new(this, BookmarkOpenTarget.PrivateWindow);
+
+    public BookmarkOpenRequest OpenSplit => new(this, BookmarkOpenTarget.SplitPane);
+
+    /// <summary>Split view takes one page, so only a bookmark offers it.</summary>
+    public bool ShowsSplitOption => !IsFolder && !IsSavedGroup;
+
     /// <summary>Re-reads everything this row draws from the node behind it.</summary>
     public void Refresh()
     {
         Name = Node.Name;
         OnPropertyChanged(nameof(AddressText));
+        OnPropertyChanged(nameof(IsFolder));
+        OnPropertyChanged(nameof(IsSavedGroup));
+        OnPropertyChanged(nameof(CanExpandAsFolder));
+        OnPropertyChanged(nameof(GroupBrush));
+        OnPropertyChanged(nameof(IsLive));
+        OnPropertyChanged(nameof(LiveRingBrush));
+        OnPropertyChanged(nameof(PageCount));
+        OnPropertyChanged(nameof(GroupToolTip));
+        OnPropertyChanged(nameof(ShowsFolderGlyph));
+        OnPropertyChanged(nameof(ShowsSideChevron));
+        OnPropertyChanged(nameof(OpenHereLabel));
+        OnPropertyChanged(nameof(OpenNewTabLabel));
+        OnPropertyChanged(nameof(OpenNewWindowLabel));
+        OnPropertyChanged(nameof(OpenPrivateLabel));
+        OnPropertyChanged(nameof(ShowsSplitOption));
 
-        if (Node is BookmarkFolder folder)
+        if (Node is BookmarkFolder { IsSavedGroup: false } folder)
         {
             SyncChildren(folder);
         }

@@ -63,6 +63,7 @@ internal sealed class BookmarkBarDragHandler
     private Button? _row;
     private Point _pressOrigin;
     private bool _isDragging;
+    private bool _hasDropSite;
     private IPointer? _capturedPointer;
 
     public BookmarkBarDragHandler(
@@ -84,6 +85,12 @@ internal sealed class BookmarkBarDragHandler
 
     /// <summary>Whether a drag is currently running.</summary>
     public bool IsDragging => _isDragging;
+
+    /// <summary>Whether release would currently perform a drop.</summary>
+    public bool HasDropSite => _hasDropSite;
+
+    /// <summary>Used by the bar to draw end feedback in the matching section.</summary>
+    public bool IsDraggingSavedGroup => _pressed?.IsSavedGroup == true;
 
     /// <summary>The row a drop would land in front of, while a drag is running.</summary>
     public BookmarkNodeViewModel? DropTarget { get; private set; }
@@ -165,6 +172,7 @@ internal sealed class BookmarkBarDragHandler
         var into = DropIntoFolder;
         var before = DropTarget;
         var parentRow = DropParent;
+        var hasDropSite = _hasDropSite;
 
         Reset();
 
@@ -172,6 +180,27 @@ internal sealed class BookmarkBarDragHandler
         {
             // A press that never travelled is a click, and belongs to the row's
             // own command rather than to this handler.
+            return;
+        }
+
+        // A saved group dragged clear of the bar is being taken to the tab strip,
+        // which is the gesture for opening it. Checked before the drop-site test,
+        // since leaving the bar is exactly what makes that test fail.
+        if (dragged.IsSavedGroup && !hasDropSite)
+        {
+            // The same thing clicking the chip does, so the gesture goes through
+            // the command rather than reaching past it into the shell.
+            if (LeftBarUpward(e) && bookmarks.OpenCommand.CanExecute(dragged))
+            {
+                e.Handled = true;
+                bookmarks.OpenCommand.Execute(dragged);
+            }
+
+            return;
+        }
+
+        if (!hasDropSite)
+        {
             return;
         }
 
@@ -193,6 +222,13 @@ internal sealed class BookmarkBarDragHandler
 
         bookmarks.Move(dragged.Id, parent, before?.Id);
     }
+
+    /// <summary>
+    /// Whether a release left the bar heading upwards, where the tab strip is.
+    /// Dragging a group downwards or off to the side is not an attempt to open it.
+    /// </summary>
+    private bool LeftBarUpward(PointerReleasedEventArgs e) =>
+        e.GetPosition(_root).Y < 0;
 
     /// <summary>Escape abandons the drag, leaving the row where it was.</summary>
     private void OnKeyDown(object? sender, KeyEventArgs e)
@@ -218,10 +254,12 @@ internal sealed class BookmarkBarDragHandler
     {
         var previousTarget = DropTarget;
         var previousFolder = DropIntoFolder;
+        var previousHasDropSite = _hasDropSite;
 
         DropTarget = null;
         DropIntoFolder = null;
         DropParent = null;
+        _hasDropSite = false;
 
         // An open dropdown is a separate top-level window, so a row inside one is
         // nowhere in this handler's own tree. Screen coordinates are the common
@@ -229,11 +267,29 @@ internal sealed class BookmarkBarDragHandler
         // one lying over the bar wins the rows underneath it.
         if (HitTestOpenFolders(e) is { } inPopup)
         {
+            // Saved groups are top-level objects and never enter bookmark
+            // folders, even when one happens to be open during the drag.
+            if (_pressed?.IsSavedGroup == true)
+            {
+                RaiseIfChanged(previousTarget, previousFolder, previousHasDropSite);
+                return;
+            }
+
+            _hasDropSite = true;
             Resolve(inPopup.Row, inPopup.Node, inPopup.Position, vertical: true);
             DropParent = inPopup.Owner;
-            RaiseIfChanged(previousTarget, previousFolder);
+            RaiseIfChanged(previousTarget, previousFolder, previousHasDropSite);
             return;
         }
+
+        if (position.X < 0 || position.Y < 0 ||
+            position.X > _root.Bounds.Width || position.Y > _root.Bounds.Height)
+        {
+            RaiseIfChanged(previousTarget, previousFolder, previousHasDropSite);
+            return;
+        }
+
+        _hasDropSite = true;
 
         foreach (var row in Rows())
         {
@@ -258,7 +314,7 @@ internal sealed class BookmarkBarDragHandler
             break;
         }
 
-        RaiseIfChanged(previousTarget, previousFolder);
+        RaiseIfChanged(previousTarget, previousFolder, previousHasDropSite);
     }
 
     /// <summary>
@@ -284,7 +340,7 @@ internal sealed class BookmarkBarDragHandler
         var extent = vertical ? row.Bounds.Height : row.Bounds.Width;
         var at = vertical ? position.Y : position.X;
 
-        if (node.IsFolder && at >= start + extent / 3 && at <= start + extent * 2 / 3)
+        if (CanDropInto(node) && at >= start + extent / 3 && at <= start + extent * 2 / 3)
         {
             DropIntoFolder = node;
         }
@@ -299,12 +355,24 @@ internal sealed class BookmarkBarDragHandler
         }
     }
 
+    /// <summary>
+    /// Whether the pressed row can be filed into this target. Saved groups are
+    /// maintained by their live tabs, so drag-and-drop may reorder their chips
+    /// but cannot edit their recorded membership.
+    /// </summary>
+    private bool CanDropInto(BookmarkNodeViewModel target)
+    {
+        return _pressed is { IsSavedGroup: false } && target.CanExpandAsFolder;
+    }
+
     private void RaiseIfChanged(
         BookmarkNodeViewModel? previousTarget,
-        BookmarkNodeViewModel? previousFolder)
+        BookmarkNodeViewModel? previousFolder,
+        bool previousHasDropSite)
     {
         if (!ReferenceEquals(previousTarget, DropTarget) ||
-            !ReferenceEquals(previousFolder, DropIntoFolder))
+            !ReferenceEquals(previousFolder, DropIntoFolder) ||
+            previousHasDropSite != _hasDropSite)
         {
             DropFeedbackChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -343,7 +411,7 @@ internal sealed class BookmarkBarDragHandler
 
             foreach (var row in list.GetVisualDescendants()
                          .OfType<Button>()
-                         .Where(b => b.Classes.Contains("bookmark-item")))
+                         .Where(b => b.Classes.Contains("bookmark-row")))
             {
                 if (row.DataContext is not BookmarkNodeViewModel node ||
                     ReferenceEquals(node, _pressed))
@@ -376,14 +444,14 @@ internal sealed class BookmarkBarDragHandler
             return 0;
         }
 
-        return bookmarks.BarItems.Contains(folder) ? 0 : 1 + DepthOfParent(bookmarks, folder);
+        return bookmarks.TopLevelRows.Contains(folder) ? 0 : 1 + DepthOfParent(bookmarks, folder);
     }
 
     private static int DepthOfParent(BookmarksViewModel bookmarks, BookmarkNodeViewModel folder)
     {
         var level = 0;
 
-        foreach (var root in bookmarks.BarItems)
+        foreach (var root in bookmarks.TopLevelRows)
         {
             if (Search(root, folder, 0) is { } found)
             {
@@ -460,7 +528,7 @@ internal sealed class BookmarkBarDragHandler
         _springTimer?.Stop();
 
         // Still resting on the same folder when the delay elapsed.
-        if (_isDragging && _springCandidate is { IsFolder: true } folder)
+        if (_isDragging && _springCandidate is { CanExpandAsFolder: true } folder)
         {
             folder.IsOpen = true;
         }
@@ -477,12 +545,19 @@ internal sealed class BookmarkBarDragHandler
             return [];
         }
 
+        // The bar's top level is drawn as two lists — saved groups, then the
+        // rest — so a top-level row belongs to whichever of them holds it.
+        if (bookmarks.GroupItems.Contains(node))
+        {
+            return bookmarks.GroupItems;
+        }
+
         if (bookmarks.BarItems.Contains(node))
         {
             return bookmarks.BarItems;
         }
 
-        foreach (var root in bookmarks.BarItems)
+        foreach (var root in bookmarks.TopLevelRows)
         {
             if (Find(root, node) is { } owner)
             {
@@ -547,8 +622,49 @@ internal sealed class BookmarkBarDragHandler
     private IEnumerable<Button> Rows() =>
         _root.GetVisualDescendants()
             .OfType<Button>()
-            .Where(row => row.Classes.Contains("bookmark-item"))
+            .Where(row =>
+                row.Classes.Contains("bookmark-row") &&
+                row.DataContext is BookmarkNodeViewModel node &&
+                node.IsSavedGroup == IsDraggingSavedGroup &&
+                IsInsideVisibleViewport(row))
             .OrderBy(row => row.TranslatePoint(default, _root) is { } o ? Along(o) : double.MaxValue);
+
+    private bool IsInsideVisibleViewport(Control row)
+    {
+        if (!row.IsVisible || row.Bounds.Width <= 0 || row.Bounds.Height <= 0)
+        {
+            return false;
+        }
+
+        for (Visual? ancestor = row; ancestor is not null; ancestor = ancestor.GetVisualParent())
+        {
+            if (ancestor is ScrollViewer viewport &&
+                (!Intersects(row, viewport) || !viewport.IsVisible))
+            {
+                return false;
+            }
+
+            if (ReferenceEquals(ancestor, _root))
+            {
+                break;
+            }
+        }
+
+        return Intersects(row, _root);
+    }
+
+    private static bool Intersects(Control row, Control viewport)
+    {
+        if (row.TranslatePoint(default, viewport) is not { } origin)
+        {
+            return false;
+        }
+
+        return origin.X < viewport.Bounds.Width &&
+            origin.Y < viewport.Bounds.Height &&
+            origin.X + row.Bounds.Width > 0 &&
+            origin.Y + row.Bounds.Height > 0;
+    }
 
     private void Reset()
     {
@@ -566,6 +682,7 @@ internal sealed class BookmarkBarDragHandler
         _pressed = null;
         _row = null;
         _isDragging = false;
+        _hasDropSite = false;
 
         if (DropTarget is not null || DropIntoFolder is not null)
         {
@@ -582,7 +699,7 @@ internal sealed class BookmarkBarDragHandler
     {
         for (var visual = source; visual is not null; visual = visual.GetVisualParent())
         {
-            if (visual is Button row && row.Classes.Contains("bookmark-item"))
+            if (visual is Button row && row.Classes.Contains("bookmark-row"))
             {
                 return row;
             }

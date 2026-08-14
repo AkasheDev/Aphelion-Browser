@@ -110,6 +110,19 @@
     <Setter Property="CornerRadius" Value="10" />
     <Setter Property="Padding" Value="10,3" />
   </Style>
+
+  <!-- The ring a bar chip wears while its group is open in the tab strip. It
+       sits outside the pill with a gap of bar background between, since a
+       border in the group's own colour would vanish against the pill it
+       outlines. The ring is always present and only its colour changes, so a
+       dormant chip keeps the exact footprint of a live one. Never hide it with
+       Opacity: that applies to the whole subtree and would take the pill with
+       it, leaving a blank gap on the bar. -->
+  <Style Selector="Border.chip-live-ring">
+    <Setter Property="CornerRadius" Value="13" />
+    <Setter Property="Padding" Value="2" />
+    <Setter Property="BorderThickness" Value="1.5" />
+  </Style>
   <Style Selector="TextBlock.chip-text">
     <Setter Property="FontSize" Value="11" />
     <Setter Property="FontWeight" Value="Medium" />
@@ -898,6 +911,27 @@
     <Setter Property="FontSize" Value="12" />
     <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
     <Setter Property="Margin" Value="10,8" />
+  </Style>
+
+  <!-- The scroll hint at the trailing edge of an overflowing saved-group strip.
+       Fades the cut chip into the bar rather than slicing it flat. -->
+  <Style Selector="Border.bookmark-group-fade">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Background">
+      <Setter.Value>
+        <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,0%">
+          <GradientStop Offset="0" Color="{DynamicResource SurfaceBaseFaded}" />
+          <GradientStop Offset="1" Color="{DynamicResource SurfaceBase}" />
+        </LinearGradientBrush>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- Separates the saved tab groups from the ordinary bookmarks. -->
+  <Style Selector="Border.bookmark-divider">
+    <Setter Property="Width" Value="1" />
+    <Setter Property="Margin" Value="6,6" />
+    <Setter Property="Background" Value="{DynamicResource DividerBrush}" />
   </Style>
 
   <Style Selector="Border.bookmark-folder-list">

@@ -17,6 +17,10 @@
 
       <!-- Surface ramp, lightest to deepest -->
       <Color x:Key="SurfaceBase">#FFFFFF</Color>
+      <!-- The same surface at zero alpha, for gradients that fade into the bar.
+           A gradient stop cannot carry its own opacity, so the transparent end
+           has to be stated per theme rather than derived. -->
+      <Color x:Key="SurfaceBaseFaded">#00FFFFFF</Color>
       <Color x:Key="SurfaceRaised">#F5F5FA</Color>
       <Color x:Key="SurfaceSunken">#E9E9F2</Color>
       <Color x:Key="SurfaceHover">#DEDEEB</Color>
@@ -55,6 +59,7 @@
       <Color x:Key="BrandAccent">#3FD8E4</Color>
 
       <Color x:Key="SurfaceBase">#14141C</Color>
+      <Color x:Key="SurfaceBaseFaded">#0014141C</Color>
       <Color x:Key="SurfaceRaised">#1B1B26</Color>
       <Color x:Key="SurfaceSunken">#0E0E15</Color>
       <Color x:Key="SurfaceHover">#262634</Color>

@@ -387,6 +387,7 @@ public sealed class BrowsingSession
             ActiveTab = left;
         }
 
+        DiscardEmptyGroups();
         return true;
     }
 
@@ -421,9 +422,12 @@ public sealed class BrowsingSession
     public BrowserTab? SplitOwnerOf(TabId id) =>
         _tabs.Find(t => t.SplitPartnerId == id);
 
-    public TabGroup CreateGroup(string name, GroupColor color)
+    public TabGroup CreateGroup(
+        string name,
+        GroupColor color,
+        SavedTabGroupId? savedGroupId = null)
     {
-        var group = new TabGroup(TabGroupId.New(), name, color);
+        var group = new TabGroup(TabGroupId.New(), name, color, savedGroupId);
         _groups.Add(group.Id, group);
         return group;
     }
@@ -466,6 +470,7 @@ public sealed class BrowsingSession
             _tabs.InsertRange(lastIndex + 1, block);
         }
 
+        DiscardEmptyGroups();
         return true;
     }
 

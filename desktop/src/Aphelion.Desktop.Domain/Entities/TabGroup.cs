@@ -12,14 +12,41 @@ namespace Aphelion.Desktop.Domain.Entities;
 /// </remarks>
 public sealed class TabGroup
 {
-    public TabGroup(TabGroupId id, string name, GroupColor color)
+    public TabGroup(
+        TabGroupId id,
+        string name,
+        GroupColor color,
+        SavedTabGroupId? savedGroupId = null)
     {
         Id = id;
         Color = color;
+        SavedGroupId = savedGroupId;
         Rename(name);
     }
 
     public TabGroupId Id { get; }
+
+    /// <summary>
+    /// Durable saved-group record represented by this live group, when linked.
+    /// Multiple windows may have different <see cref="Id"/> values carrying the
+    /// same saved identity.
+    /// </summary>
+    public SavedTabGroupId? SavedGroupId { get; private set; }
+
+    /// <summary>
+    /// Links a legacy live group to its durable record. The link may be assigned
+    /// once during migration, but can never be redirected to a different saved
+    /// group afterwards.
+    /// </summary>
+    public void LinkSavedGroup(SavedTabGroupId savedGroupId)
+    {
+        if (SavedGroupId is { } existing && existing != savedGroupId)
+        {
+            throw new InvalidOperationException("A tab group cannot change its saved-group identity.");
+        }
+
+        SavedGroupId = savedGroupId;
+    }
 
     public string Name { get; private set; } = string.Empty;
 

@@ -254,7 +254,10 @@
                         </MenuItem>
                         <Separator />
                         <MenuItem Header="Ungroup" Command="{Binding UngroupCommand}" />
+                        <!-- Close puts the group away, leaving its row on the
+                             bookmark bar to reopen from; delete discards both. -->
                         <MenuItem Header="Close group" Command="{Binding CloseGroupCommand}" />
+                        <MenuItem Header="Delete group" Command="{Binding DeleteGroupCommand}" />
                       </ContextMenu>
                     </Button.ContextMenu>
 
@@ -352,11 +355,12 @@
          the choice in; until then a toggle that forgets itself every launch is
          worse than no toggle. -->
     <ContentControl DockPanel.Dock="Top"
-                    Content="{Binding Shell.Bookmarks}"
+                    Content="{Binding Shell}"
                     IsVisible="{Binding Shell.IsBookmarkBarVisible}">
       <ContentControl.ContentTemplate>
-        <DataTemplate DataType="vm:BookmarksViewModel">
-          <views:BookmarkBarView />
+        <DataTemplate DataType="vm:ShellViewModel">
+          <views:BookmarkBarView Shell="{Binding}"
+                                 Bookmarks="{Binding Bookmarks}" />
         </DataTemplate>
       </ContentControl.ContentTemplate>
     </ContentControl>

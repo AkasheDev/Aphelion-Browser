@@ -62,6 +62,25 @@ public sealed class Bookmark : BookmarkNode
     }
 }
 
+/// <summary>A New Tab recorded inside a saved tab group.</summary>
+/// <remarks>
+/// The New Tab page is a surface this application draws rather than somewhere
+/// the browser navigates, so it has no address a <see cref="Bookmark"/> could
+/// hold — and <see cref="PageAddress"/> deliberately admits only http and https,
+/// so inventing an internal scheme for it is not an option. It still occupies a
+/// slot in the group, and without one a group reopened smaller than it was
+/// closed. Being its own type keeps it clear of the <c>OfType&lt;Bookmark&gt;</c>
+/// filters that drive the bar, the star, and folder contents: a New Tab slot is
+/// only ever meaningful inside the group holding it.
+/// </remarks>
+public sealed class BlankPage : BookmarkNode
+{
+    public BlankPage(BookmarkNodeId id, string name = "New tab")
+        : base(id, name)
+    {
+    }
+}
+
 /// <summary>A named container of bookmarks and further folders.</summary>
 /// <remarks>
 /// Structural changes go through <see cref="BookmarkTree"/> rather than being
@@ -73,9 +92,51 @@ public sealed class BookmarkFolder : BookmarkNode
 {
     private readonly List<BookmarkNode> _children = [];
 
-    public BookmarkFolder(BookmarkNodeId id, string name)
+    public BookmarkFolder(
+        BookmarkNodeId id,
+        string name,
+        GroupColor? groupColor = null,
+        SavedTabGroupId? savedGroupId = null)
         : base(id, name)
     {
+        GroupColor = groupColor;
+        SavedGroupId = savedGroupId;
+    }
+
+    /// <summary>
+    /// Set when this folder is a saved tab group rather than an ordinary folder,
+    /// and holds the colour that group is drawn in.
+    /// </summary>
+    /// <remarks>
+    /// A saved group reuses a folder's ordered children for persistence, but
+    /// <see cref="BookmarkTree"/> keeps it as a flat top-level record. Its colour
+    /// and durable id express that its pages reopen together as a tab group.
+    /// </remarks>
+    public GroupColor? GroupColor { get; private set; }
+
+    /// <summary>
+    /// Durable identity shared by this record and any live tab-group occurrence
+    /// reopened from it. Null on ordinary folders and legacy saved groups that
+    /// have not yet been upgraded.
+    /// </summary>
+    public SavedTabGroupId? SavedGroupId { get; private set; }
+
+    public bool IsSavedGroup => GroupColor is not null || SavedGroupId is not null;
+
+    public void MarkAsGroup(GroupColor color, SavedTabGroupId? savedGroupId = null)
+    {
+        GroupColor = color;
+
+        if (savedGroupId is not null)
+        {
+            SavedGroupId = savedGroupId;
+        }
+    }
+
+    public void ClearGroup()
+    {
+        GroupColor = null;
+        SavedGroupId = null;
     }
 
     public IReadOnlyList<BookmarkNode> Children => _children;

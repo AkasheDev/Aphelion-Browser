@@ -87,7 +87,8 @@ internal sealed class WindowManager(IServiceProvider services)
             // user chose to keep, not a record of where they have been, so they
             // are not what private mode is protecting — the same call Chrome
             // makes. Browsing history and cookies remain untouched by them.
-            bookmarks: _services.GetService<BookmarksViewModel>());
+            bookmarks: _services.GetService<BookmarksViewModel>(),
+            isPrivateWindow: true);
 
         var window = new MainWindow { DataContext = new MainWindowViewModel(shell), Title = "Private Mode — Aphelion" };
         Register(window);
@@ -114,6 +115,27 @@ internal sealed class WindowManager(IServiceProvider services)
 
         _windows.Add(window);
         window.Closed += (_, _) => _windows.Remove(window);
+    }
+
+    public void ActivateShell(ShellViewModel shell)
+    {
+        ArgumentNullException.ThrowIfNull(shell);
+
+        var window = _windows.FirstOrDefault(candidate =>
+            candidate.DataContext is MainWindowViewModel { Shell: { } candidateShell } &&
+            ReferenceEquals(candidateShell, shell));
+
+        if (window is null)
+        {
+            return;
+        }
+
+        if (!window.IsVisible)
+        {
+            window.Show();
+        }
+
+        window.Activate();
     }
 
     /// <summary>

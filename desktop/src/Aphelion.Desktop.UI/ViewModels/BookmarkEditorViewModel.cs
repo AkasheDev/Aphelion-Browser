@@ -120,6 +120,11 @@ public sealed partial class BookmarkEditorViewModel : ViewModelBase
     {
         foreach (var folder in parent.Children.OfType<BookmarkFolder>())
         {
+            if (folder.IsSavedGroup)
+            {
+                continue;
+            }
+
             Folders.Add(new BookmarkFolderRowViewModel(folder, depth));
             AddFolderRows(folder, depth + 1);
         }

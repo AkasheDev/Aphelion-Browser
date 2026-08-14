@@ -1,10 +1,102 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+             xmlns:imaging="using:Avalonia.Media.Imaging"
              x:Class="Aphelion.Desktop.UI.Views.BookmarkBarView"
-             x:DataType="vm:BookmarksViewModel">
+             x:DataType="vm:ShellViewModel">
+
+  <UserControl.DataTemplates>
+    <!-- Lets a menu item's Icon be handed the favicon bitmap itself; the
+         presenter finds this and draws it. -->
+    <DataTemplate DataType="imaging:Bitmap">
+      <Image Source="{Binding}" Width="16" Height="16" />
+    </DataTemplate>
+  </UserControl.DataTemplates>
 
   <UserControl.Resources>
+
+    <!-- Saved tab groups are the same object visually in both places: the exact
+         chip/pill/text composition used by the live group header in the tab
+         strip. Only the command differs — here it restores or focuses the group. -->
+    <DataTemplate x:Key="SavedGroupChipTemplate" x:DataType="vm:BookmarkNodeViewModel">
+      <Panel>
+        <Border Classes="bookmark-drop-marker"
+                HorizontalAlignment="Left"
+                IsVisible="False"
+                ZIndex="5" />
+
+        <Button Classes="chip bookmark-group-chip bookmark-row"
+                Command="{Binding Owner.OpenInCommand}"
+                CommandParameter="{Binding OpenHere}"
+                ToolTip.Tip="{Binding GroupToolTip}"
+                PointerEntered="OnRowPointerEntered">
+          <Button.ContextMenu>
+            <!-- Bound as one list rather than declared row by row: the group's
+                 own pages are listed below its actions, and a menu cannot mix
+                 markup items with bound ones. -->
+            <ContextMenu ItemsSource="{Binding GroupMenu}">
+              <ContextMenu.ItemContainerTheme>
+                <!-- BasedOn matters: a ControlTheme without it replaces the whole
+                     theme, template included, and the items render as nothing. -->
+                <ControlTheme TargetType="MenuItem"
+                              x:DataType="vm:GroupMenuEntryViewModel"
+                              BasedOn="{StaticResource {x:Type MenuItem}}">
+                  <Setter Property="Header" Value="{Binding Label}" />
+                  <Setter Property="Command" Value="{Binding Command}" />
+                  <Setter Property="CommandParameter" Value="{Binding CommandParameter}" />
+                  <Setter Property="IsEnabled" Value="{Binding IsEnabled}" />
+                  <!-- The bitmap goes in raw and a DataTemplate turns it into an
+                       Image. Handing Icon a <Template> instead leaves the
+                       presenter holding the template object rather than a
+                       picture, which is why no icon appeared. -->
+                  <Setter Property="Icon" Value="{Binding Page.Favicon}" />
+                  <!-- A listed page is a bookmark like any other, so it carries
+                       the same menu the bar gives one. Bound to the page's own
+                       row view model, which is what those entries act on. -->
+                  <Setter Property="ContextMenu">
+                    <Setter.Value>
+                      <Template>
+                        <ContextMenu x:DataType="vm:GroupMenuEntryViewModel"
+                                     IsVisible="{Binding Page, Converter={x:Static ObjectConverters.IsNotNull}}">
+                          <MenuItem Header="Open in new tab"
+                                    Command="{Binding Page.Owner.OpenInCommand}"
+                                    CommandParameter="{Binding Page.OpenNewTab}" />
+                          <MenuItem Header="Open in new window"
+                                    Command="{Binding Page.Owner.OpenInCommand}"
+                                    CommandParameter="{Binding Page.OpenNewWindow}" />
+                          <MenuItem Header="Open in private window"
+                                    Command="{Binding Page.Owner.OpenInCommand}"
+                                    CommandParameter="{Binding Page.OpenPrivate}" />
+                          <MenuItem Header="Open in split view"
+                                    Command="{Binding Page.Owner.OpenInCommand}"
+                                    CommandParameter="{Binding Page.OpenSplit}" />
+                          <Separator />
+                          <MenuItem Header="Copy"
+                                    Command="{Binding Page.Owner.CopyCommand}"
+                                    CommandParameter="{Binding Page}" />
+                          <MenuItem Header="Delete"
+                                    Command="{Binding Page.Owner.DeleteCommand}"
+                                    CommandParameter="{Binding Page}" />
+                        </ContextMenu>
+                      </Template>
+                    </Setter.Value>
+                  </Setter>
+                </ControlTheme>
+              </ContextMenu.ItemContainerTheme>
+            </ContextMenu>
+          </Button.ContextMenu>
+
+          <Border Classes="chip-live-ring"
+                  BorderBrush="{Binding LiveRingBrush}">
+            <Border Classes="chip-pill" Background="{Binding GroupBrush}">
+              <TextBlock Classes="chip-text"
+                         Text="{Binding Name}" />
+            </Border>
+          </Border>
+        </Button>
+      </Panel>
+    </DataTemplate>
+
     <!--
       One template for a row wherever it appears: along the bar and inside a
       folder's dropdown. A folder shows a folder glyph and a chevron, a bookmark
@@ -20,32 +112,73 @@
         <Border Classes="bookmark-drop-marker"
                 Classes.horizontal="{Binding IsInFolder}"
                 HorizontalAlignment="Left"
-                IsVisible="{Binding IsDropBefore}"
+                IsVisible="False"
                 ZIndex="5" />
 
         <Panel Margin="{Binding RowInset}">
           <Button Name="RowButton"
-                  Classes="bookmark-item"
+                  Classes="bookmark-item bookmark-row"
                   Classes.open="{Binding IsOpen}"
-                  Classes.drop-into="{Binding IsDropTarget}"
                   Command="{Binding Owner.OpenCommand}"
                   CommandParameter="{Binding}"
                   ToolTip.Tip="{Binding AddressText}"
                   PointerEntered="OnRowPointerEntered">
             <Button.ContextMenu>
               <ContextMenu>
-                <MenuItem Header="Open"
+                <!-- A saved group is reopened rather than browsed, so its
+                     entries replace the folder ones rather than adding to them.
+                     One menu with each half hidden in turn, since a control
+                     carries only one context menu. -->
+                <MenuItem Header="Open group"
+                          IsVisible="{Binding IsSavedGroup}"
                           Command="{Binding Owner.OpenCommand}"
                           CommandParameter="{Binding}" />
-                <Separator />
+                <MenuItem Header="Open group in new window"
+                          IsVisible="{Binding IsSavedGroup}"
+                          Command="{Binding Owner.OpenInCommand}"
+                          CommandParameter="{Binding OpenNewWindow}" />
+                <Separator IsVisible="{Binding IsSavedGroup}" />
                 <MenuItem Header="Rename…"
+                          IsVisible="{Binding IsSavedGroup}"
+                          Command="{Binding Owner.BeginRenameCommand}"
+                          CommandParameter="{Binding}" />
+                <Separator IsVisible="{Binding IsSavedGroup}" />
+                <MenuItem Header="Delete group"
+                          IsVisible="{Binding IsSavedGroup}"
+                          Command="{Binding Owner.DeleteGroupCommand}"
+                          CommandParameter="{Binding}" />
+
+                <!-- Wording follows what the row is: a page opens, a folder
+                     opens everything in it, and the count says how much that
+                     is before the click rather than after. -->
+                <MenuItem IsVisible="{Binding !IsSavedGroup}"
+                          Header="{Binding OpenHereLabel}"
+                          Command="{Binding Owner.OpenInCommand}"
+                          CommandParameter="{Binding OpenHere}" />
+                <MenuItem IsVisible="{Binding !IsSavedGroup}" Header="{Binding OpenNewTabLabel}"
+                          Command="{Binding Owner.OpenInCommand}"
+                          CommandParameter="{Binding OpenNewTab}" />
+                <MenuItem IsVisible="{Binding !IsSavedGroup}" Header="{Binding OpenNewWindowLabel}"
+                          Command="{Binding Owner.OpenInCommand}"
+                          CommandParameter="{Binding OpenNewWindow}" />
+                <MenuItem IsVisible="{Binding !IsSavedGroup}" Header="{Binding OpenPrivateLabel}"
+                          Command="{Binding Owner.OpenInCommand}"
+                          CommandParameter="{Binding OpenPrivate}" />
+                <MenuItem Header="Open in split view"
+                          IsVisible="{Binding ShowsSplitOption}"
+                          Command="{Binding Owner.OpenInCommand}"
+                          CommandParameter="{Binding OpenSplit}" />
+
+                <Separator IsVisible="{Binding !IsSavedGroup}" />
+
+                <MenuItem IsVisible="{Binding !IsSavedGroup}" Header="Rename…"
                           Command="{Binding Owner.BeginRenameCommand}"
                           CommandParameter="{Binding}" />
                 <!-- Filing without dragging, for anyone who would rather pick a
                      destination than drag to one. Each entry carries both the
                      row being moved and where it is going, so the menu item
                      needs no binding back up to its owner. -->
-                <MenuItem Header="Move to" ItemsSource="{Binding MoveTargets}">
+                <MenuItem IsVisible="{Binding !IsSavedGroup}" Header="Move to" ItemsSource="{Binding MoveTargets}">
                   <MenuItem.ItemTemplate>
                     <DataTemplate x:DataType="vm:BookmarkMoveTargetViewModel">
                       <TextBlock Text="{Binding Label}" />
@@ -58,16 +191,47 @@
                     </ControlTheme>
                   </MenuItem.ItemContainerTheme>
                 </MenuItem>
-                <MenuItem Header="Delete"
+
+                <Separator IsVisible="{Binding !IsSavedGroup}" />
+
+                <MenuItem IsVisible="{Binding !IsSavedGroup}" Header="Cut"
+                          Command="{Binding Owner.CutCommand}"
+                          CommandParameter="{Binding}" />
+                <MenuItem IsVisible="{Binding !IsSavedGroup}" Header="Copy"
+                          Command="{Binding Owner.CopyCommand}"
+                          CommandParameter="{Binding}" />
+                <MenuItem IsVisible="{Binding !IsSavedGroup}" Header="Paste"
+                          IsEnabled="{Binding Owner.CanPaste}"
+                          Command="{Binding Owner.PasteCommand}"
+                          CommandParameter="{Binding}" />
+
+                <Separator IsVisible="{Binding !IsSavedGroup}" />
+
+                <MenuItem IsVisible="{Binding !IsSavedGroup}" Header="Delete"
                           Command="{Binding Owner.DeleteCommand}"
+                          CommandParameter="{Binding}" />
+
+                <Separator IsVisible="{Binding !IsSavedGroup}" />
+
+                <MenuItem IsVisible="{Binding !IsSavedGroup}" Header="Bookmark this page"
+                          Command="{Binding Owner.AddPageHereCommand}"
+                          CommandParameter="{Binding}" />
+                <MenuItem IsVisible="{Binding !IsSavedGroup}" Header="Add folder…"
+                          Command="{Binding Owner.CreateFolderInCommand}"
                           CommandParameter="{Binding}" />
               </ContextMenu>
             </Button.ContextMenu>
             <Grid ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="7">
 
+              <!-- A saved tab group wears its group's colour as a dot, the same
+                   identity the live group carries in the tab strip. -->
+              <Ellipse Grid.Column="0" Width="9" Height="9" VerticalAlignment="Center"
+                       IsVisible="{Binding IsSavedGroup}"
+                       Fill="{Binding GroupBrush}" />
+
               <Path Grid.Column="0" Classes="glyph" Width="13" Height="13" Stretch="Uniform"
                     VerticalAlignment="Center"
-                    IsVisible="{Binding IsFolder}"
+                    IsVisible="{Binding ShowsFolderGlyph}"
                     Data="M1,3 H5.5 L7,4.8 H12 V11 H1 Z" />
 
               <Panel Grid.Column="0" Width="14" Height="14" VerticalAlignment="Center"
@@ -101,10 +265,12 @@
                anything Avalonia draws on top of it; a Popup is its own window at
                the OS level and composites above it. Nested folders open to the
                side, as menus do, rather than below. -->
-          <Popup IsOpen="{Binding IsOpen}"
-                 PlacementTarget="{Binding ElementName=RowButton}"
+          <Popup PlacementTarget="{Binding ElementName=RowButton}"
                  Placement="{Binding FolderPlacement}"
                  IsLightDismissEnabled="True"
+                 AttachedToLogicalTree="OnFolderPopupAttached"
+                 DetachedFromLogicalTree="OnFolderPopupDetached"
+                 Opened="OnFolderPopupOpened"
                  Closed="OnFolderPopupClosed">
             <Border Classes="panel bookmark-folder-panel">
               <!-- The same action as on the bar, scoped to this folder. -->
@@ -132,36 +298,100 @@
     </DataTemplate>
   </UserControl.Resources>
 
-  <Border Classes="bookmark-bar">
+  <Border Name="BarRoot"
+          x:DataType="vm:BookmarksViewModel"
+          Classes="bookmark-bar">
     <!-- Right-clicking the bar itself, rather than any row on it, is where
          adding a folder belongs: it is an action on the bar, not on a bookmark
          that happened to be under the pointer. -->
     <Border.ContextMenu>
       <ContextMenu>
-        <MenuItem Header="Add folder" Command="{Binding CreateFolderCommand}" />
+        <MenuItem Header="Bookmark this page" Command="{Binding AddPageHereCommand}" />
+        <MenuItem Header="Add folder…" Command="{Binding CreateFolderCommand}" />
+        <Separator />
+        <MenuItem Header="Paste"
+                  IsEnabled="{Binding CanPaste}"
+                  Command="{Binding PasteCommand}" />
       </ContextMenu>
     </Border.ContextMenu>
     <Panel>
 
-      <!-- Standing in for the rows until there are some, so the bar explains
-           itself instead of showing an unexplained empty strip. -->
-      <TextBlock Classes="bookmark-empty"
-                 Text="Bookmark a page with the star, or press Ctrl+D."
-                 VerticalAlignment="Center"
-                 IsVisible="{Binding !BarItems.Count}" />
+      <Grid Name="RowsHost"
+            ColumnDefinitions="Auto,Auto,Auto,Auto,*"
+            SizeChanged="OnRowsHostSizeChanged">
 
-      <ScrollViewer HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
-        <ItemsControl Name="BarItemsHost" ItemsSource="{Binding BarItems}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <StackPanel Orientation="Horizontal" Spacing="1" />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <StaticResource ResourceKey="BookmarkRowTemplate" />
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </ScrollViewer>
+        <!-- Saved groups first, then a button to start one, then a divider, then
+             the ordinary bookmarks — the arrangement Chrome uses, which keeps
+             the two kinds from interleaving as things are added. -->
+        <Panel Grid.Column="0">
+          <ScrollViewer Name="GroupItemsScroller"
+                        HorizontalScrollBarVisibility="Hidden"
+                        VerticalScrollBarVisibility="Disabled"
+                        PointerWheelChanged="OnGroupItemsPointerWheelChanged"
+                        ScrollChanged="OnGroupItemsScrollChanged">
+            <ItemsControl Name="GroupItemsHost" ItemsSource="{Binding GroupItems}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="1" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <StaticResource ResourceKey="SavedGroupChipTemplate" />
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+
+          <!-- The strip is capped, so with enough groups a chip is cut at the
+               edge. Fading that edge into the bar says "this scrolls" instead of
+               leaving what looks like a half-drawn chip; the wheel already moves
+               it. Shown only while there is actually more to reach. -->
+          <Border Name="GroupStripFade"
+                  Classes="bookmark-group-fade"
+                  HorizontalAlignment="Right"
+                  IsHitTestVisible="False"
+                  IsVisible="False" />
+        </Panel>
+
+        <!-- Moved here from the toolbar: grouping tabs belongs beside the saved
+             groups it produces, not among the navigation controls. -->
+        <Button Grid.Column="2"
+                Classes="bookmark-item"
+                ToolTip.Tip="Group or ungroup this tab"
+                Command="{Binding CreateGroupCommand}">
+          <!-- Four panes in a grid, the glyph a browser uses for grouping. The
+               panel-and-divider one this used to draw is the split-view icon, so
+               the two buttons read as the same control in different places. -->
+          <Path Classes="glyph" Width="13" Height="13" Stretch="Uniform"
+                Data="M2,2 H5.5 V5.5 H2 Z M7.5,2 H11 V5.5 H7.5 Z M2,7.5 H5.5 V11 H2 Z M7.5,7.5 H11 V11 H7.5 Z" />
+        </Button>
+
+        <Border Grid.Column="3" Classes="bookmark-divider"
+                IsVisible="{Binding ShowsDivider}" />
+
+        <!-- The empty hint owns only the ordinary-bookmark column, so it cannot
+             sit beneath the always-present group action button. -->
+        <TextBlock Grid.Column="4"
+                   Classes="bookmark-empty"
+                   Text="Bookmark a page with the star, or press Ctrl+D."
+                   VerticalAlignment="Center"
+                   IsVisible="{Binding !HasAnyItems}" />
+
+        <ScrollViewer Grid.Column="4"
+                      IsVisible="{Binding HasBarItems}"
+                      HorizontalScrollBarVisibility="Hidden"
+                      VerticalScrollBarVisibility="Disabled">
+          <ItemsControl Name="BarItemsHost" ItemsSource="{Binding BarItems}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="1" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <StaticResource ResourceKey="BookmarkRowTemplate" />
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Grid>
 
       <!-- The marker for a drop past the last row, which no row can draw. -->
       <Border Classes="bookmark-drop-marker"
@@ -171,11 +401,12 @@
 
       <!-- Renaming. Anchored to the bar rather than to the row it was started
            from, because that row can be reconciled away underneath the popup. -->
-      <Popup IsOpen="{Binding IsRenaming}"
+      <Popup Name="RenamePopup"
              PlacementTarget="{Binding $parent[UserControl]}"
              Placement="Bottom"
              HorizontalOffset="8"
              IsLightDismissEnabled="True"
+             Opened="OnRenamePopupOpened"
              Closed="OnRenamePopupClosed">
         <Border Classes="panel" Width="260" Padding="12">
           <StackPanel Spacing="10">

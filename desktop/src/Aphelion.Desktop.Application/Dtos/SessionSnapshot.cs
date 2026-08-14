@@ -6,7 +6,13 @@ public sealed record SessionTabSnapshot(
     string? GroupName,
     string? GroupColor,
     bool GroupCollapsed,
-    int? SplitPartnerIndex = null);
+    int? SplitPartnerIndex = null,
+    /// <summary>
+    /// Durable identity of the saved group this live tab group represents.
+    /// Optional for compatibility with session files written before that link
+    /// was persisted.
+    /// </summary>
+    string? SavedGroupId = null);
 
 /// <summary>
 /// The open-tab state persisted between runs so the browser reopens where the

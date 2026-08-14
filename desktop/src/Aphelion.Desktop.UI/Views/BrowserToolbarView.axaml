@@ -15,7 +15,7 @@
   <Grid Background="{DynamicResource SurfaceBaseBrush}"
         DataContext="{Binding}">
 
-    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto"
+    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto"
           Margin="6,6,10,6"
           ColumnSpacing="2">
 
@@ -47,13 +47,9 @@
       <Path Classes="glyph" Data="M1,1 H12 V12 H1 Z M6.5,1 V12" />
       </Button>
 
-      <Button Grid.Column="4" Classes="icon" ToolTip.Tip="Group or ungroup this tab"
-            Command="{Binding Shell.GroupActiveTabCommand}">
-      <Path Classes="glyph" Data="M0.5,2.5 H12.5 V10.5 H0.5 Z M4.5,2.5 V10.5" />
-      </Button>
 
       <TextBox Name="AddressBox"
-               Grid.Column="5"
+               Grid.Column="4"
                Classes="address"
                Margin="8,0,0,0"
                Text="{Binding Shell.FocusedBrowser.AddressText}"
@@ -66,7 +62,7 @@
 
       <!-- Filled once the open page is saved, hollow otherwise, and the anchor
            the add/edit form hangs from. -->
-      <Button Grid.Column="6"
+      <Button Grid.Column="5"
               Name="BookmarkStar"
               Classes="icon"
               Classes.bookmarked="{Binding Shell.IsActivePageBookmarked}"

@@ -34,6 +34,19 @@ public partial class MainWindow : Window
         AddHandler(PointerReleasedEvent, OnPointerReleasedTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         AddHandler(KeyDownEvent, OnNavigationShortcutTunnel, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
 
+        // The bookmark bar is one view model shared by every window, so a click
+        // on it carries no indication of which window it came from. Each shell
+        // reports whether its window is in front, and the bar acts on that one.
+        Activated += (_, _) => SetWindowActive(true);
+        Deactivated += (_, _) => SetWindowActive(false);
+        Closed += (_, _) =>
+        {
+            if (Shell is { } shell)
+            {
+                shell.ReleaseBookmarks();
+            }
+        };
+
         // WebView2 is a native child window on Windows and owns Ctrl+wheel. Its
         // real factor is observed by the browser-engine adapter instead; adding
         // a second Avalonia handler here makes the level depend on whether the
@@ -49,6 +62,19 @@ public partial class MainWindow : Window
     }
 
     private ShellViewModel? Shell => (DataContext as MainWindowViewModel)?.Shell;
+
+    private void SetWindowActive(bool active)
+    {
+        if (Shell is { } shell)
+        {
+            shell.IsWindowActive = active;
+
+            if (active)
+            {
+                shell.Bookmarks?.MarkActive(shell);
+            }
+        }
+    }
 
     protected override void OnDataContextChanged(EventArgs e)
     {
@@ -77,6 +103,10 @@ public partial class MainWindow : Window
         UpdateOverflowLayout();
         UpdateZoomFeedbackAnchor();
         UpdateBrowserPool();
+
+        // The window is generally activated before its DataContext arrives, so
+        // that first Activated had no shell to tell. Catch up here.
+        SetWindowActive(IsActive);
     }
 
     private void OnShellPropertyChanged(object? sender, PropertyChangedEventArgs e)

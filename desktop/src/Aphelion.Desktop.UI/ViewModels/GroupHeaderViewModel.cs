@@ -22,6 +22,7 @@ public sealed partial class GroupHeaderViewModel : ViewModelBase
     private readonly Action _toggle;
     private readonly Action _ungroup;
     private readonly Action _close;
+    private readonly Action? _delete;
 
     /// <summary>Guards the two-way name binding against echoing a refresh back as a rename.</summary>
     private bool _refreshing;
@@ -32,7 +33,8 @@ public sealed partial class GroupHeaderViewModel : ViewModelBase
         Action<GroupColor> recolor,
         Action toggle,
         Action ungroup,
-        Action close)
+        Action close,
+        Action? delete = null)
     {
         Id = id;
         _rename = rename ?? throw new ArgumentNullException(nameof(rename));
@@ -40,6 +42,7 @@ public sealed partial class GroupHeaderViewModel : ViewModelBase
         _toggle = toggle ?? throw new ArgumentNullException(nameof(toggle));
         _ungroup = ungroup ?? throw new ArgumentNullException(nameof(ungroup));
         _close = close ?? throw new ArgumentNullException(nameof(close));
+        _delete = delete;
     }
 
     public TabGroupId Id { get; }
@@ -70,8 +73,16 @@ public sealed partial class GroupHeaderViewModel : ViewModelBase
     [RelayCommand]
     private void Ungroup() => _ungroup();
 
+    /// <summary>
+    /// Closes the group's tabs, leaving its row on the bookmark bar so it can be
+    /// reopened. The counterpart to <see cref="DeleteGroup"/>, which discards it.
+    /// </summary>
     [RelayCommand]
     private void CloseGroup() => _close();
+
+    /// <summary>Closes the group's tabs and removes its saved row for good.</summary>
+    [RelayCommand]
+    private void DeleteGroup() => _delete?.Invoke();
 
     public void Refresh(TabGroup group)
     {

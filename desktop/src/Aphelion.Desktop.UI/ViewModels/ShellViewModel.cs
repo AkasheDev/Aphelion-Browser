@@ -36,6 +36,13 @@ public sealed partial class ShellViewModel : ViewModelBase
     private readonly HashSet<TabGroupId> _transitioningGroups = [];
 
     /// <summary>
+    /// Groups that lost their last tab to ordinary tab closes, rather than being
+    /// closed or deleted as a group. Their rows on the bar go with them: nothing
+    /// was put away on purpose, so there is nothing to keep.
+    /// </summary>
+    private readonly HashSet<TabGroupId> _emptiedGroups = [];
+
+    /// <summary>
     /// How much room the strip has, reported by the panel as it lays out. What
     /// does not fit spills into the overflow panel.
     /// </summary>
@@ -50,7 +57,8 @@ public sealed partial class ShellViewModel : ViewModelBase
         ISessionStore? sessionStore = null,
         IFaviconLoader? favicons = null,
         ITabSoundPlayer? tabSounds = null,
-        BookmarksViewModel? bookmarks = null)
+        BookmarksViewModel? bookmarks = null,
+        bool isPrivateWindow = false)
     {
         _browserFactory = browserFactory ?? throw new ArgumentNullException(nameof(browserFactory));
         WindowManager = windowManager;
@@ -58,13 +66,18 @@ public sealed partial class ShellViewModel : ViewModelBase
         _favicons = favicons;
         _tabSounds = tabSounds;
         Bookmarks = bookmarks;
+        IsPrivateWindow = isPrivateWindow;
 
         if (Bookmarks is not null)
         {
-            // The bar navigates the window it was clicked in, so the shell — not
-            // the profile-wide bookmark view model — supplies the destination.
-            Bookmarks.Navigate = address => ActiveBrowser?.NavigateTo(address);
-            Bookmarks.BookmarksChanged += (_, _) => OnPropertyChanged(nameof(IsActivePageBookmarked));
+            // The bookmark view model is one per profile, shared by every window,
+            // so it cannot hold a callback pointing at any single shell: each new
+            // window would overwrite the last, and clicking the bar would act on
+            // whichever window happened to open most recently rather than the one
+            // in front of the user. Instead every shell registers itself, and the
+            // bar asks which one is currently in front — see BookmarksViewModel.
+            Bookmarks.Register(this);
+            Bookmarks.BookmarksChanged += OnBookmarksChanged;
         }
 
         Overflow = new TabListViewModel(
@@ -110,6 +123,40 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// only in tests and previews, which construct a shell without them.
     /// </summary>
     public BookmarksViewModel? Bookmarks { get; }
+
+    /// <summary>
+    /// Private windows may read explicit bookmarks, but their live tab groups
+    /// must never leak browsing activity into persistent saved-group records.
+    /// </summary>
+    public bool IsPrivateWindow { get; }
+
+    /// <summary>
+    /// Whether this shell's window is the one in front. The shared bookmark bar
+    /// uses it to tell which window a click on it belongs to.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isWindowActive;
+
+    /// <summary>The page on screen, for the bar's "Bookmark this page".</summary>
+    public BookmarkPageCandidate? CurrentPageCandidate() =>
+        ActiveBrowser is { Address: { } address } browser
+            ? new BookmarkPageCandidate(browser.PageTitle, address, browser.FaviconAddress)
+            : null;
+
+    private void OnBookmarksChanged(object? sender, EventArgs e) =>
+        OnPropertyChanged(nameof(IsActivePageBookmarked));
+
+    /// <summary>Releases profile-wide bookmark subscriptions when this window closes.</summary>
+    public void ReleaseBookmarks()
+    {
+        if (Bookmarks is null)
+        {
+            return;
+        }
+
+        Bookmarks.BookmarksChanged -= OnBookmarksChanged;
+        Bookmarks.Unregister(this);
+    }
 
     /// <summary>
     /// Whether the bookmark bar is showing. On by default and left that way:
@@ -175,6 +222,454 @@ public sealed partial class ShellViewModel : ViewModelBase
 
     [RelayCommand]
     private void CloseBookmarkEditor() => BookmarkEditor = null;
+
+    /// <summary>
+    /// Keeps the bookmark bar's saved groups in step with the live ones: a group
+    /// appears there as soon as it exists, follows its name, colour and pages,
+    /// and stays after its tabs are closed.
+    /// </summary>
+    /// <remarks>
+    /// Mirrored rather than saved on demand. A tab group is a working set the
+    /// user has already assembled deliberately; requiring a second, explicit
+    /// save before closing it is the step everyone forgets, and forgetting it
+    /// loses the set. Deleting the row on the bar is what discards it — closing
+    /// the tabs only puts it away.
+    ///
+    /// The link runs one way, from session to bar. Edits made on the bar are not
+    /// pushed back into the live group: the folder is a record of the group, and
+    /// a record that rewrites what it describes would be surprising.
+    /// </remarks>
+    private void SyncSavedGroups()
+    {
+        if (Bookmarks is null || _isReopeningGroup)
+        {
+            return;
+        }
+
+        if (IsPrivateWindow)
+        {
+            foreach (var id in _emptiedGroups)
+            {
+                Bookmarks.DiscardGroup(this, id.ToString(), removeSavedRowWhenUnlinked: false);
+            }
+
+            _emptiedGroups.Clear();
+            return;
+        }
+
+        foreach (var group in _session.Groups)
+        {
+            MirrorSavedGroup(group);
+        }
+
+        // Deliberately not removing rows for groups that have left the session.
+        // Closing a group's tabs is how it is put away, and its row on the bar is
+        // what it is put away into; deleting is a separate act, and the only one
+        // that discards the record — see DeleteGroup.
+        //
+        // The exception is a group whose last tab was closed one at a time rather
+        // than through Close group. That empties the group without any intent to
+        // keep it, so the row goes with it.
+        foreach (var id in _emptiedGroups)
+        {
+            Bookmarks.DiscardGroup(this, id.ToString());
+        }
+
+        _emptiedGroups.Clear();
+    }
+
+    /// <summary>Captures one live group into its durable bookmark-bar record.</summary>
+    private void MirrorSavedGroup(TabGroup group, bool replaceWithEmpty = false)
+    {
+        if (Bookmarks is null || IsPrivateWindow)
+        {
+            return;
+        }
+
+        var wasLegacyGroup = group.SavedGroupId is null;
+        var proposedSavedGroupId = group.SavedGroupId ?? SavedTabGroupId.New();
+
+        // A blank tab is recorded as a New Tab slot rather than dropped: it has
+        // no address, but it is still one of the group's tabs, and skipping it
+        // meant a group came back a tab short of how it was closed.
+        var pages = _session.TabsInGroup(group.Id)
+            .Select(tab => new BookmarkPageCandidate(
+                tab.DisplayTitle,
+                tab.Address,
+                tab.FaviconAddress,
+                HasResolvedTitle: !string.IsNullOrWhiteSpace(tab.Title),
+                HasResolvedFavicon: tab.FaviconAddress is not null))
+            .ToList();
+
+        var adoptedSavedGroupId = Bookmarks.MirrorGroup(
+            this,
+            group.Id.ToString(),
+            proposedSavedGroupId,
+            group.Name,
+            group.Color,
+            pages,
+            replaceWithEmpty,
+            canAdoptIdentifiedExactMatch: wasLegacyGroup);
+
+        group.LinkSavedGroup(adoptedSavedGroupId);
+    }
+
+    /// <summary>
+    /// Opens bookmarked pages where the menu asked for them. Windows and panes
+    /// are the shell's to arrange, which is why the bar delegates this back here.
+    /// </summary>
+    public void OpenBookmarkPages(IReadOnlyList<PageAddress> pages, BookmarkOpenTarget target)
+    {
+        if (pages.Count == 0)
+        {
+            return;
+        }
+
+        switch (target)
+        {
+            case BookmarkOpenTarget.CurrentTab:
+                ActiveBrowser?.NavigateTo(pages[0]);
+
+                // "Open all" on a folder still means every page: the first
+                // replaces what is on screen, the rest arrive beside it.
+                foreach (var page in pages.Skip(1))
+                {
+                    OpenInNewTab(page, activate: false);
+                }
+
+                break;
+
+            case BookmarkOpenTarget.NewTab:
+                for (var i = 0; i < pages.Count; i++)
+                {
+                    OpenInNewTab(pages[i], activate: i == 0);
+                }
+
+                break;
+
+            case BookmarkOpenTarget.NewWindow when WindowManager is WindowManager manager:
+            {
+                var window = manager.CreateWindow(pages[0]);
+                window.Show();
+
+                if (window.DataContext is MainWindowViewModel { Shell: { } opened })
+                {
+                    foreach (var page in pages.Skip(1))
+                    {
+                        opened.OpenInNewTab(page, activate: false);
+                    }
+                }
+
+                break;
+            }
+
+            case BookmarkOpenTarget.PrivateWindow when WindowManager is WindowManager privateManager:
+            {
+                var window = privateManager.CreatePrivateWindow();
+                window.Show();
+
+                if (window.DataContext is MainWindowViewModel { Shell: { } opened })
+                {
+                    for (var i = 0; i < pages.Count; i++)
+                    {
+                        if (i == 0)
+                        {
+                            opened.ActiveBrowser?.NavigateTo(pages[i]);
+                        }
+                        else
+                        {
+                            opened.OpenInNewTab(pages[i], activate: false);
+                        }
+                    }
+                }
+
+                break;
+            }
+
+            case BookmarkOpenTarget.SplitPane:
+                OpenInSplit(pages[0]);
+                break;
+        }
+    }
+
+    /// <summary>Opens one page in a tab of its own.</summary>
+    public void OpenInNewTab(PageAddress address, bool activate = true)
+    {
+        var tab = _session.OpenTab(activate: activate);
+        Attach(tab);
+        SyncTabs();
+        _browsers[tab.Id].NavigateTo(address);
+    }
+
+    /// <summary>Opens a page beside the current one, in the second pane.</summary>
+    private void OpenInSplit(PageAddress address)
+    {
+        if (_session.ActiveTab is not { SplitPartnerId: null } active)
+        {
+            return;
+        }
+
+        var tab = _session.OpenTab(activate: false);
+        Attach(tab);
+
+        if (!_session.Split(active.Id, tab.Id))
+        {
+            Detach(tab.Id);
+            _session.CloseTab(tab.Id);
+            return;
+        }
+
+        _browsers[tab.Id].NavigateTo(address);
+        SyncTabs();
+    }
+
+    /// <summary>
+    /// Reopens a saved group: its pages as tabs, gathered under a live group of
+    /// the same name and colour.
+    /// </summary>
+    public void OpenSavedGroup(BookmarkFolder folder, BookmarkOpenTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(folder);
+
+        if (target == BookmarkOpenTarget.NewWindow && WindowManager is WindowManager manager)
+        {
+            var window = manager.CreateWindow();
+
+            if (window.DataContext is MainWindowViewModel { Shell: { } opened })
+            {
+                Bookmarks?.ClaimSavedGroup(opened, folder.Id);
+                opened.OpenSavedGroup(folder, BookmarkOpenTarget.CurrentTab);
+            }
+
+            window.Show();
+            return;
+        }
+
+        if (target != BookmarkOpenTarget.CurrentTab)
+        {
+            return;
+        }
+
+        // Normal open focuses the one live occurrence, even when it belongs to
+        // another window. The explicit "new window" path above is what moves it.
+        if (FocusLiveGroupFor(folder.Id))
+        {
+            return;
+        }
+
+        if (Bookmarks?.LiveOwnerOf(this, folder.Id) is { } owner &&
+            owner.FocusLiveGroupFor(folder.Id))
+        {
+            if (WindowManager is WindowManager ownerWindowManager)
+            {
+                ownerWindowManager.ActivateShell(owner);
+            }
+
+            return;
+        }
+
+        // One saved group has one live working set. Opening it from another
+        // window first snapshots and closes the previous occurrence, then reads
+        // that latest durable snapshot below.
+        Bookmarks?.ClaimSavedGroup(this, folder.Id);
+
+        // Read before anything is opened. The addresses are about to be handed
+        // to tabs that mirror straight back into this same folder, so working
+        // from a snapshot keeps the source from shifting underfoot.
+        // New Tab slots come back as blank tabs, so the group reopens at the size
+        // it was closed and in the same order.
+        var pages = BookmarkTree.PagesOf(folder)
+            .Select(BookmarkTree.AddressOf)
+            .ToList();
+
+        // Older builds could persist a group before its first page had an
+        // address, producing a clickable row that silently did nothing forever.
+        // Its lost URL cannot be reconstructed, but its group identity can: open
+        // one blank member so the action is never a no-op and the row can recover.
+        if (pages.Count == 0)
+        {
+            pages.Add(null);
+        }
+
+        var savedGroupId = Bookmarks is not null
+            ? Bookmarks.EnsureSavedGroupId(folder)
+            : folder.SavedGroupId ?? SavedTabGroupId.New();
+        var group = _session.CreateGroup(
+            folder.Name,
+            folder.GroupColor ?? NextGroupColor(),
+            savedGroupId);
+
+        // The reopened group takes over the folder it came from rather than
+        // mirroring itself into a second one beside it.
+        Bookmarks?.AdoptGroupFolder(this, group.Id.ToString(), folder);
+
+        // Suspended for the whole reopen: each new tab is blank until it
+        // navigates, and mirroring in that state would empty the folder being
+        // read from and leave the group recorded as having no pages at all.
+        _isReopeningGroup = true;
+
+        try
+        {
+            BrowserTab? firstOpened = null;
+            var reusableBlank = _session.Tabs.Count == 1 &&
+                _session.ActiveTab is { IsBlank: true, GroupId: null, SplitPartnerId: null } existingBlank
+                    ? existingBlank
+                    : null;
+
+            for (var index = 0; index < pages.Count; index++)
+            {
+                var address = pages[index];
+                var tab = index == 0 && reusableBlank is not null
+                    ? reusableBlank
+                    : _session.OpenTab(address, activate: false);
+
+                _session.AddToGroup(tab.Id, group.Id);
+
+                if (!ReferenceEquals(tab, reusableBlank))
+                {
+                    Attach(tab);
+                }
+                else if (address is not null)
+                {
+                    _browsers[tab.Id].NavigateTo(address);
+                }
+
+                firstOpened ??= tab;
+            }
+
+            if (firstOpened is not null)
+            {
+                _session.Activate(firstOpened.Id);
+            }
+        }
+        finally
+        {
+            _isReopeningGroup = false;
+        }
+
+        SyncTabs();
+    }
+
+    /// <summary>
+    /// True while a saved group is being reopened, when the tabs exist but have
+    /// not navigated yet. See the remarks in <see cref="OpenSavedGroup"/>.
+    /// </summary>
+    private bool _isReopeningGroup;
+
+    /// <summary>
+    /// Closes the tabs of the group a bar row records, when that group is open
+    /// in this window. Deleting a row the user is currently looking at should
+    /// take its tabs with it.
+    /// </summary>
+    public void CloseLiveGroupFor(BookmarkNodeId rowId, bool preserveSavedGroup = false)
+    {
+        if (Bookmarks?.LiveGroupIdFor(this, rowId) is not { } sessionId)
+        {
+            return;
+        }
+
+        var group = _session.Groups.FirstOrDefault(g => g.Id.ToString() == sessionId);
+
+        if (group is not null)
+        {
+            CloseGroupTabs(group.Id, preserveSavedGroup);
+        }
+    }
+
+    public bool HasLiveGroupFor(BookmarkNodeId rowId)
+    {
+        if (Bookmarks?.LiveGroupIdFor(this, rowId) is not { } sessionId ||
+            _session.Groups.FirstOrDefault(group => group.Id.ToString() == sessionId) is not { } group)
+        {
+            return false;
+        }
+
+        return _session.TabsInGroup(group.Id).Count > 0;
+    }
+
+    public bool FocusLiveGroupFor(BookmarkNodeId rowId)
+    {
+        if (Bookmarks?.LiveGroupIdFor(this, rowId) is not { } sessionId ||
+            _session.Groups.FirstOrDefault(group => group.Id.ToString() == sessionId) is not { } group)
+        {
+            return false;
+        }
+
+        var tabs = _session.TabsInGroup(group.Id);
+
+        if (tabs.Count == 0)
+        {
+            _session.CloseGroup(group.Id);
+            return false;
+        }
+
+        RevealGroup(group);
+        _session.Activate(tabs[0].Id);
+        SyncTabs();
+        return true;
+    }
+
+    /// <summary>
+    /// Expands a group and releases the closed pose its members were left in.
+    /// </summary>
+    /// <remarks>
+    /// Collapsing puts every member into the pose the transition ends on, and
+    /// that pose is what keeps them drawn as gone. Expanding without releasing it
+    /// puts the tabs back in the strip while leaving them invisible, which reads
+    /// as a group that opened but lost its tabs. Only
+    /// <see cref="ToggleGroupCollapsed"/> used to do this handshake, so every
+    /// other way a group could expand had that bug.
+    /// </remarks>
+    private void RevealGroup(TabGroup group)
+    {
+        if (!group.IsCollapsed)
+        {
+            return;
+        }
+
+        var members = _session.VisibleTabs
+            .Where(tab => tab.GroupId == group.Id)
+            .Select(ItemFor)
+            .ToArray();
+
+        foreach (var member in members)
+        {
+            member.IsExiting = true;
+        }
+
+        group.Expand();
+
+        if (members.Length > 0)
+        {
+            RevealAfterRender(members);
+        }
+    }
+
+    /// <summary>Keeps a reopened live group aligned with its saved chip.</summary>
+    public void RenameLiveGroupFor(BookmarkNodeId rowId, string name)
+    {
+        if (Bookmarks?.LiveGroupIdFor(this, rowId) is not { } sessionId ||
+            _session.Groups.FirstOrDefault(group => group.Id.ToString() == sessionId) is not { } group)
+        {
+            return;
+        }
+
+        group.Rename(name);
+        SyncTabs();
+    }
+
+    /// <summary>Keeps every live occurrence aligned with its saved colour.</summary>
+    public void RecolorLiveGroupFor(BookmarkNodeId rowId, GroupColor color)
+    {
+        if (Bookmarks?.LiveGroupIdFor(this, rowId) is not { } sessionId ||
+            _session.Groups.FirstOrDefault(group => group.Id.ToString() == sessionId) is not { } group)
+        {
+            return;
+        }
+
+        group.Recolor(color);
+        SyncTabs();
+    }
 
     [ObservableProperty]
     private bool _isOverflowOpen;
@@ -249,6 +744,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsActivePageBookmarked));
     }
 
+
     partial void OnSplitBrowserChanged(BrowserViewModel? value) =>
         OnPropertyChanged(nameof(FocusedBrowser));
 
@@ -320,11 +816,22 @@ public sealed partial class ShellViewModel : ViewModelBase
                 await Task.Delay(TabTransitionDuration).ConfigureAwait(true);
             }
 
+            // Noted before the close, since the tab is the only thing that knows
+            // which group it was in once it is gone.
+            var leavingGroup = item.Tab.GroupId;
+
             // A delayed close may race a transfer or a group operation. Identity,
             // not merely the id, proves this is still the same tab in this window.
             if (!IsCurrent(item) || !_session.CloseTab(item.Id))
             {
                 return;
+            }
+
+            // Closing tabs one by one until none are left is not putting a group
+            // away — it is the group ceasing to exist, so its row does too.
+            if (leavingGroup is { } emptied && _session.FindGroup(emptied) is null)
+            {
+                _emptiedGroups.Add(emptied);
             }
 
             _tabSounds?.PlayTabClosed();
@@ -388,7 +895,9 @@ public sealed partial class ShellViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(item);
 
+        var previousGroup = item.Tab.GroupId;
         _session.MoveVisibleTabBefore(item.Id, before?.Id, group);
+        DiscardGroupIfGone(previousGroup);
         SyncTabs();
     }
 
@@ -509,9 +1018,24 @@ public sealed partial class ShellViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Closes a group's tabs, leaving its row on the bookmark bar. This is how a
+    /// group is put away: the tabs go, the record of them stays, and clicking
+    /// that row brings them back.
+    /// </summary>
     [RelayCommand]
-    private void CloseGroup(TabGroupId groupId)
+    private void CloseGroup(TabGroupId groupId) => CloseGroupTabs(groupId, preserveSavedGroup: true);
+
+    private void CloseGroupTabs(TabGroupId groupId, bool preserveSavedGroup)
     {
+        // Persist the exact final membership synchronously before any browser or
+        // domain tab is detached. Relying on an earlier layout/property callback
+        // is how closed groups ended up as permanently empty bookmark rows.
+        if (preserveSavedGroup && _session.FindGroup(groupId) is { } closingGroup)
+        {
+            MirrorSavedGroup(closingGroup, replaceWithEmpty: true);
+        }
+
         foreach (var tab in _session.TabsInGroup(groupId))
         {
             Detach(tab.Id);
@@ -527,15 +1051,32 @@ public sealed partial class ShellViewModel : ViewModelBase
         SyncTabs();
     }
 
+    /// <summary>
+    /// Closes a group's tabs and removes its saved row for good — the deliberate
+    /// discard that <see cref="CloseGroup"/> is not.
+    /// </summary>
+    [RelayCommand]
+    private void DeleteGroup(TabGroupId groupId)
+    {
+        if (Bookmarks?.DeleteLiveGroup(this, groupId.ToString()) == true)
+        {
+            return;
+        }
+
+        CloseGroupTabs(groupId, preserveSavedGroup: false);
+    }
+
     [RelayCommand]
     private void UngroupTab(TabItemViewModel? item)
     {
-        if (item is null)
+        if (item?.Tab.GroupId is not { } groupId)
         {
             return;
         }
 
         _session.RemoveFromGroup(item.Id);
+        DiscardGroupIfGone(groupId);
+
         SyncTabs();
     }
 
@@ -554,12 +1095,17 @@ public sealed partial class ShellViewModel : ViewModelBase
 
         if (tab.GroupId is not null)
         {
+            var groupId = tab.GroupId.Value;
             _session.RemoveFromGroup(tab.Id);
+            DiscardGroupIfGone(groupId);
         }
         else
         {
             var color = NextGroupColor();
-            var group = _session.CreateGroup($"Group {_session.Groups.Count + 1}", color);
+            var group = _session.CreateGroup(
+                $"Group {_session.Groups.Count + 1}",
+                color,
+                SavedTabGroupId.New());
             _session.AddToGroup(tab.Id, group.Id);
         }
 
@@ -578,7 +1124,9 @@ public sealed partial class ShellViewModel : ViewModelBase
             return;
         }
 
+        var previousGroup = item.Tab.GroupId;
         _session.Split(active.Id, item.Id);
+        DiscardGroupIfGone(previousGroup);
         SyncTabs();
     }
 
@@ -807,6 +1355,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         }
 
         var partnerId = item.Tab.SplitPartnerId;
+        var previousGroup = item.Tab.GroupId;
         var partner = partnerId is { } id
             ? _session.Tabs.FirstOrDefault(tab => tab.Id == id)
             : null;
@@ -827,6 +1376,8 @@ public sealed partial class ShellViewModel : ViewModelBase
             return false;
         }
 
+        DiscardGroupIfGone(previousGroup);
+
         if (_session.IsEmpty)
         {
             sourceIsEmpty = true;
@@ -835,6 +1386,19 @@ public sealed partial class ShellViewModel : ViewModelBase
 
         SyncTabs();
         return true;
+    }
+
+    private void DiscardGroupIfGone(TabGroupId? previousGroup)
+    {
+        if (previousGroup is not { } id || _session.FindGroup(id) is not null)
+        {
+            return;
+        }
+
+        Bookmarks?.DiscardGroup(
+            this,
+            id.ToString(),
+            removeSavedRowWhenUnlinked: !IsPrivateWindow);
     }
 
     /// <summary>Adds a tab received from another window and activates it.</summary>
@@ -905,7 +1469,8 @@ public sealed partial class ShellViewModel : ViewModelBase
                 group?.IsCollapsed ?? false,
                 tab.SplitPartnerId is { } partnerId
                     ? _session.Tabs.ToList().FindIndex(t => t.Id == partnerId)
-                    : null));
+                    : null,
+                group?.SavedGroupId?.ToString()));
         }
 
         return new SessionSnapshot(tabs, activeIndex);
@@ -922,66 +1487,120 @@ public sealed partial class ShellViewModel : ViewModelBase
             return false;
         }
 
-        var groups = new Dictionary<string, TabGroup>();
-        var restored = new List<BrowserTab>();
-
-        foreach (var saved in snapshot.Tabs)
+        if (!snapshot.Tabs.Any(saved => saved is not null))
         {
-            PageAddress? address = null;
-
-            if (saved.Address is not null &&
-                Uri.TryCreate(saved.Address, UriKind.Absolute, out var uri))
-            {
-                PageAddress.TryCreate(uri, out address);
-            }
-
-            var tab = _session.OpenTab(address, activate: false);
-            restored.Add(tab);
-            Attach(tab);
-
-            if (saved.GroupName is not null)
-            {
-                var key = $"{saved.GroupName}|{saved.GroupColor}";
-
-                if (!groups.TryGetValue(key, out var group))
-                {
-                    var color = Enum.TryParse<GroupColor>(saved.GroupColor, out var parsed)
-                        ? parsed
-                        : GroupColor.Slate;
-                    group = _session.CreateGroup(saved.GroupName, color);
-                    groups[key] = group;
-                }
-
-                _session.AddToGroup(tab.Id, group.Id);
-
-                if (saved.GroupCollapsed)
-                {
-                    group.Collapse();
-                }
-            }
-
-            // Marks the tab as loading so the navigation replays once its view
-            // attaches an engine session.
-            if (address is not null)
-            {
-                _browsers[tab.Id].NavigateTo(address);
-            }
+            return false;
         }
 
-        for (var i = 0; i < snapshot.Tabs.Count; i++)
+        var restoredDurableIds = new HashSet<SavedTabGroupId>();
+        TabGroup? currentRun = null;
+        string? currentRunSignature = null;
+        var restored = new Dictionary<int, BrowserTab>();
+
+        // Navigating each restored tab raises Address immediately. Suppress group
+        // mirroring until every member has been reconstructed, otherwise the first
+        // member creates a partial duplicate before the complete saved row can be
+        // matched and adopted.
+        _isReopeningGroup = true;
+
+        try
         {
-            if (snapshot.Tabs[i].SplitPartnerIndex is { } partnerIndex &&
-                partnerIndex >= 0 &&
-                partnerIndex < restored.Count)
+            for (var sourceIndex = 0; sourceIndex < snapshot.Tabs.Count; sourceIndex++)
             {
-                _session.Split(restored[i].Id, restored[partnerIndex].Id);
+                var saved = snapshot.Tabs[sourceIndex];
+
+                if (saved is null)
+                {
+                    currentRun = null;
+                    currentRunSignature = null;
+                    continue;
+                }
+
+                PageAddress? address = null;
+
+                if (saved.Address is not null &&
+                    Uri.TryCreate(saved.Address, UriKind.Absolute, out var uri))
+                {
+                    PageAddress.TryCreate(uri, out address);
+                }
+
+                var tab = _session.OpenTab(address, activate: false);
+                restored[sourceIndex] = tab;
+                Attach(tab);
+
+                if (saved.GroupName is not null)
+                {
+                    var parsedSavedGroupId = TryParseSavedGroupId(saved.SavedGroupId);
+                    var signature =
+                        $"{saved.GroupName}|{saved.GroupColor}|{saved.GroupCollapsed}|{parsedSavedGroupId}";
+
+                    // Group membership is a contiguous run in BrowsingSession.
+                    // Reuse an id only inside that run: a corrupt snapshot can
+                    // repeat the same durable id later for a different group,
+                    // and globally keying by id silently merged their pages.
+                    if (currentRun is null || currentRunSignature != signature)
+                    {
+                        var acceptedId = parsedSavedGroupId is { } durableId &&
+                            restoredDurableIds.Add(durableId)
+                                ? durableId
+                                : (SavedTabGroupId?)null;
+                        currentRun = CreateRestoredGroup(saved, acceptedId);
+                        currentRunSignature = signature;
+                    }
+
+                    var group = currentRun;
+
+                    _session.AddToGroup(tab.Id, group.Id);
+
+                    if (saved.GroupCollapsed)
+                    {
+                        group.Collapse();
+                    }
+                }
+                else
+                {
+                    currentRun = null;
+                    currentRunSignature = null;
+                }
+
+                // Marks the tab as loading so the navigation replays once its view
+                // attaches an engine session.
+                if (address is not null)
+                {
+                    _browsers[tab.Id].NavigateTo(address);
+                }
             }
+
+            foreach (var (sourceIndex, tab) in restored)
+            {
+                if (snapshot.Tabs[sourceIndex]?.SplitPartnerIndex is { } partnerIndex &&
+                    restored.TryGetValue(partnerIndex, out var partner))
+                {
+                    _session.Split(tab.Id, partner.Id);
+                }
+            }
+
+            var active = restored.TryGetValue(snapshot.ActiveIndex, out var selected)
+                ? selected
+                : restored.OrderBy(entry => entry.Key).First().Value;
+            _session.Activate(active.Id);
+        }
+        finally
+        {
+            _isReopeningGroup = false;
         }
 
-        var index = Math.Clamp(snapshot.ActiveIndex, 0, _session.Tabs.Count - 1);
-        _session.Activate(restored[index].Id);
         SyncTabs();
         return true;
+
+        TabGroup CreateRestoredGroup(SessionTabSnapshot saved, SavedTabGroupId? savedGroupId)
+        {
+            var color = Enum.TryParse<GroupColor>(saved.GroupColor, out var parsed) &&
+                Enum.IsDefined(parsed)
+                ? parsed
+                : GroupColor.Slate;
+            return _session.CreateGroup(saved.GroupName ?? "Group", color, savedGroupId);
+        }
     }
 
     /// <summary>Cycles the palette so consecutive groups are visually distinct.</summary>
@@ -990,6 +1609,9 @@ public sealed partial class ShellViewModel : ViewModelBase
         var palette = Enum.GetValues<GroupColor>();
         return palette[_session.Groups.Count % palette.Length];
     }
+
+    private static SavedTabGroupId? TryParseSavedGroupId(string? value) =>
+        SavedTabGroupId.TryParse(value, out var id) ? id : null;
 
     private void Attach(BrowserTab tab)
     {
@@ -1066,6 +1688,16 @@ public sealed partial class ShellViewModel : ViewModelBase
         {
             OnPropertyChanged(nameof(IsActivePageBookmarked));
         }
+
+        // A grouped tab's recorded page follows what it actually shows, so the
+        // saved group reopens where the tabs were left rather than where they
+        // started.
+        if (e.PropertyName is nameof(BrowserViewModel.Address)
+            or nameof(BrowserViewModel.PageTitle)
+            or nameof(BrowserViewModel.FaviconAddress))
+        {
+            SyncSavedGroups();
+        }
     }
 
     private void OnZoomFeedbackRequested(object? sender, ZoomFeedbackRequestedEventArgs e) =>
@@ -1100,9 +1732,12 @@ public sealed partial class ShellViewModel : ViewModelBase
             // group there is.
             var reveal = _session.ActiveTab?.GroupId ?? _session.VisibleTabs[0].GroupId;
 
-            if (reveal is { } groupId)
+            if (reveal is { } groupId && _session.FindGroup(groupId) is { } hidden)
             {
-                _session.FindGroup(groupId)?.Expand();
+                // Closing the last loose tab while a collapsed group holds the
+                // rest lands here. The group has to come back drawn, not merely
+                // expanded, or the strip is left showing a chip and nothing else.
+                RevealGroup(hidden);
             }
         }
 
@@ -1249,6 +1884,14 @@ public sealed partial class ShellViewModel : ViewModelBase
 
         PruneCaches();
         SyncBrowsers();
+
+        // Groups are recorded on the bar as they change, so closing their tabs
+        // leaves the record behind rather than losing the set.
+        SyncSavedGroups();
+
+        // Which groups are live has just been settled, so the bar can redraw the
+        // outline that tells a live saved group from a merely stored one.
+        Bookmarks?.RefreshLiveGroupState();
         RefreshTabDisplay();
 
         ActiveTab = _session.ActiveTab is { } active
@@ -1290,7 +1933,7 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// </remarks>
     private void PersistSession()
     {
-        if (_sessionStore is null)
+        if (_sessionStore is null || _isReopeningGroup)
         {
             return;
         }
@@ -1300,7 +1943,9 @@ public sealed partial class ShellViewModel : ViewModelBase
         var key = string.Join(
             '\n',
             snapshot.Tabs
-                .Select(t => $"{t.Address}|{t.GroupName}|{t.GroupColor}|{t.GroupCollapsed}")
+                .Select(t =>
+                    $"{t.Address}|{t.GroupName}|{t.GroupColor}|{t.GroupCollapsed}|" +
+                    $"{t.SplitPartnerIndex}|{t.SavedGroupId}")
                 .Prepend(snapshot.ActiveIndex.ToString(CultureInfo.InvariantCulture)));
 
         if (key == _lastPersisted)
@@ -1367,13 +2012,27 @@ public sealed partial class ShellViewModel : ViewModelBase
             id,
             rename: name =>
             {
-                _session.FindGroup(id)?.Rename(name);
-                SyncTabs();
+                if (Bookmarks?.SavedGroupRowIdFor(this, id.ToString()) is { } rowId)
+                {
+                    Bookmarks.Rename(rowId, name);
+                }
+                else
+                {
+                    _session.FindGroup(id)?.Rename(name);
+                    SyncTabs();
+                }
             },
             recolor: color =>
             {
-                _session.FindGroup(id)?.Recolor(color);
-                SyncTabs();
+                if (Bookmarks?.SavedGroupRowIdFor(this, id.ToString()) is { } rowId)
+                {
+                    Bookmarks.RecolorSavedGroup(rowId, color);
+                }
+                else
+                {
+                    _session.FindGroup(id)?.Recolor(color);
+                    SyncTabs();
+                }
             },
             toggle: () => ToggleGroupCollapsedCommand.Execute(id),
             ungroup: () =>
@@ -1383,9 +2042,11 @@ public sealed partial class ShellViewModel : ViewModelBase
                     _session.RemoveFromGroup(tab.Id);
                 }
 
+                DiscardGroupIfGone(id);
                 SyncTabs();
             },
-            close: () => CloseGroup(id));
+            close: () => CloseGroup(id),
+            delete: () => DeleteGroup(id));
 
         _headers[id] = header;
         return header;
