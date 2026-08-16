@@ -48,29 +48,51 @@
       </Button>
 
 
-      <TextBox Name="AddressBox"
-               Grid.Column="4"
-               Classes="address"
-               Margin="8,0,0,0"
-               Text="{Binding Shell.FocusedBrowser.AddressText}"
-               PlaceholderText="Search or enter address">
-        <TextBox.KeyBindings>
-          <KeyBinding Gesture="Enter" Command="{Binding Shell.FocusedBrowser.NavigateCommand}" />
-          <KeyBinding Gesture="Escape" Command="{Binding Shell.FocusedBrowser.CancelAddressEditingCommand}" />
-        </TextBox.KeyBindings>
-      </TextBox>
+      <!-- Sits against the address box rather than out at the far end: it is the
+           way into the browser's own settings, and the address box is where the
+           browser stops being the page and starts being itself. The dots are
+           zero-length strokes with round caps, so they take the glyph styling —
+           and its hover — like every other icon here. -->
+      <!-- The star rides inside the address box, at its trailing end, the way
+           every browser puts it: bookmarking is something you do to the address,
+           so it belongs to that control rather than sitting beside it. The box
+           carries the extra right padding that keeps text from running under it. -->
+      <Panel Grid.Column="4" Margin="8,0,0,0">
+        <TextBox Name="AddressBox"
+                 Classes="address"
+                 Padding="14,0,40,0"
+                 Text="{Binding Shell.FocusedBrowser.AddressText}"
+                 PlaceholderText="Search or enter address">
+          <TextBox.KeyBindings>
+            <KeyBinding Gesture="Enter" Command="{Binding Shell.FocusedBrowser.NavigateCommand}" />
+            <KeyBinding Gesture="Escape" Command="{Binding Shell.FocusedBrowser.CancelAddressEditingCommand}" />
+          </TextBox.KeyBindings>
+        </TextBox>
 
-      <!-- Filled once the open page is saved, hollow otherwise, and the anchor
-           the add/edit form hangs from. -->
+        <!-- Filled once the open page is saved, hollow otherwise, and the anchor
+             the add/edit form hangs from. -->
+        <Button Name="BookmarkStar"
+                Classes="icon inset"
+                Classes.bookmarked="{Binding Shell.IsActivePageBookmarked}"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                Margin="0,0,5,0"
+                ToolTip.Tip="Bookmark this page (Ctrl+D)"
+                Command="{Binding Shell.BookmarkActiveTabCommand}">
+          <Path Classes="glyph"
+                Data="M6.5,1 L8.2,4.9 L12.4,5.3 L9.2,8.1 L10.2,12.2 L6.5,10 L2.8,12.2 L3.8,8.1 L0.6,5.3 L4.8,4.9 Z" />
+        </Button>
+      </Panel>
+
+      <!-- Settings takes the end of the bar, where a browser's own menu lives.
+           The dots are zero-length strokes with round caps, so they take the
+           glyph styling — and its hover — like every other icon here. -->
       <Button Grid.Column="5"
-              Name="BookmarkStar"
               Classes="icon"
-              Classes.bookmarked="{Binding Shell.IsActivePageBookmarked}"
               Margin="4,0,0,0"
-              ToolTip.Tip="Bookmark this page (Ctrl+D)"
-              Command="{Binding Shell.BookmarkActiveTabCommand}">
-        <Path Classes="glyph"
-              Data="M6.5,1 L8.2,4.9 L12.4,5.3 L9.2,8.1 L10.2,12.2 L6.5,10 L2.8,12.2 L3.8,8.1 L0.6,5.3 L4.8,4.9 Z" />
+              ToolTip.Tip="Settings">
+        <Path Classes="glyph" StrokeThickness="2.2"
+              Data="M6.5,2 L6.5,2 M6.5,6.5 L6.5,6.5 M6.5,11 L6.5,11" />
       </Button>
 
       <Popup IsOpen="{Binding Shell.IsBookmarkEditorOpen}"

@@ -236,6 +236,18 @@
     <Setter Property="Height" Value="20" />
   </Style>
 
+  <!-- An icon sitting inside another control draws no hover of its own: the
+       address box is already a filled pill, and a second filled shape on top of
+       it reads as a box stuck to the box rather than as a button waking up. Used
+       by the bookmark star, which rides inside the address box. -->
+  <Style Selector="Button.icon.inset:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.icon.inset:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
   <Style Selector="Button.icon Path.glyph">
     <Setter Property="Stroke" Value="{DynamicResource ForegroundMutedBrush}" />
     <Setter Property="StrokeThickness" Value="1.3" />
