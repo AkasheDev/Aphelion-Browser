@@ -106,7 +106,10 @@ internal sealed class TabListDragHandler
         {
             if (outside)
             {
-                manager.UpdateDropPreview(owner.PointToScreen(e.GetPosition(owner)), exclude: null);
+                manager.UpdateDropPreview(
+                    owner.PointToScreen(e.GetPosition(owner)),
+                    exclude: null,
+                    sourceIsPrivate: Shell?.IsPrivateWindow == true);
             }
             else
             {

@@ -26,6 +26,10 @@
         <views:NewTabPage DataContext="{Binding NewTab}" />
       </Panel>
 
+      <Panel IsVisible="{Binding IsDownloadsPage}">
+        <views:DownloadsView DataContext="{Binding Downloads}" />
+      </Panel>
+
       <views:NavigationErrorPage DataContext="{Binding ErrorPage}"
                                  IsVisible="{Binding IsVisible}" />
 

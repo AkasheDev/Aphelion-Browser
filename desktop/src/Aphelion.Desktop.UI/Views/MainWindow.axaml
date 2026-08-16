@@ -35,6 +35,7 @@
                 CommandParameter="{Binding Shell.ActiveTab}" />
     <KeyBinding Gesture="Escape" Command="{Binding Shell.FocusedBrowser.CancelAddressEditingCommand}" />
     <KeyBinding Gesture="Ctrl+D" Command="{Binding Shell.BookmarkActiveTabCommand}" />
+    <KeyBinding Gesture="Ctrl+J" Command="{Binding Shell.OpenDownloadsPageCommand}" />
     <KeyBinding Gesture="Ctrl+Shift+B" Command="{Binding Shell.ToggleBookmarkBarCommand}" />
   </Window.KeyBindings>
 

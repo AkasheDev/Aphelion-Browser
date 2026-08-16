@@ -34,6 +34,8 @@ internal static class CompositionRoot
         services.AddSingleton<ISearchEnginePreferenceStore, JsonSearchEnginePreferenceStore>();
         services.AddSingleton<ISiteZoomStore, JsonSiteZoomStore>();
         services.AddSingleton<IPrivacyPreferenceStore, JsonPrivacyPreferenceStore>();
+        services.AddSingleton<IDownloadHistoryStore, JsonDownloadHistoryStore>();
+        services.AddSingleton<IFileExplorer, SystemFileExplorer>();
         // Constructed eagerly here, rather than registered by type, because its
         // native engine is only bundled for Windows and macOS (see the type's
         // remarks) — a platform without it must fall back to silence instead of
@@ -64,6 +66,10 @@ internal static class CompositionRoot
             BookmarksViewModel.Restore(sp.GetRequiredService<IBookmarkStore>()));
         services.AddSingleton<BookmarksViewModel>();
 
+        // Downloads belong to the profile the same way bookmarks do: a file
+        // started in one window is this user's download in every other.
+        services.AddSingleton<DownloadsViewModel>();
+
         // Presentation. Browsers are transient because every tab needs its own
         // engine session and history; the shell creates one per tab.
         services.AddTransient<BrowserViewModel>();
@@ -78,7 +84,8 @@ internal static class CompositionRoot
             sp.GetRequiredService<ISessionStore>(),
             sp.GetRequiredService<IFaviconLoader>(),
             sp.GetRequiredService<ITabSoundPlayer>(),
-            sp.GetRequiredService<BookmarksViewModel>()));
+            sp.GetRequiredService<BookmarksViewModel>(),
+            downloads: sp.GetRequiredService<DownloadsViewModel>()));
         services.AddSingleton<SplashViewModel>();
         services.AddSingleton<MainWindowViewModel>();
 

@@ -19,6 +19,7 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
 {
     private readonly NativeWebView _webView;
     private readonly WebView2ZoomBridge _windowsZoom;
+    private readonly WebView2DownloadBridge _windowsDownloads;
     private bool _disposed;
     private bool _navigationInProgress;
     private Uri? _latestNavigationRequest;
@@ -29,13 +30,14 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     {
         _webView = webView ?? throw new ArgumentNullException(nameof(webView));
         _windowsZoom = new WebView2ZoomBridge(OnNativeZoomChanged);
+        _windowsDownloads = new WebView2DownloadBridge(OnEngineDownloadStarted);
 
         _webView.NavigationStarted += OnNavigationStarted;
         _webView.NavigationCompleted += OnNavigationCompleted;
         _webView.AdapterCreated += OnAdapterCreated;
         _webView.AdapterDestroyed += OnAdapterDestroyed;
 
-        TryAttachZoomBridge(_webView.TryGetPlatformHandle());
+        TryAttachPlatformBridges(_webView.TryGetPlatformHandle());
     }
 
     public bool CanGoBack => _webView.CanGoBack;
@@ -47,6 +49,8 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     public event EventHandler<EngineNavigationCompletedEventArgs>? NavigationCompleted;
 
     public event EventHandler<EngineZoomFactorChangedEventArgs>? ZoomFactorChanged;
+
+    public event EventHandler<EngineDownloadStartedEventArgs>? DownloadStarted;
 
     public void Navigate(PageAddress address)
     {
@@ -219,14 +223,24 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     }
 
     private void OnAdapterCreated(object? sender, WebViewAdapterEventArgs e) =>
-        TryAttachZoomBridge(e.TryGetPlatformHandle());
+        TryAttachPlatformBridges(e.TryGetPlatformHandle());
 
-    private void OnAdapterDestroyed(object? sender, WebViewAdapterEventArgs e) =>
-        _windowsZoom.Detach();
-
-    private void TryAttachZoomBridge(Avalonia.Platform.IPlatformHandle? platformHandle)
+    private void OnAdapterDestroyed(object? sender, WebViewAdapterEventArgs e)
     {
-        if (_disposed || !_windowsZoom.TryAttach(platformHandle))
+        _windowsZoom.Detach();
+        _windowsDownloads.Detach();
+    }
+
+    private void TryAttachPlatformBridges(Avalonia.Platform.IPlatformHandle? platformHandle)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _windowsDownloads.TryAttach(platformHandle);
+
+        if (!_windowsZoom.TryAttach(platformHandle))
         {
             return;
         }
@@ -235,6 +249,14 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         {
             _actualZoomFactor = Math.Clamp(appliedFactor, 0.25d, 5d);
             _ = RestoreDocumentZoomAsync();
+        }
+    }
+
+    private void OnEngineDownloadStarted(IEngineDownloadOperation operation)
+    {
+        if (!_disposed)
+        {
+            DownloadStarted?.Invoke(this, new EngineDownloadStartedEventArgs(operation));
         }
     }
 
@@ -324,6 +346,7 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         _webView.AdapterCreated -= OnAdapterCreated;
         _webView.AdapterDestroyed -= OnAdapterDestroyed;
         _windowsZoom.Dispose();
+        _windowsDownloads.Dispose();
         _disposed = true;
     }
 }

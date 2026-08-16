@@ -1,4 +1,5 @@
 using Aphelion.Desktop.Application.Ports;
+using Aphelion.Desktop.Domain;
 using Aphelion.Desktop.Domain.Entities;
 using Aphelion.Desktop.Domain.ValueObjects;
 using Avalonia.Media;
@@ -81,6 +82,9 @@ public sealed partial class TabItemViewModel(
     /// missing icon — only meaningful while this tab is split.</summary>
     public bool ShowsPartnerFallback => IsSplit && PartnerFavicon is null;
 
+    partial void OnFaviconChanged(Bitmap? value) =>
+        OnPropertyChanged(nameof(ShowsGlobeFallback));
+
     /// <summary>
     /// Column widths for the tab's contents. The two titles share the space when
     /// split; otherwise the partner's column takes none, so an ordinary tab does
@@ -110,6 +114,10 @@ public sealed partial class TabItemViewModel(
 
     partial void OnGroupBrushChanged(IBrush? value) => OnPropertyChanged(nameof(IsGrouped));
 
+    public bool IsDownloadsPage => Tab.IsDownloadsPage;
+
+    public bool ShowsGlobeFallback => Favicon is null && !IsDownloadsPage;
+
     /// <summary>Pulls display state back from the domain tab.</summary>
     public void Refresh(GroupColor? groupColor, BrowserTab? partner = null)
     {
@@ -123,12 +131,22 @@ public sealed partial class TabItemViewModel(
         IsLoading = Tab.LoadState == TabLoadState.Loading;
         GroupBrush = groupColor is null ? null : GroupBrushes.For(groupColor.Value);
 
+        OnPropertyChanged(nameof(IsDownloadsPage));
+        OnPropertyChanged(nameof(ShowsGlobeFallback));
+
         LoadFaviconIfChanged();
         LoadPartnerFaviconIfChanged(partner);
     }
 
     private async void LoadFaviconIfChanged()
     {
+        if (Tab.IsDownloadsPage)
+        {
+            _loadedIconKey = InternalPages.DownloadsAddress;
+            Favicon = null;
+            return;
+        }
+
         var key = Tab.FaviconAddress?.ToString();
 
         if (key == _loadedIconKey)

@@ -65,6 +65,24 @@ public interface IBrowserEngineSession
     /// and native keyboard zoom handled inside the hosted page.
     /// </summary>
     event EventHandler<EngineZoomFactorChangedEventArgs>? ZoomFactorChanged;
+
+    /// <summary>
+    /// Raised when the page starts downloading a file, however it was started —
+    /// a clicked link, a script, or a navigation the engine turned into a
+    /// download. The operation in the args is live and controllable.
+    /// </summary>
+    /// <remarks>
+    /// Only raised where the platform engine exposes its download pipeline —
+    /// WebView2 on Windows today. On the other hosts downloads fall back to the
+    /// platform's own handling until their adapters gain the same bridge, as
+    /// anticipated by ADR-0001's download-handling follow-up.
+    /// </remarks>
+    event EventHandler<EngineDownloadStartedEventArgs>? DownloadStarted;
+}
+
+public sealed class EngineDownloadStartedEventArgs(IEngineDownloadOperation operation) : EventArgs
+{
+    public IEngineDownloadOperation Operation { get; } = operation;
 }
 
 public sealed class EngineZoomFactorChangedEventArgs(double factor) : EventArgs

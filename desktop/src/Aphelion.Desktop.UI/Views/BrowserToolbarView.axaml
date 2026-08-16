@@ -15,7 +15,7 @@
   <Grid Background="{DynamicResource SurfaceBaseBrush}"
         DataContext="{Binding}">
 
-    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto"
+    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto"
           Margin="6,6,10,6"
           ColumnSpacing="2">
 
@@ -84,12 +84,28 @@
         </Button>
       </Panel>
 
+      <!-- Downloads sits immediately left of the menu, where Chrome puts it:
+           a file action next to the browser's own menu, not next to the page. -->
+      <Panel Grid.Column="5" Width="28" Height="28" Margin="4,0,0,0">
+        <Ellipse Width="26" Height="26"
+                 Stroke="{DynamicResource BrandPrimaryBrush}"
+                 StrokeThickness="1.5"
+                 IsHitTestVisible="False"
+                 IsVisible="{Binding Shell.Downloads.HasActiveDownloads, FallbackValue=False}" />
+        <Button Name="DownloadsButton"
+                Classes="icon"
+                ToolTip.Tip="Downloads (Ctrl+J)"
+                Command="{Binding Shell.ToggleDownloadsBubbleCommand}">
+          <Path Classes="glyph"
+                Data="M6.5,1.5 V8 M3.5,5.5 L6.5,8.5 L9.5,5.5 M2.2,11 H10.8" />
+        </Button>
+      </Panel>
+
       <!-- Settings takes the end of the bar, where a browser's own menu lives.
            The dots are zero-length strokes with round caps, so they take the
            glyph styling — and its hover — like every other icon here. -->
-      <Button Grid.Column="5"
+      <Button Grid.Column="6"
               Classes="icon"
-              Margin="4,0,0,0"
               ToolTip.Tip="Settings">
         <Path Classes="glyph" StrokeThickness="2.2"
               Data="M6.5,2 L6.5,2 M6.5,6.5 L6.5,6.5 M6.5,11 L6.5,11" />
@@ -102,6 +118,16 @@
              IsLightDismissEnabled="True"
              Closed="OnBookmarkEditorClosed">
         <views:BookmarkEditorView DataContext="{Binding Shell.BookmarkEditor}" />
+      </Popup>
+
+      <Popup IsOpen="{Binding Shell.IsDownloadsBubbleOpen}"
+             PlacementTarget="{Binding ElementName=DownloadsButton}"
+             Placement="BottomEdgeAlignedRight"
+             VerticalOffset="8"
+             IsLightDismissEnabled="True"
+             ShouldUseOverlayLayer="False"
+             Closed="OnDownloadsClosed">
+        <views:DownloadsBubbleView DataContext="{Binding Shell}" />
       </Popup>
 
     </Grid>

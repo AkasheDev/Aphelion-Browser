@@ -42,7 +42,8 @@ internal static class TabTransfer
 
         var target = manager.WindowAcceptingDropAt(
             screenPoint,
-            exclude: allowSameWindow ? null : owner);
+            exclude: allowSameWindow ? null : owner,
+            sourceIsPrivate: shell.IsPrivateWindow);
 
         if (target is not null)
         {

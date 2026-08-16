@@ -63,17 +63,25 @@ public sealed class BrowserTab
     public string? FailureReason { get; private set; }
 
     /// <summary>
+    /// The local downloads page, drawn by the application rather than the
+    /// engine. Distinct from a blank New Tab: this tab has a name and an icon
+    /// of its own, and it is not an empty surface waiting for an address.
+    /// </summary>
+    public bool IsDownloadsPage { get; private set; }
+
+    /// <summary>
     /// A tab that has never been navigated. The UI shows a new-tab page for these
     /// rather than an empty engine surface.
     /// </summary>
-    public bool IsBlank => Address is null;
+    public bool IsBlank => Address is null && !IsDownloadsPage;
 
     /// <summary>
     /// Best available label for the tab strip: the search term for a results page,
     /// otherwise the page's own title, falling back to the host while it loads.
     /// </summary>
     public string DisplayTitle =>
-        IsBlank ? "New tab"
+        IsDownloadsPage ? InternalPages.DownloadsTitle
+        : IsBlank ? "New tab"
         : !string.IsNullOrWhiteSpace(SearchTerm) ? SearchTerm!
         : !string.IsNullOrWhiteSpace(Title) ? Title
         : Address is not null ? Address.DisplayHost
@@ -87,6 +95,7 @@ public sealed class BrowserTab
     {
         ArgumentNullException.ThrowIfNull(address);
 
+        IsDownloadsPage = false;
         Address = address;
         LoadState = TabLoadState.Loading;
         FailureReason = null;
@@ -115,10 +124,23 @@ public sealed class BrowserTab
         FailureReason = string.IsNullOrWhiteSpace(reason) ? "Navigation failed." : reason;
     }
 
+    /// <summary>Opens the local downloads page in this tab.</summary>
+    public void ShowDownloads()
+    {
+        Address = null;
+        IsDownloadsPage = true;
+        Title = InternalPages.DownloadsTitle;
+        FaviconAddress = null;
+        SearchTerm = null;
+        LoadState = TabLoadState.Idle;
+        FailureReason = null;
+    }
+
     /// <summary>Returns this tab to the local New Tab experience.</summary>
     public void ResetToBlank()
     {
         Address = null;
+        IsDownloadsPage = false;
         Title = string.Empty;
         FaviconAddress = null;
         SearchTerm = null;
@@ -144,6 +166,7 @@ public sealed class BrowserTab
     {
         ArgumentNullException.ThrowIfNull(address);
 
+        IsDownloadsPage = false;
         Address = address;
         Title = title ?? string.Empty;
         SearchTerm = string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm;

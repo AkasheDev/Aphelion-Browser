@@ -303,6 +303,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (e.Key == Key.Escape && e.KeyModifiers == KeyModifiers.None && Shell is { IsDownloadsBubbleOpen: true } downloadsShell)
+        {
+            downloadsShell.CloseDownloadsBubbleCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
         // Handled here as well as in the window's KeyBindings because a hosted
         // native web view can consume the key before those are consulted.
         if (Shell is { } bookmarkShell)
@@ -310,6 +317,13 @@ public partial class MainWindow : Window
             if (e.Key == Key.D && e.KeyModifiers == KeyModifiers.Control)
             {
                 bookmarkShell.BookmarkActiveTabCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.J && e.KeyModifiers == KeyModifiers.Control)
+            {
+                bookmarkShell.OpenDownloadsPageCommand.Execute(null);
                 e.Handled = true;
                 return;
             }

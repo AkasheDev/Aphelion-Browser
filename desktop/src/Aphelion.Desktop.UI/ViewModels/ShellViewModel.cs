@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using Aphelion.Desktop.Application.Dtos;
 using Aphelion.Desktop.Application.Ports;
+using Aphelion.Desktop.Domain;
 using Aphelion.Desktop.Domain.Entities;
 using Aphelion.Desktop.Domain.ValueObjects;
 using Avalonia.Threading;
@@ -58,7 +59,8 @@ public sealed partial class ShellViewModel : ViewModelBase
         IFaviconLoader? favicons = null,
         ITabSoundPlayer? tabSounds = null,
         BookmarksViewModel? bookmarks = null,
-        bool isPrivateWindow = false)
+        bool isPrivateWindow = false,
+        DownloadsViewModel? downloads = null)
     {
         _browserFactory = browserFactory ?? throw new ArgumentNullException(nameof(browserFactory));
         WindowManager = windowManager;
@@ -66,6 +68,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         _favicons = favicons;
         _tabSounds = tabSounds;
         Bookmarks = bookmarks;
+        Downloads = downloads;
         IsPrivateWindow = isPrivateWindow;
 
         if (Bookmarks is not null)
@@ -123,6 +126,65 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// only in tests and previews, which construct a shell without them.
     /// </summary>
     public BookmarksViewModel? Bookmarks { get; }
+
+    /// <summary>
+    /// The download list, shared with every other window in the profile the
+    /// same way bookmarks are. The toolbar button opens Chrome's bubble;
+    /// Ctrl+J and the bubble's "Show all downloads" open the full page.
+    /// </summary>
+    public DownloadsViewModel? Downloads { get; }
+
+    /// <summary>The toolbar flyout. Separate from the full downloads page.</summary>
+    [ObservableProperty]
+    private bool _isDownloadsBubbleOpen;
+
+    [RelayCommand]
+    private void ToggleDownloadsBubble() => IsDownloadsBubbleOpen = !IsDownloadsBubbleOpen;
+
+    [RelayCommand]
+    private void CloseDownloadsBubble() => IsDownloadsBubbleOpen = false;
+
+    [RelayCommand]
+    private void OpenDownloadsPage()
+    {
+        IsDownloadsBubbleOpen = false;
+
+        var existing = _session.Tabs.FirstOrDefault(tab =>
+            tab.IsDownloadsPage && !tab.IsSplitPartner);
+
+        if (existing is not null)
+        {
+            if (existing.GroupId is { } groupId &&
+                _session.FindGroup(groupId) is { IsCollapsed: true } hidden)
+            {
+                RevealGroup(hidden);
+            }
+
+            _session.Activate(existing.Id);
+            SyncTabs();
+            return;
+        }
+
+        var tab = _session.OpenTab();
+        _tabSounds?.PlayTabOpened();
+        Attach(tab);
+        _browsers[tab.Id].ShowDownloads();
+        var item = ItemFor(tab);
+        item.IsExiting = true;
+        SyncTabs();
+        RevealAfterRender(item);
+    }
+
+    /// <summary>Escape dismisses the bubble. The downloads tab is a real tab.</summary>
+    [RelayCommand]
+    private void DismissDownloads() => IsDownloadsBubbleOpen = false;
+
+    /// <summary>
+    /// Opens the bubble in the window whose page started the download, as
+    /// Chrome surfaces its flyout when a download begins.
+    /// </summary>
+    private void OnBrowserDownloadStarted(object? sender, EventArgs e) =>
+        IsDownloadsBubbleOpen = true;
 
     /// <summary>
     /// Private windows may read explicit bookmarks, but their live tab groups
@@ -788,6 +850,7 @@ public sealed partial class ShellViewModel : ViewModelBase
     [RelayCommand]
     private void NewTab()
     {
+        IsDownloadsBubbleOpen = false;
         var tab = _session.OpenTab();
         _tabSounds?.PlayTabOpened();
         Attach(tab);
@@ -879,8 +942,10 @@ public sealed partial class ShellViewModel : ViewModelBase
 
         // A pending split belongs to the tab that opened the picker. Switching
         // tabs cancels that pending operation instead of trapping navigation
-        // behind an empty right pane.
+        // behind an empty right pane. Leaving Downloads does the same: it is a
+        // page, not a tab, so choosing a tab puts that page back on screen.
         IsSplitPickerOpen = false;
+        IsDownloadsBubbleOpen = false;
         SyncTabs();
     }
 
@@ -1360,7 +1425,11 @@ public sealed partial class ShellViewModel : ViewModelBase
             ? _session.Tabs.FirstOrDefault(tab => tab.Id == id)
             : null;
 
-        transfer = new TabTransferSnapshot(item.Tab.Address, partner?.Address);
+        transfer = new TabTransferSnapshot(
+            item.Tab.Address,
+            partner?.Address,
+            item.Tab.IsDownloadsPage,
+            IsPrivateWindow);
 
         Detach(item.Id);
 
@@ -1409,10 +1478,15 @@ public sealed partial class ShellViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(transfer);
 
-        var tab = _session.OpenTab(transfer.PrimaryAddress);
+        var tab = _session.OpenTab(transfer.IsDownloadsPage ? null : transfer.PrimaryAddress);
         Attach(tab);
         _session.MoveVisibleTabBefore(tab.Id, before?.Id, group);
         _session.Activate(tab.Id);
+
+        if (transfer.IsDownloadsPage)
+        {
+            _browsers[tab.Id].ShowDownloads();
+        }
 
         if (transfer.PartnerAddress is not null)
         {
@@ -1463,7 +1537,7 @@ public sealed partial class ShellViewModel : ViewModelBase
             }
 
             tabs.Add(new SessionTabSnapshot(
-                tab.Address?.ToString(),
+                tab.IsDownloadsPage ? InternalPages.DownloadsAddress : tab.Address?.ToString(),
                 group?.Name,
                 group?.Color.ToString(),
                 group?.IsCollapsed ?? false,
@@ -1517,8 +1591,10 @@ public sealed partial class ShellViewModel : ViewModelBase
                 }
 
                 PageAddress? address = null;
+                var isDownloadsPage = InternalPages.IsDownloads(saved.Address);
 
-                if (saved.Address is not null &&
+                if (!isDownloadsPage &&
+                    saved.Address is not null &&
                     Uri.TryCreate(saved.Address, UriKind.Absolute, out var uri))
                 {
                     PageAddress.TryCreate(uri, out address);
@@ -1527,6 +1603,11 @@ public sealed partial class ShellViewModel : ViewModelBase
                 var tab = _session.OpenTab(address, activate: false);
                 restored[sourceIndex] = tab;
                 Attach(tab);
+
+                if (isDownloadsPage)
+                {
+                    _browsers[tab.Id].ShowDownloads();
+                }
 
                 if (saved.GroupName is not null)
                 {
@@ -1619,6 +1700,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         browser.Bind(tab);
         browser.PropertyChanged += OnBrowserPropertyChanged;
         browser.ZoomFeedbackRequested += OnZoomFeedbackRequested;
+        browser.DownloadStarted += OnBrowserDownloadStarted;
         _browsers[tab.Id] = browser;
     }
 
@@ -1628,6 +1710,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         {
             browser.PropertyChanged -= OnBrowserPropertyChanged;
             browser.ZoomFeedbackRequested -= OnZoomFeedbackRequested;
+            browser.DownloadStarted -= OnBrowserDownloadStarted;
         }
     }
 

@@ -1,0 +1,114 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+             x:Class="Aphelion.Desktop.UI.Views.DownloadsBubbleView"
+             x:DataType="vm:ShellViewModel">
+
+  <!-- Chrome's download bubble: a flyout from the toolbar button. The full
+       chrome://downloads page is a separate surface opened by Ctrl+J or
+       "Show all downloads" below. This is a native Popup so it sits above
+       the WebView; an in-tree overlay would paint underneath it. -->
+  <Border Classes="panel" Width="380" Padding="10">
+    <StackPanel Spacing="6">
+
+      <TextBlock Classes="panel-title" Text="Downloads"
+                 Margin="0" VerticalAlignment="Center" />
+
+      <TextBlock Classes="downloads-empty"
+                 Text="No downloads"
+                 Padding="8,18"
+                 IsVisible="{Binding !Downloads.HasDownloads, FallbackValue=True}" />
+
+      <ScrollViewer MaxHeight="360"
+                    HorizontalScrollBarVisibility="Disabled"
+                    IsVisible="{Binding Downloads.HasDownloads, FallbackValue=False}">
+        <ItemsControl ItemsSource="{Binding Downloads.Items}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:DownloadItemViewModel">
+
+              <Border Classes="download-row">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+
+                  <Button Grid.Column="0" Classes="download-body"
+                          Command="{Binding OpenFileCommand}"
+                          ToolTip.Tip="{Binding FilePath}">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+
+                      <Border Grid.Column="0" Classes="download-file-badge">
+                        <Path Classes="download-file-glyph"
+                              Data="M2,1 H8 L12,5 V13 H2 Z M8,1 V5 H12" />
+                      </Border>
+
+                      <StackPanel Grid.Column="1" Spacing="3"
+                                  VerticalAlignment="Center">
+                        <TextBlock Classes="download-name"
+                                   Text="{Binding FileName}"
+                                   TextTrimming="CharacterEllipsis" />
+
+                        <ProgressBar Classes="download-progress"
+                                     Minimum="0" Maximum="100"
+                                     Value="{Binding ProgressPercent}"
+                                     IsIndeterminate="{Binding IsProgressIndeterminate}"
+                                     IsVisible="{Binding ShowsProgress}" />
+
+                        <TextBlock Classes="download-status"
+                                   Text="{Binding StatusText}"
+                                   TextTrimming="CharacterEllipsis" />
+                      </StackPanel>
+
+                    </Grid>
+                  </Button>
+
+                  <StackPanel Grid.Column="1" Orientation="Horizontal"
+                              Spacing="2" VerticalAlignment="Center">
+
+                    <Button Classes="icon small" ToolTip.Tip="Pause"
+                            IsVisible="{Binding CanPause}"
+                            Command="{Binding PauseCommand}">
+                      <Path Classes="glyph" Data="M3,1.5 V10.5 M8,1.5 V10.5" />
+                    </Button>
+
+                    <Button Classes="icon small" ToolTip.Tip="Resume"
+                            IsVisible="{Binding CanResume}"
+                            Command="{Binding ResumeCommand}">
+                      <Path Classes="glyph" Data="M3,1.5 L9.5,6 L3,10.5 Z" />
+                    </Button>
+
+                    <Button Classes="icon small" ToolTip.Tip="Cancel"
+                            IsVisible="{Binding CanCancel}"
+                            Command="{Binding CancelCommand}">
+                      <Path Classes="glyph" Data="M1,1 L9,9 M9,1 L1,9" />
+                    </Button>
+
+                    <Button Classes="icon small" ToolTip.Tip="Show in folder"
+                            IsVisible="{Binding CanOpenFile}"
+                            Command="{Binding RevealInFolderCommand}">
+                      <Path Classes="glyph" Data="M1,2.5 H4.7 L6,4 H11 V9.5 H1 Z" />
+                    </Button>
+
+                    <Button Classes="icon small" ToolTip.Tip="Remove from list"
+                            IsVisible="{Binding CanRemove}"
+                            Command="{Binding RemoveCommand}">
+                      <Path Classes="glyph" Data="M1,1 L9,9 M9,1 L1,9" />
+                    </Button>
+
+                  </StackPanel>
+
+                </Grid>
+              </Border>
+
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+
+      <Button Classes="download-show-all"
+              Content="Show all downloads"
+              HorizontalAlignment="Stretch"
+              HorizontalContentAlignment="Center"
+              Command="{Binding OpenDownloadsPageCommand}" />
+
+    </StackPanel>
+  </Border>
+
+</UserControl>

@@ -308,7 +308,10 @@ internal sealed class TabStripDragHandler
         // user can see where a cross-window drop would land.
         if (TopLevel.GetTopLevel(_strip) is MainWindow owner && Manager is { } manager)
         {
-            manager.UpdateDropPreview(owner.PointToScreen(e.GetPosition(owner)), owner);
+            manager.UpdateDropPreview(
+                owner.PointToScreen(e.GetPosition(owner)),
+                owner,
+                sourceIsPrivate: _shell()?.IsPrivateWindow == true);
         }
     }
 

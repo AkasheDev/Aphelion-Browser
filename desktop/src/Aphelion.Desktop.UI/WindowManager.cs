@@ -1,3 +1,4 @@
+using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Domain.ValueObjects;
 using Aphelion.Desktop.UI.ViewModels;
 using Aphelion.Desktop.UI.Views;
@@ -35,11 +36,12 @@ internal sealed class WindowManager(IServiceProvider services)
             _services.GetRequiredService<Func<BrowserViewModel>>(),
             this,
             sessionStore: null,
-            favicons: _services.GetService<Aphelion.Desktop.Application.Ports.IFaviconLoader>(),
+            favicons: _services.GetService<IFaviconLoader>(),
             tabSounds: null,
             // Bookmarks belong to the profile, so an ordinary new window shows
             // the same bar as the one it was opened from.
-            bookmarks: _services.GetService<BookmarksViewModel>());
+            bookmarks: _services.GetService<BookmarksViewModel>(),
+            downloads: _services.GetService<DownloadsViewModel>());
 
         var window = new MainWindow
         {
@@ -65,7 +67,7 @@ internal sealed class WindowManager(IServiceProvider services)
     /// The session store is withheld either way, so nothing here is restored on
     /// the next launch regardless.
     /// </summary>
-    public MainWindow CreatePrivateWindow()
+    public MainWindow CreatePrivateWindow(PageAddress? initialAddress = null)
     {
         // A private window gets its own ambient view model rather than the
         // process-wide singleton DI would otherwise hand it, so weather off by
@@ -77,19 +79,31 @@ internal sealed class WindowManager(IServiceProvider services)
             _services.GetRequiredService<Aphelion.Desktop.Application.Ports.IPrivacyPreferenceStore>(),
             isPrivateInstance: true);
 
-        var factory = () => ActivatorUtilities.CreateInstance<BrowserViewModel>(_services, privateAmbient, true);
+        // A private window gets its own download list: the files still land
+        // on disk, but the list itself must not leak into the profile or into
+        // ordinary windows, and it dies with the window.
+        var privateDownloads = new DownloadsViewModel(
+            store: null,
+            files: _services.GetService<IFileExplorer>());
+
+        var factory = () => ActivatorUtilities.CreateInstance<BrowserViewModel>(
+            _services,
+            privateAmbient,
+            true,
+            privateDownloads);
         var shell = new ShellViewModel(
             factory,
             this,
             sessionStore: null,
-            favicons: _services.GetService<Aphelion.Desktop.Application.Ports.IFaviconLoader>(),
+            favicons: _services.GetService<IFaviconLoader>(),
             tabSounds: null,
             // Bookmarks are shown and can be added here too. They are things the
             // user chose to keep, not a record of where they have been, so they
             // are not what private mode is protecting — the same call Chrome
             // makes. Browsing history and cookies remain untouched by them.
             bookmarks: _services.GetService<BookmarksViewModel>(),
-            isPrivateWindow: true);
+            isPrivateWindow: true,
+            downloads: privateDownloads);
 
         var window = new MainWindow { DataContext = new MainWindowViewModel(shell), Title = "Private Mode — Aphelion" };
 
@@ -102,6 +116,11 @@ internal sealed class WindowManager(IServiceProvider services)
                 new Uri("avares://Aphelion.Desktop.UI/Themes/PrivatePalette.axaml")));
 
         Register(window);
+
+        if (initialAddress is not null)
+        {
+            shell.NavigateActiveTab(initialAddress);
+        }
 
         window.Closing += (_, _) =>
         {
@@ -150,15 +169,24 @@ internal sealed class WindowManager(IServiceProvider services)
 
     /// <summary>
     /// Opens a torn-off tab in its own window, positioned under the pointer.
+    /// A tab taken from a private window opens in a new private window, so
+    /// dragging it out cannot drop it into ordinary browsing.
     /// </summary>
     public void TearOff(TabTransferSnapshot transfer, PixelPoint screenPosition, Size size)
     {
         ArgumentNullException.ThrowIfNull(transfer);
 
-        var window = CreateWindow(transfer.PrimaryAddress);
+        var initialAddress = transfer.IsDownloadsPage ? null : transfer.PrimaryAddress;
+        var window = transfer.IsPrivate
+            ? CreatePrivateWindow(initialAddress)
+            : CreateWindow(initialAddress);
 
         if (window.DataContext is MainWindowViewModel { Shell: { } shell })
         {
+            if (transfer.IsDownloadsPage)
+            {
+                shell.ActiveBrowser?.ShowDownloads();
+            }
             if (transfer.PartnerAddress is not null)
             {
                 shell.SplitActiveWithAddress(transfer.PartnerAddress);
@@ -183,9 +211,13 @@ internal sealed class WindowManager(IServiceProvider services)
     /// having already placed the tab live; a drag out of the overflow list passes
     /// nothing, since dropping onto its own strip is the point.
     /// </param>
-    public void UpdateDropPreview(PixelPoint screenPoint, MainWindow? exclude)
+    /// <param name="sourceIsPrivate">
+    /// Privacy of the window the tab is leaving. Private and ordinary strips do
+    /// not accept each other's tabs, so the indicator only lights on a match.
+    /// </param>
+    public void UpdateDropPreview(PixelPoint screenPoint, MainWindow? exclude, bool sourceIsPrivate)
     {
-        var target = WindowAcceptingDropAt(screenPoint, exclude);
+        var target = WindowAcceptingDropAt(screenPoint, exclude, sourceIsPrivate);
 
         foreach (var window in _windows)
         {
@@ -210,14 +242,23 @@ internal sealed class WindowManager(IServiceProvider services)
 
     /// <summary>
     /// The window whose tab strip contains <paramref name="screenPoint"/>, ignoring
-    /// <paramref name="exclude"/>. Used to decide whether a released drag lands on
-    /// another window rather than on empty desktop.
+    /// <paramref name="exclude"/> and any window whose privacy does not match
+    /// <paramref name="sourceIsPrivate"/>. Used to decide whether a released drag
+    /// lands on another window rather than on empty desktop.
     /// </summary>
-    public MainWindow? WindowAcceptingDropAt(PixelPoint screenPoint, MainWindow? exclude)
+    public MainWindow? WindowAcceptingDropAt(
+        PixelPoint screenPoint,
+        MainWindow? exclude,
+        bool sourceIsPrivate)
     {
         foreach (var window in _windows)
         {
             if (ReferenceEquals(window, exclude) || !window.IsVisible)
+            {
+                continue;
+            }
+
+            if (WindowIsPrivate(window) != sourceIsPrivate)
             {
                 continue;
             }
@@ -230,4 +271,7 @@ internal sealed class WindowManager(IServiceProvider services)
 
         return null;
     }
+
+    private static bool WindowIsPrivate(MainWindow window) =>
+        window.DataContext is MainWindowViewModel { Shell.IsPrivateWindow: true };
 }

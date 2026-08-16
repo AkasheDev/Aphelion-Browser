@@ -80,10 +80,15 @@
                          RenderOptions.BitmapInterpolationMode="HighQuality"
                          IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNotNull}}" />
                   <Path Grid.Column="1"
+                        Classes="favicon-downloads"
+                        Width="13" Height="13"
+                        Data="M6.5,1.5 V8 M3.5,5.5 L6.5,8.5 L9.5,5.5 M2.2,11 H10.8"
+                        IsVisible="{Binding IsDownloadsPage}" />
+                  <Path Grid.Column="1"
                         Classes="favicon-fallback"
                         Width="13" Height="13"
                         Data="M1,6.5 A5.5,5.5 0 1 0 12,6.5 A5.5,5.5 0 1 0 1,6.5 M1,6.5 H12 M6.5,1 A8,8 0 0 1 6.5,12 A8,8 0 0 1 6.5,1"
-                        IsVisible="{Binding Favicon, Converter={x:Static ObjectConverters.IsNull}}" />
+                        IsVisible="{Binding ShowsGlobeFallback}" />
 
                   <TextBlock Grid.Column="2"
                              Text="{Binding Title}"

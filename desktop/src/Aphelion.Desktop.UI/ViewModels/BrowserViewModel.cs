@@ -1,5 +1,6 @@
 using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Application.UseCases;
+using Aphelion.Desktop.Domain;
 using Aphelion.Desktop.Domain.Entities;
 using Aphelion.Desktop.Domain.ValueObjects;
 using Avalonia.Threading;
@@ -20,6 +21,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
 {
     private readonly NavigateFromAddressBar _navigateFromAddressBar;
     private readonly ManageSiteZoom? _siteZoom;
+    private readonly DownloadsViewModel? _downloads;
     private readonly bool _isPrivate;
 
     private BrowserTab _tab = new(TabId.New());
@@ -78,11 +80,13 @@ public sealed partial class BrowserViewModel : ViewModelBase
         ISearchSuggestionProvider? suggestions = null,
         ManageSiteZoom? siteZoom = null,
         bool isPrivate = false,
-        IPrivacyPreferenceStore? privacy = null)
+        IPrivacyPreferenceStore? privacy = null,
+        DownloadsViewModel? downloads = null)
     {
         _navigateFromAddressBar = navigateFromAddressBar
             ?? throw new ArgumentNullException(nameof(navigateFromAddressBar));
         _siteZoom = siteZoom;
+        _downloads = downloads;
         _isPrivate = isPrivate;
         _loadingProgressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
         _loadingProgressTimer.Tick += OnLoadingProgressTick;
@@ -101,13 +105,32 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
     public NewTabPageViewModel NewTab { get; }
 
+    /// <summary>The shared download list, shown when this tab is the downloads page.</summary>
+    public DownloadsViewModel? Downloads => _downloads;
+
     public bool IsPrivate => _isPrivate;
 
     /// <summary>Local error surface shown instead of an engine-specific failure page.</summary>
     public NavigationErrorPageViewModel ErrorPage { get; }
 
     /// <summary>Whether the native surface should remain visible behind browser UI.</summary>
-    public bool ShouldShowWebView => !IsBlank && !ErrorPage.IsVisible;
+    public bool ShouldShowWebView => !IsBlank && !IsDownloadsPage && !ErrorPage.IsVisible;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShouldShowWebView))]
+    private bool _isDownloadsPage;
+
+    /// <summary>
+    /// Turns this tab into the local downloads page, as Ctrl+J does. Counted as
+    /// leaving New Tab so Back returns there rather than disabling.
+    /// </summary>
+    public void ShowDownloads()
+    {
+        ErrorPage.Hide();
+        NoteNavigationAway(_tab.IsBlank);
+        _tab.ShowDownloads();
+        SyncFromTab();
+    }
 
     /// <summary>
     /// Binds this view model to the tab it drives. The shell owns tab lifetime, so
@@ -220,6 +243,14 @@ public sealed partial class BrowserViewModel : ViewModelBase
     /// </summary>
     public event EventHandler<ZoomFeedbackRequestedEventArgs>? ZoomFeedbackRequested;
 
+    /// <summary>
+    /// Raised when a page in this tab starts a download, after the shared
+    /// download list has taken it. The shell listens so the window the download
+    /// started in — and only that window — opens its downloads panel, as Chrome
+    /// surfaces its bubble.
+    /// </summary>
+    public event EventHandler? DownloadStarted;
+
     /// <summary>Simulated, monotonic navigation progress from 0 to 100.</summary>
     [ObservableProperty]
     private double _loadingProgress;
@@ -258,6 +289,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _session.NavigationStarted += OnNavigationStarted;
         _session.NavigationCompleted += OnNavigationCompleted;
         _session.ZoomFactorChanged += OnZoomFactorChanged;
+        _session.DownloadStarted += OnDownloadStarted;
 
         RefreshHistoryState();
         ResumePendingNavigation();
@@ -294,7 +326,13 @@ public sealed partial class BrowserViewModel : ViewModelBase
         // how most New-Tab-to-page navigations actually happen; the New Tab
         // page's own search box goes through NavigateFromNewTab instead, but both
         // need the same flag set the same way.
-        var leftNewTab = _tab.IsBlank;
+        var leftNewTab = _tab.IsBlank || _tab.IsDownloadsPage;
+
+        if (_tab.IsDownloadsPage &&
+            InternalPages.IsDownloads(AddressText))
+        {
+            return;
+        }
 
         if (_navigateFromAddressBar.Execute(_tab, _session, AddressText))
         {
@@ -306,7 +344,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
     [RelayCommand]
     private void CancelAddressEditing()
     {
-        AddressText = _tab.Address?.ToString() ?? string.Empty;
+        AddressText = AddressBarText();
     }
 
     [RelayCommand(CanExecute = nameof(CanGoBack))]
@@ -374,7 +412,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
     [RelayCommand]
     private void Reload()
     {
-        if (_tab.IsBlank)
+        if (_tab.IsBlank || _tab.IsDownloadsPage)
         {
             return;
         }
@@ -549,6 +587,11 @@ public sealed partial class BrowserViewModel : ViewModelBase
         OnPropertyChanged(nameof(FaviconAddress));
     }
 
+    private string AddressBarText() =>
+        _tab.IsDownloadsPage
+            ? InternalPages.DownloadsAddress
+            : _tab.Address?.ToString() ?? string.Empty;
+
     /// <summary>The current page's favicon address, surfaced for the tab strip.</summary>
     public PageAddress? FaviconAddress => _tab.FaviconAddress;
 
@@ -563,6 +606,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         var wasLoading = IsLoading;
         IsLoading = _tab.LoadState == TabLoadState.Loading;
         IsBlank = _tab.IsBlank;
+        IsDownloadsPage = _tab.IsDownloadsPage;
         OnPropertyChanged(nameof(ShouldShowWebView));
 
         if (IsLoading)
@@ -586,9 +630,9 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
         // Do not overwrite the address bar while the user is typing into it: only
         // follow the tab when a navigation is in flight or has just landed.
-        if (_tab.Address is not null)
+        if (_tab.IsDownloadsPage || _tab.Address is not null)
         {
-            AddressText = _tab.Address.ToString();
+            AddressText = AddressBarText();
         }
 
         StatusText = _tab.LoadState switch
@@ -644,6 +688,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _session.NavigationStarted -= OnNavigationStarted;
         _session.NavigationCompleted -= OnNavigationCompleted;
         _session.ZoomFactorChanged -= OnZoomFactorChanged;
+        _session.DownloadStarted -= OnDownloadStarted;
         _session = null;
         _lastStartedAddress = null;
         _sessionGeneration++;
@@ -767,6 +812,34 @@ public sealed partial class BrowserViewModel : ViewModelBase
             zoom = _siteZoom?.Save(_tab.Address, zoom) ?? zoom;
             ZoomPercent = zoom.Percent;
             RequestZoomFeedback(zoom.Percent);
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            Apply();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(Apply);
+        }
+    }
+
+    private void OnDownloadStarted(object? sender, EngineDownloadStartedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, _session))
+        {
+            return;
+        }
+
+        void Apply()
+        {
+            if (!ReferenceEquals(sender, _session))
+            {
+                return;
+            }
+
+            _downloads?.Track(e.Operation, _isPrivate);
+            DownloadStarted?.Invoke(this, EventArgs.Empty);
         }
 
         if (Dispatcher.UIThread.CheckAccess())

@@ -22,6 +22,20 @@ public partial class BrowserToolbarView : UserControl
         }
     }
 
+    /// <summary>
+    /// Posted after the click that dismissed the popup, so toggling the
+    /// downloads button closed does not immediately reopen it.
+    /// </summary>
+    private void OnDownloadsClosed(object? sender, EventArgs e)
+    {
+        if (DataContext is MainWindowViewModel { Shell: { } shell })
+        {
+            Dispatcher.UIThread.Post(
+                () => shell.CloseDownloadsBubbleCommand.Execute(null),
+                DispatcherPriority.Background);
+        }
+    }
+
     /// <summary>Focuses and selects the shared address input for Ctrl+L.</summary>
     public void FocusAddress() =>
         Dispatcher.UIThread.Post(
