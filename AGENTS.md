@@ -1,69 +1,114 @@
 # AGENTS.md
 
-Aphelion is a cross-platform browser product. This repository has three code
-components:
+Instructions for **any** coding agent or automated assistant working in this
+repository (Cursor, Claude Code, Codex, Copilot, Gemini CLI, etc.). Humans can
+follow the same steps.
 
-- `backend/` — optional sync API (.NET 10, ASP.NET Core minimal API).
-- `desktop/` — Windows/Linux/macOS browser client (.NET 10 + Avalonia UI).
-- `mobile/` — Android/iOS client (Flutter + Dart).
+## Product overview
 
-## Cursor Cloud specific instructions
+Aphelion is a cross-platform browser product with three code components:
 
-The base VM snapshot already has the toolchains installed and on `PATH` (via
-`~/.bashrc`). The startup update script only refreshes project dependencies
-(`dotnet restore` for both solutions and `flutter pub get` for mobile). You
-normally do not need to install anything.
+| Path | Stack | Maturity |
+| --- | --- | --- |
+| `backend/` | .NET 10, ASP.NET Core | Scaffold + `GET /health` |
+| `desktop/` | .NET 10, Avalonia UI | Full browser client |
+| `mobile/` | Flutter / Dart | Scaffold + widget test |
 
-### Toolchains
+Shared design/product notes live under `shared/` and `docs/`. Canonical
+per-component commands are also in `backend/README.md`, `desktop/README.md`, and
+`mobile/README.md`.
 
-- .NET 10 SDK (`10.0.302`, pinned by each `global.json`) lives at `~/.dotnet`
-  (`dotnet` on `PATH`). Both `.slnx` solutions require an SDK new enough to parse
-  the XML solution format; .NET 10 handles it.
-- Flutter stable (`~/flutter`, `flutter`/`dart` on `PATH`) provides Dart `3.13`,
-  which satisfies mobile's `sdk: ^3.12.2` constraint.
-- `Directory.Build.props` in `backend/` and `desktop/` sets
-  `TreatWarningsAsErrors`, so builds fail on any warning — keep changes clean.
+## First-time machine setup (all agents)
 
-### Standard commands
+From the repository root, run the portable bootstrap once (or whenever toolchains
+are missing):
 
-Per-component build/run/test/lint commands are already documented and correct in
-`backend/README.md`, `desktop/README.md`, and `mobile/README.md`. Key entry
-points:
+```bash
+./scripts/setup-dev.sh
+```
 
-- Backend: `dotnet run --project backend/src/Aphelion.Api` → serves on
-  `http://localhost:5270` (port comes from
-  `backend/src/Aphelion.Api/Properties/launchSettings.json`, which overrides
-  `ASPNETCORE_URLS` unless you pass `--no-launch-profile`). Smoke test:
-  `curl http://localhost:5270/health` → `{"status":"healthy"}`. There are no
-  automated backend tests yet (see `backend/tests/README.md`).
-- Desktop: `dotnet run --project desktop/src/Aphelion.Desktop.UI` (GUI, uses
-  `DISPLAY=:1`). No automated desktop tests yet.
-- Mobile: `flutter analyze` (lint) and `flutter test` (one widget test). There is
-  no Linux/web desktop target configured, so `flutter run` needs an
-  Android/iOS device; use `flutter test` to exercise the app headlessly.
+This installs (idempotently):
 
-### Non-obvious desktop gotchas
+- .NET SDK **10.0.302** (pinned by `backend/global.json` and `desktop/global.json`) into `~/.dotnet`
+- Flutter **stable** into `~/flutter` (provides Dart ≥ 3.12 for `mobile/`)
+- On Linux: `libwebkit2gtk-4.1` plus unversioned `libwebkit2gtk.so` symlinks required by the desktop WebView
+- Package restore: `dotnet restore` for both `.slnx` solutions and `flutter pub get` for mobile
 
-- The desktop WebView uses the platform native engine. On Linux that is
-  WebKitGTK, loaded by the unversioned name `libwebkit2gtk`. The snapshot has
-  `libwebkit2gtk-4.1-0` plus `libwebkit2gtk.so` / `liblibwebkit2gtk.so` symlinks
-  in `/usr/lib/x86_64-linux-gnu`. Without them the app hard-crashes the moment a
-  tab's WebView is created.
-- On the headless, software-rendered X display (`:1`, no GPU — expect a
-  `libEGL ... DRI3` warning), the browser's navigation layer works fully (typing a
-  URL resolves and loads it; the tab title and X11 window title update to the
-  site), but WebKitGTK does not composite page pixels into the embedded native
-  surface, so the page area looks blank. This is an environment/GPU limitation,
-  not a code bug; it does not reproduce on a real desktop with a GPU. The
-  new-tab page, tabs, address bar, bookmarks, and the live weather widget (fetched
-  from Open-Meteo) all render normally via Avalonia's software renderer.
-- `WEBKIT_DEBUG=1` is pre-set in the VM environment and spams
-  `Unknown logging channel: 1`; `unset WEBKIT_DEBUG` for clean logs.
-- LibVLC (tab interaction sounds) has no Linux native package here (the NuGet
-  natives are Windows/macOS only); the app degrades gracefully to silence.
+If toolchains are already installed and only NuGet/pub packages need refresh:
 
-### Mobile gotcha
+```bash
+./scripts/setup-dev.sh --deps-only
+```
 
-- `flutter pub get` may rewrite `mobile/pubspec.lock` and append analyzer
-  excludes to `mobile/analysis_options.yaml`. That churn is normal Flutter
-  behavior and safe to discard (`git checkout -- mobile/...`).
+Put `~/.dotnet` and `~/flutter/bin` on `PATH` (the setup script appends this to
+`~/.bashrc` when possible).
+
+## Lint / test / run
+
+`Directory.Build.props` in `backend/` and `desktop/` sets `TreatWarningsAsErrors`.
+Treat any compiler warning as a failure.
+
+### Backend
+
+```bash
+dotnet build backend/Aphelion.Backend.slnx
+dotnet run --project backend/src/Aphelion.Api
+# Default URL from launchSettings.json: http://localhost:5270
+curl -sS http://localhost:5270/health   # → {"status":"healthy"}
+```
+
+`ASPNETCORE_URLS` is overridden by `launchSettings.json` unless you pass
+`--no-launch-profile`. No automated backend tests yet (`backend/tests/README.md`).
+
+### Desktop
+
+```bash
+dotnet build desktop/Aphelion.Desktop.slnx
+dotnet run --project desktop/src/Aphelion.Desktop.UI
+```
+
+GUI app. Requires a display. On Linux the native WebView needs WebKitGTK (installed
+by `scripts/setup-dev.sh`). No automated desktop tests yet.
+
+### Mobile
+
+```bash
+cd mobile
+flutter analyze
+flutter test
+flutter run    # needs Android/iOS device or emulator
+```
+
+There is no Linux/web desktop Flutter target configured; use `flutter test` for
+headless verification.
+
+## Important gotchas (every agent)
+
+- **Linux desktop WebView:** Avalonia loads `libwebkit2gtk` (unversioned). Without
+  the package + symlinks created by `scripts/setup-dev.sh`, the app crashes when a
+  tab creates a WebView.
+- **Headless / no-GPU displays:** Navigation can succeed (URL and tab title update)
+  while the embedded WebKit surface stays blank. Avalonia UI (new tab, chrome,
+  weather widget) still renders. This is a display/GPU limitation, not an app bug.
+- **`flutter pub get` churn:** May rewrite `mobile/pubspec.lock` and
+  `mobile/analysis_options.yaml`. Safe to discard if unintended
+  (`git checkout -- mobile/...`).
+- **LibVLC sounds:** NuGet ships Windows/macOS natives only; on Linux the desktop
+  app stays silent and continues normally.
+- **Do not commit secrets.** Prefer environment secrets / local env files that are
+  gitignored.
+
+## Cursor Cloud notes
+
+Cursor Cloud Agents may already have toolchains from a saved environment snapshot.
+In that case only dependency refresh is needed:
+
+```bash
+./scripts/setup-dev.sh --deps-only
+```
+
+If a Cursor environment panel install script is configured separately, keep it
+aligned with `--deps-only` (restore / `pub get` only). Full toolchain bootstrap
+belongs in the snapshot or in `./scripts/setup-dev.sh` for cold machines.
+
+Unset `WEBKIT_DEBUG` if logs spam `Unknown logging channel: 1`.

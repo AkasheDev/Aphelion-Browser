@@ -14,24 +14,30 @@ Aphelion aims to bring a polished, modern, and cross-platform experience to user
 
 ## Project Structure
 
-- mobile/ - Flutter application for iOS and Android
-- desktop/ - Avalonia application for Linux, macOS, and Windows
-- docs/ - Product notes, architecture references, and planning documents
+- `mobile/` — Flutter application for iOS and Android
+- `desktop/` — Avalonia application for Linux, macOS, and Windows
+- `backend/` — optional .NET sync API
+- `docs/` — product notes, architecture references, and planning documents
+- `scripts/setup-dev.sh` — portable toolchain + dependency bootstrap for humans and coding agents
 
 ## Technology Stack
 
 - Mobile: Flutter, Dart
 - Desktop: Avalonia, .NET
+- Backend: .NET (ASP.NET Core)
 - Development workflow: Git, GitHub, VS Code
 
 ## Getting Started
 
-### Prerequisites
+Recommended one-shot setup (installs pinned .NET 10 + Flutter stable, Linux WebKit
+deps when needed, then restores packages):
 
-- Flutter SDK
-- Dart SDK
-- Android Studio or Xcode for mobile builds
-- .NET SDK for desktop development
+```bash
+./scripts/setup-dev.sh
+```
+
+Agent-oriented commands, gotchas, and per-component lint/test/run notes live in
+[`AGENTS.md`](AGENTS.md).
 
 ### Mobile App
 
@@ -44,9 +50,14 @@ flutter run
 ### Desktop App
 
 ```bash
-cd desktop
-dotnet restore
-dotnet run
+dotnet run --project desktop/src/Aphelion.Desktop.UI
+```
+
+### Backend API
+
+```bash
+dotnet run --project backend/src/Aphelion.Api
+curl http://localhost:5270/health
 ```
 
 ## Roadmap
