@@ -239,16 +239,6 @@
           </Border>
         </Grid>
 
-        <!-- Below the search box rather than above it: the mark and the wordmark
-             say where you are, and this says what that means — a footnote to the
-             whole page, so it reads after the thing the page is for. Outside the
-             private block it sits in, hence its own visibility. -->
-        <TextBlock Text="Nothing here is kept. This window leaves no history, and its cookies and site data go when you close it."
-                   FontSize="13" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="370"
-                   LineHeight="21"
-                   IsVisible="{Binding IsPrivate}"
-                   Foreground="{DynamicResource NewTabMutedBrush}" HorizontalAlignment="Center" />
-
       </StackPanel>
 
       <!--
@@ -292,6 +282,19 @@
           </ItemsControl.ItemTemplate>
         </ItemsControl>
       </ScrollViewer>
+
+      <!-- Private mode's note takes the place the shortcut row holds in an
+           ordinary tab: the same half of the page, stepping aside for the
+           suggestion list in exactly the same way, so searching looks the same
+           in both kinds of tab. -->
+      <TextBlock Grid.Row="1"
+                 Text="Nothing here is kept. This window leaves no history, and its cookies and site data go when you close it."
+                 FontSize="13" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="370"
+                 LineHeight="21"
+                 Margin="0,28,0,0"
+                 VerticalAlignment="Top"
+                 IsVisible="{Binding ShowPrivateNote}"
+                 Foreground="{DynamicResource NewTabMutedBrush}" HorizontalAlignment="Center" />
 
       <!-- Shares the lower half with the suggestion list, which takes over the
            space while it is showing. Wrapped so the page can withdraw the whole

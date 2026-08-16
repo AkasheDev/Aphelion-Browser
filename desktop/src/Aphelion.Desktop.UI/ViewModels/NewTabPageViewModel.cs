@@ -66,6 +66,14 @@ public sealed partial class NewTabPageViewModel : ViewModelBase
     /// </summary>
     public bool ShowShortcutRow => !IsPrivate && !Search.HasSuggestions;
 
+    /// <summary>
+    /// Whether private mode's note is showing. It occupies the same half of the
+    /// page the shortcut row does in an ordinary tab, and steps aside for
+    /// suggestions the same way: what the window is stays true while you search,
+    /// but it is not what you are looking at.
+    /// </summary>
+    public bool ShowPrivateNote => IsPrivate && !Search.HasSuggestions;
+
     private void OnAmbientPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(NewTabAmbientViewModel.IsWeatherEnabled))
@@ -79,6 +87,7 @@ public sealed partial class NewTabPageViewModel : ViewModelBase
         if (e.PropertyName == nameof(NewTabSearchBoxViewModel.HasSuggestions))
         {
             OnPropertyChanged(nameof(ShowShortcutRow));
+            OnPropertyChanged(nameof(ShowPrivateNote));
         }
     }
 
