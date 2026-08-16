@@ -177,11 +177,6 @@
               </LinearGradientBrush>
             </Border.Background>
           </Border>
-
-          <TextBlock Text="Nothing here is kept. This window leaves no history, and its cookies and site data go when you close it."
-                     FontSize="13" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="370"
-                     LineHeight="21"
-                     Foreground="{DynamicResource NewTabMutedBrush}" HorizontalAlignment="Center" />
         </StackPanel>
         <Grid Name="NewTabSearchAnchor" Height="58" ClipToBounds="False">
           <Border Name="NewTabSearchSurface"
@@ -243,6 +238,16 @@
             </Grid>
           </Border>
         </Grid>
+
+        <!-- Below the search box rather than above it: the mark and the wordmark
+             say where you are, and this says what that means — a footnote to the
+             whole page, so it reads after the thing the page is for. Outside the
+             private block it sits in, hence its own visibility. -->
+        <TextBlock Text="Nothing here is kept. This window leaves no history, and its cookies and site data go when you close it."
+                   FontSize="13" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="370"
+                   LineHeight="21"
+                   IsVisible="{Binding IsPrivate}"
+                   Foreground="{DynamicResource NewTabMutedBrush}" HorizontalAlignment="Center" />
 
       </StackPanel>
 
