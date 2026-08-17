@@ -9,11 +9,27 @@ namespace Aphelion.Desktop.UI.Services;
 /// </summary>
 internal sealed class NullTabSoundPlayer : ITabSoundPlayer
 {
+    /// <summary>
+    /// Used when LibVLC could not report the cue's length. Long enough that the
+    /// orbit is visible; the real player replaces this with the file's duration.
+    /// </summary>
+    internal static readonly TimeSpan FallbackSplashDuration = TimeSpan.FromSeconds(8);
+
+    public TimeSpan SplashDuration => FallbackSplashDuration;
+
     public void PlayTabOpened()
     {
     }
 
     public void PlayTabClosed()
+    {
+    }
+
+    public void PlaySplash(bool repeat = false)
+    {
+    }
+
+    public void StopSplash()
     {
     }
 }

@@ -1,3 +1,4 @@
+using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Application.UseCases;
 using Aphelion.Desktop.UI.ViewModels;
 using Aphelion.Desktop.UI.Views;
@@ -37,12 +38,33 @@ public partial class App : Avalonia.Application
         var services = _services!;
 
         var splashViewModel = services.GetRequiredService<SplashViewModel>();
-        var splash = new SplashWindow { DataContext = splashViewModel };
-        splash.Show();
+        var sounds = services.GetRequiredService<ITabSoundPlayer>();
+        splashViewModel.OrbitDuration = sounds.SplashDuration;
+        if (Environment.GetCommandLineArgs().Contains("--splash"))
+        {
+            splashViewModel.LoopOrbit = true;
+        }
 
-        // Started with --splash, the splash is the whole application: a slow,
-        // looping sweep so its orbit can actually be watched. A real start is
-        // over in about a second, which is not long enough to judge it by.
+        var splash = new SplashWindow { DataContext = splashViewModel };
+
+        // The window is on screen at Opened, not at Show: Show only asks the
+        // platform to present it. Play then, and stop when the splash goes away
+        // so the cue never continues under the browser. The hold starts here too,
+        // so the orbit and the cue share one clock.
+        var cueHold = Task.CompletedTask;
+        var opened = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        splash.Opened += (_, _) =>
+        {
+            sounds.PlaySplash(splashViewModel.LoopOrbit);
+            cueHold = Task.Delay(sounds.SplashDuration);
+            opened.TrySetResult();
+        };
+        splash.Closed += (_, _) => sounds.StopSplash();
+        splash.Show();
+        await opened.Task;
+
+        // Started with --splash, the splash is the whole application: a looping
+        // lap timed to the cue so its orbit can actually be watched.
         if (Environment.GetCommandLineArgs().Contains("--splash"))
         {
             await PreviewSplashAsync(splashViewModel, splash);
@@ -54,7 +76,6 @@ public partial class App : Avalonia.Application
             var progress = new Progress<StartupProgress>(report =>
             {
                 splashViewModel.StatusText = report.Description;
-                splashViewModel.ProgressPercent = report.Fraction * 100d;
             });
 
             await services.GetRequiredService<RunStartupSequence>()
@@ -72,7 +93,12 @@ public partial class App : Avalonia.Application
             return;
         }
 
-        // Let the finished progress bar register before the window swaps.
+        // The cue is the floor: if loading already finished, the body still has
+        // to complete its lap. If the cue already ended, loading continues and
+        // this returns at once — the browser opens when the work is done.
+        await cueHold;
+
+        // A beat at home so the arrival is seen before the window swaps.
         await Task.Delay(TimeSpan.FromMilliseconds(350));
 
         var mainWindow = new MainWindow
@@ -97,25 +123,18 @@ public partial class App : Avalonia.Application
     }
 
     /// <summary>
-    /// Drives the splash's progress from nought to full and round again until the
-    /// window is closed. A development aid for looking at the orbit, reached only
-    /// through the --splash argument.
+    /// Holds the splash open until it is closed. The orbit itself is timed to the
+    /// cue and loops for this preview; this method only keeps the window alive.
     /// </summary>
     private static async Task PreviewSplashAsync(SplashViewModel model, SplashWindow splash)
     {
         var closed = false;
         splash.Closed += (_, _) => closed = true;
+        model.StatusText = "Splash preview";
 
         while (!closed)
         {
-            for (var percent = 0; percent <= 100 && !closed; percent++)
-            {
-                model.ProgressPercent = percent;
-                model.StatusText = $"Splash preview — {percent}%";
-                await Task.Delay(70);
-            }
-
-            await Task.Delay(900);
+            await Task.Delay(200);
         }
     }
 

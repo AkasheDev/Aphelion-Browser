@@ -1,4 +1,4 @@
-using System.ComponentModel;
+using System.Diagnostics;
 using Aphelion.Desktop.UI.ViewModels;
 using Avalonia;
 using Avalonia.Controls;
@@ -13,14 +13,16 @@ namespace Aphelion.Desktop.UI.Views;
 
 /// <summary>
 /// The orbit the splash screen is built around: a body sets out from the near
-/// side and arrives at the aphelion — the point farthest from the star it
-/// circles — exactly as startup finishes.
+/// side and completes a lap — arriving back where it began — as the splash cue
+/// ends. Startup may still be running after that; the window simply waits.
 /// </summary>
 /// <remarks>
 /// The scene is in the XAML; the motion is here, because XAML can lay out a
 /// scene but not walk a point around an ellipse. Everything is created once and
 /// then only repositioned, so a frame costs a few dozen point assignments and no
-/// allocation of controls.
+/// allocation of controls. Progress is elapsed time over the cue's duration, not
+/// the startup fraction: loading is usually over in a second, which is too brief
+/// for the lap to be seen.
 /// </remarks>
 public partial class SplashWindow : Window
 {
@@ -38,22 +40,6 @@ public partial class SplashWindow : Window
     /// <summary>How much of the trail behind the body burns brighter than the rest.</summary>
     private const double HeadFraction = 0.16;
 
-    /// <summary>
-    /// How quickly the drawn progress catches up with the reported progress, per
-    /// frame. Startup reports in jumps; gliding between them is the difference
-    /// between a scene and a progress bar. High enough that the body is visibly
-    /// travelling rather than drifting — a splash that dawdles reads as a slow
-    /// application.
-    /// </summary>
-    private const double Smoothing = 0.19;
-
-    /// <summary>
-    /// The least the body advances per frame once it is behind, as a fraction of
-    /// the whole journey. Exponential easing alone crawls over the last stretch of
-    /// every step, which is exactly where it looks stuck.
-    /// </summary>
-    private const double MinimumStep = 0.0045;
-
     /// <summary>Size of the panel holding the star and its corona.</summary>
     private const double CentreSize = 260;
 
@@ -66,10 +52,10 @@ public partial class SplashWindow : Window
     private readonly Ellipse _body = new();
 
     private readonly DispatcherTimer _ticker;
+    private readonly Stopwatch _orbitClock = new();
 
     private SplashViewModel? _model;
-    private double _target;
-    private double _shown;
+    private double _drawn = double.NaN;
 
     public SplashWindow()
     {
@@ -99,6 +85,7 @@ public partial class SplashWindow : Window
             root.Opacity = 1;
         }
 
+        _orbitClock.Restart();
         _ticker.Start();
     }
 
@@ -106,73 +93,43 @@ public partial class SplashWindow : Window
     {
         _ticker.Stop();
         _ticker.Tick -= OnTick;
+        _orbitClock.Stop();
 
-        if (_model is not null)
-        {
-            _model.PropertyChanged -= OnModelChanged;
-            _model = null;
-        }
+        _model = null;
     }
 
     protected override void OnDataContextChanged(EventArgs e)
     {
         base.OnDataContextChanged(e);
-
-        if (_model is not null)
-        {
-            _model.PropertyChanged -= OnModelChanged;
-        }
-
         _model = DataContext as SplashViewModel;
-
-        if (_model is not null)
-        {
-            _model.PropertyChanged += OnModelChanged;
-            _target = _model.ProgressPercent / 100d;
-        }
-    }
-
-    private void OnModelChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName == nameof(SplashViewModel.ProgressPercent) && _model is not null)
-        {
-            _target = Math.Clamp(_model.ProgressPercent / 100d, 0, 1);
-        }
     }
 
     private void OnTick(object? sender, EventArgs e)
     {
-        var delta = _target - _shown;
-
-        // Settled: stop redrawing a scene that is not moving. The animations
-        // declared in XAML keep running on their own.
-        if (Math.Abs(delta) < 0.0005)
+        var duration = _model?.OrbitDuration ?? TimeSpan.FromSeconds(8);
+        if (duration <= TimeSpan.Zero)
         {
-            if (_shown != _target)
-            {
-                _shown = _target;
-                Draw(_shown);
-            }
+            duration = TimeSpan.FromSeconds(8);
+        }
 
+        var progress = _orbitClock.Elapsed.TotalMilliseconds / duration.TotalMilliseconds;
+
+        if (_model?.LoopOrbit == true)
+        {
+            progress %= 1d;
+        }
+        else
+        {
+            progress = Math.Clamp(progress, 0, 1);
+        }
+
+        if (!double.IsNaN(_drawn) && Math.Abs(progress - _drawn) < 0.0004)
+        {
             return;
         }
 
-        // The last leg closes faster. Startup shuts the window shortly after it
-        // reports completion, so a body still ambling towards the aphelion would
-        // be cut off just short of arriving — the one frame the whole scene is
-        // built around.
-        var rate = _target >= 1 ? Smoothing * 2.1 : Smoothing;
-        var step = delta * rate;
-
-        // Keep it moving through the tail of the ease, where the remaining
-        // distance is small and pure easing would inch along.
-        if (Math.Abs(step) < MinimumStep)
-        {
-            step = Math.Sign(delta) * Math.Min(MinimumStep, Math.Abs(delta));
-        }
-
-        _shown += step;
-        Draw(_shown);
+        _drawn = progress;
+        Draw(progress);
     }
 
     /// <summary>Positions the star and its corona, which XAML anchors at the top left.</summary>

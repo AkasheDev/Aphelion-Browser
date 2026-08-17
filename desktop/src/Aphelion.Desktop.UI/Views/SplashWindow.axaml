@@ -15,9 +15,9 @@
 
   <!--
     An aphelion is the point of an orbit farthest from the star it circles, so
-    the splash is that journey: the body sets out from the near side and arrives
-    at the far point exactly as startup finishes. The logo stands at the centre
-    as the star it is orbiting.
+    the splash is that journey: the body sets out from the near side, passes the
+    far point, and arrives back where it began as the splash cue ends. The logo
+    stands at the centre as the star it is orbiting.
 
     Everything here is local to this window on purpose. The splash is the one
     surface with its own visual language, and putting its starfield and orbit

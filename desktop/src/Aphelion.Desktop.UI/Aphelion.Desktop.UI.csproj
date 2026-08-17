@@ -12,6 +12,10 @@
     <AvaloniaResource Include="Assets\**" />
     <Content Include="Assets\Sounds\0812.mp3" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Assets\Sounds\0813.mp3" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\..\shared\resources\splash.mp3"
+             Link="Assets\Sounds\splash.mp3"
+             CopyToOutputDirectory="PreserveNewest"
+             TargetPath="Assets\Sounds\splash.mp3" />
   </ItemGroup>
 
   <ItemGroup>
