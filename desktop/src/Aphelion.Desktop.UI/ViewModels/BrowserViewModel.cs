@@ -20,6 +20,8 @@ namespace Aphelion.Desktop.UI.ViewModels;
 public sealed partial class BrowserViewModel : ViewModelBase
 {
     private readonly NavigateFromAddressBar _navigateFromAddressBar;
+    private readonly ISearchSuggestionProvider? _suggestions;
+    private readonly SearchEngineSelectorViewModel? _searchEngines;
     private readonly ManageSiteZoom? _siteZoom;
     private readonly DownloadsViewModel? _downloads;
     private readonly bool _isPrivate;
@@ -83,6 +85,8 @@ public sealed partial class BrowserViewModel : ViewModelBase
     {
         NewTab,
         Downloads,
+        Settings,
+        History,
         Engine,
     }
 
@@ -109,6 +113,8 @@ public sealed partial class BrowserViewModel : ViewModelBase
     {
         _navigateFromAddressBar = navigateFromAddressBar
             ?? throw new ArgumentNullException(nameof(navigateFromAddressBar));
+        _suggestions = suggestions;
+        _searchEngines = searchEngines;
         _siteZoom = siteZoom;
         _downloads = downloads;
         _isPrivate = isPrivate;
@@ -138,7 +144,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
     public NavigationErrorPageViewModel ErrorPage { get; }
 
     /// <summary>Whether the native surface should remain visible behind browser UI.</summary>
-    public bool ShouldShowWebView => !IsBlank && !IsDownloadsPage && !ErrorPage.IsVisible;
+    public bool ShouldShowWebView => !IsBlank && !HasInternalPage && !ErrorPage.IsVisible;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShouldShowWebView))]
@@ -197,7 +203,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
         ErrorPage.Hide();
 
-        var leftLocal = _tab.IsBlank || _tab.IsDownloadsPage;
+        var leftLocal = _tab.IsLocalSurface;
         if (leftLocal)
         {
             PushCurrentToLocalBack();
@@ -240,15 +246,14 @@ public sealed partial class BrowserViewModel : ViewModelBase
         switch (kind)
         {
             case InternalPageKind.Downloads:
-                if (_tab.IsDownloadsPage)
-                {
-                    AddressText = InternalPages.DownloadsAddress;
-                    return true;
-                }
-
                 ShowDownloads();
                 return true;
-
+            case InternalPageKind.Settings:
+                ShowSettings();
+                return true;
+            case InternalPageKind.History:
+                ShowHistory();
+                return true;
             default:
                 return false;
         }
@@ -286,9 +291,15 @@ public sealed partial class BrowserViewModel : ViewModelBase
             return;
         }
 
-        if (_tab.IsDownloadsPage)
+        if (_tab.InternalPage is { } page)
         {
-            _localBack.Push(new LocalBackEntry(LocalBackKind.Downloads, null, _newTabDepth));
+            var kind = page switch
+            {
+                InternalPageKind.Settings => LocalBackKind.Settings,
+                InternalPageKind.History => LocalBackKind.History,
+                _ => LocalBackKind.Downloads,
+            };
+            _localBack.Push(new LocalBackEntry(kind, null, _newTabDepth));
             return;
         }
 
@@ -308,7 +319,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
             return false;
         }
 
-        var leftLocal = _tab.IsBlank || _tab.IsDownloadsPage;
+        var leftLocal = _tab.IsLocalSurface;
         if (leftLocal)
         {
             PushCurrentToLocalBack();
@@ -342,14 +353,16 @@ public sealed partial class BrowserViewModel : ViewModelBase
     /// </summary>
     private void ResumePendingNavigation()
     {
-        if (_session is not null && _tab.Address is { } address)
+        if (_session is null || _tab.IsLocalSurface || _tab.Address is not { } address)
         {
-            _suppressEngineHistory = true;
-            _tab.BeginNavigation(address);
-            ApplySiteZoom();
-            _session.Navigate(address);
-            SyncFromTab();
+            return;
         }
+
+        _suppressEngineHistory = true;
+        _tab.BeginNavigation(address);
+        ApplySiteZoom();
+        _session.Navigate(address);
+        SyncFromTab();
     }
 
     /// <summary>Text currently in the address bar, which the user may be editing.</summary>
@@ -439,9 +452,11 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _session.DownloadStarted += OnDownloadStarted;
         _session.FullScreenElementChanged += OnFullScreenElementChanged;
         _session.AcceleratorKeyPressed += OnAcceleratorKeyPressed;
+        _session.PageMessage += OnPageMessage;
 
         RefreshHistoryState();
         ResumePendingNavigation();
+        _ = ApplyMuteAsync();
     }
 
     /// <summary>
@@ -485,7 +500,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         // Local pages, and the first engine document above one, are restored
         // from the stack — not from the engine, which never saw those pages and
         // may still hold entries from before this tab last returned to them.
-        if (_tab.IsDownloadsPage || _tab.IsBlank || _newTabDepth == 0 || _session?.CanGoBack != true)
+        if (_tab.IsLocalSurface || _newTabDepth == 0 || _session?.CanGoBack != true)
         {
             RestoreLocalBack();
             return;
@@ -506,7 +521,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         // Forward out of a local page is the mirror of the step that got here:
         // the engine never moved, so the page it is still showing only has to be
         // put back on the tab.
-        if ((_tab.IsBlank || _tab.IsDownloadsPage) && _newTabForward is { } resume)
+        if (_tab.IsLocalSurface && _newTabForward is { } resume)
         {
             PushCurrentToLocalBack();
             _tab.RestoreFromBlank(
@@ -539,7 +554,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanReload))]
     private void Reload()
     {
-        if (_tab.IsBlank || _tab.IsDownloadsPage)
+        if (_tab.IsLocalSurface)
         {
             return;
         }
@@ -547,7 +562,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _session?.Reload();
     }
 
-    private bool CanReload() => !IsLoading && !_tab.IsBlank && !_tab.IsDownloadsPage;
+    private bool CanReload() => !IsLoading && !_tab.IsLocalSurface;
 
     [RelayCommand]
     private void ZoomIn() => SetZoom(PageZoom.FromPercent(ZoomPercent).Increase());
@@ -595,7 +610,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
             }
             else if (!_suppressEngineHistory && !isRedirect)
             {
-                NoteNavigationAway(_tab.IsBlank || _tab.IsDownloadsPage);
+                NoteNavigationAway(_tab.IsLocalSurface);
             }
 
             _lastStartedAddress = address;
@@ -657,6 +672,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
         _tab.CompleteNavigation(title: null);
         SyncFromTab();
+        RecordHistoryIfNeeded();
         await ReadPageIdentityAsync();
     }
 
@@ -738,8 +754,8 @@ public sealed partial class BrowserViewModel : ViewModelBase
     }
 
     private string AddressBarText() =>
-        _tab.IsDownloadsPage
-            ? InternalPages.DownloadsAddress
+        _tab.InternalPage is { } page
+            ? InternalPages.AddressOf(page)
             : _tab.Address?.ToString() ?? string.Empty;
 
     /// <summary>The current page's favicon address, surfaced for the tab strip.</summary>
@@ -757,6 +773,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         IsLoading = _tab.LoadState == TabLoadState.Loading;
         IsBlank = _tab.IsBlank;
         IsDownloadsPage = _tab.IsDownloadsPage;
+        RefreshOmnibox();
         OnPropertyChanged(nameof(ShouldShowWebView));
 
         if (IsLoading)
@@ -777,7 +794,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
         // Do not overwrite the address bar while the user is typing into it: only
         // follow the tab when a navigation is in flight or has just landed.
-        if (_tab.IsDownloadsPage || _tab.Address is not null)
+        if (_tab.HasInternalPage || _tab.Address is not null)
         {
             AddressText = AddressBarText();
         }
@@ -814,9 +831,9 @@ public sealed partial class BrowserViewModel : ViewModelBase
         // tab still uses the engine, because it never sat on New Tab.
         CanGoBack = _localBack.Count > 0
             || _newTabDepth >= 0
-            || (!_tab.IsBlank && !_tab.IsDownloadsPage && (_session?.CanGoBack ?? false));
+            || (!_tab.IsLocalSurface && (_session?.CanGoBack ?? false));
         CanGoForward = (_session?.CanGoForward ?? false) ||
-            ((_tab.IsBlank || _tab.IsDownloadsPage) && _newTabForward is not null);
+            (_tab.IsLocalSurface && _newTabForward is not null);
     }
 
     /// <summary>
@@ -841,6 +858,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _session.DownloadStarted -= OnDownloadStarted;
         _session.FullScreenElementChanged -= OnFullScreenElementChanged;
         _session.AcceleratorKeyPressed -= OnAcceleratorKeyPressed;
+        _session.PageMessage -= OnPageMessage;
         ContainsFullScreenElement = false;
         _session = null;
         _lastStartedAddress = null;
@@ -946,7 +964,15 @@ public sealed partial class BrowserViewModel : ViewModelBase
         switch (entry.Kind)
         {
             case LocalBackKind.Downloads:
-                RevealDownloads();
+                RevealInternal(InternalPageKind.Downloads);
+                break;
+
+            case LocalBackKind.Settings:
+                RevealInternal(InternalPageKind.Settings);
+                break;
+
+            case LocalBackKind.History:
+                RevealInternal(InternalPageKind.History);
                 break;
 
             case LocalBackKind.Engine when entry.Page is not null:
@@ -959,15 +985,17 @@ public sealed partial class BrowserViewModel : ViewModelBase
         }
     }
 
-    private void RevealDownloads()
+    private void RevealInternal(InternalPageKind kind)
     {
         _session?.StopLoading();
         _newTabForward = CaptureCurrentPage();
-        _tab.ShowDownloads();
+        _tab.ShowInternal(kind);
         _newTabDepth = NotAnchoredToNewTab;
         ErrorPage.Hide();
         SyncFromTab();
     }
+
+    private void RevealDownloads() => RevealInternal(InternalPageKind.Downloads);
 
     private void RevealEnginePage(BlankStepBack page)
     {
@@ -1105,6 +1133,25 @@ public sealed partial class BrowserViewModel : ViewModelBase
         }
 
         AcceleratorKeyPressed?.Invoke(this, e);
+    }
+
+    private void OnPageMessage(object? sender, EnginePageMessageEventArgs e)
+    {
+        if (!ReferenceEquals(sender, _session))
+        {
+            return;
+        }
+
+        void Apply() => HandlePageMessage(e);
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            Apply();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(Apply);
+        }
     }
 
     private void RequestZoomFeedback(int percent) =>

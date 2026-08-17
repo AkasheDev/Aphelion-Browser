@@ -1,5 +1,6 @@
 using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Application.UseCases;
+using Aphelion.Desktop.UI.Services;
 using Aphelion.Desktop.UI.ViewModels;
 using Aphelion.Desktop.UI.Views;
 using Avalonia;
@@ -101,13 +102,34 @@ public partial class App : Avalonia.Application
         // A beat at home so the arrival is seen before the window swaps.
         await Task.Delay(TimeSpan.FromMilliseconds(350));
 
+        var settings = services.GetRequiredService<IAppSettingsStore>();
+        ThemeController.Apply(settings);
+
+        if (!settings.Load().HasCompletedOnboarding)
+        {
+            var onboardingClosed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var onboarding = new OnboardingWindow
+            {
+                DataContext = new OnboardingViewModel(
+                    settings,
+                    services.GetRequiredService<ISearchEnginePreference>(),
+                    () => onboardingClosed.TrySetResult()),
+            };
+            onboarding.Closed += (_, _) => onboardingClosed.TrySetResult();
+            onboarding.Show();
+            await onboardingClosed.Task;
+            onboarding.Close();
+            ThemeController.Apply(settings);
+        }
+
         var mainWindow = new MainWindow
         {
             DataContext = services.GetRequiredService<MainWindowViewModel>(),
         };
 
         // Registered so tabs torn off this window can find their way back.
-        services.GetRequiredService<WindowManager>().Register(mainWindow);
+        var windowManager = services.GetRequiredService<WindowManager>();
+        windowManager.Register(mainWindow);
 
         desktop.MainWindow = mainWindow;
 
@@ -119,6 +141,7 @@ public partial class App : Avalonia.Application
         desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnLastWindowClose;
 
         mainWindow.Show();
+        windowManager.RestoreExtraWindows();
         splash.Close();
     }
 
@@ -153,8 +176,17 @@ public partial class App : Avalonia.Application
     {
         try
         {
-            if (_services?.GetService<ViewModels.ShellViewModel>() is { } shell &&
-                _services.GetService<Aphelion.Desktop.Application.Ports.ISessionStore>() is { } store)
+            if (_services is not { } services)
+            {
+                return;
+            }
+
+            if (services.GetService<WindowManager>() is { } manager)
+            {
+                manager.PersistAll();
+            }
+            else if (services.GetService<ViewModels.ShellViewModel>() is { } shell &&
+                services.GetService<Aphelion.Desktop.Application.Ports.ISessionStore>() is { } store)
             {
                 store.Save(shell.CaptureSnapshot());
             }

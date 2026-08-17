@@ -31,8 +31,9 @@ public partial class BrowserView : UserControl, IDisposable
 
     protected override void OnUnloaded(Avalonia.Interactivity.RoutedEventArgs e)
     {
+        // Hidden tabs stay in the visual tree with IsVisible=false. Disposing
+        // here used to blank the engine and force a reload on the next show.
         base.OnUnloaded(e);
-        Dispose();
     }
 
     public void Dispose()
@@ -41,10 +42,6 @@ public partial class BrowserView : UserControl, IDisposable
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>
-    /// Wraps the native web view in an engine session and hands it to the view
-    /// model, which never sees the web view type itself.
-    /// </summary>
     private void AttachSession()
     {
         if (DataContext is not BrowserViewModel viewModel ||
@@ -62,11 +59,24 @@ public partial class BrowserView : UserControl, IDisposable
 
         ReleaseSession();
 
-        var session = new NativeWebViewSession(webView);
+        var session = new NativeWebViewSession(webView, () => viewModel.PreferredDownloadDirectory);
         _session = session;
         _attachedViewModel = viewModel;
 
         viewModel.AttachSession(session);
+        viewModel.PropertyChanged += OnViewModelPropertyChanged;
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(BrowserViewModel.IsPageMenuOpen) ||
+            DataContext is not BrowserViewModel { IsPageMenuOpen: true } ||
+            this.FindControl<ContextMenu>("PageMenu") is not { } menu)
+        {
+            return;
+        }
+
+        menu.Open(this.FindControl<NativeWebView>("WebView") as Control ?? this);
     }
 
     private void ReleaseSession()
@@ -82,28 +92,54 @@ public partial class BrowserView : UserControl, IDisposable
             return;
         }
 
+        viewModel?.PropertyChanged -= OnViewModelPropertyChanged;
         viewModel?.DetachSession(session);
-        // A native web view can continue media playback after it leaves the
-        // Avalonia visual tree. Explicitly blank it before releasing handlers.
         session.Close();
         session.Dispose();
     }
 
     private void OnEnvironmentRequested(object? sender, WebViewEnvironmentRequestedEventArgs e)
     {
-        if (DataContext is not BrowserViewModel { IsPrivate: true })
+        if (DataContext is not BrowserViewModel viewModel || !viewModel.IsPrivate)
         {
             return;
+        }
+
+        var directory = viewModel.IsolatedUserDataDirectory;
+        if (!string.IsNullOrWhiteSpace(directory))
+        {
+            Directory.CreateDirectory(directory);
         }
 
         switch (e)
         {
             case WindowsWebView2EnvironmentRequestedEventArgs windows:
                 windows.IsInPrivateModeEnabled = true;
+                TrySetProperty(windows, "UserDataFolder", directory);
                 break;
             case AppleWKWebViewEnvironmentRequestedEventArgs apple:
                 apple.NonPersistentDataStore = true;
+                TrySetProperty(apple, "UserDataFolder", directory);
                 break;
+            default:
+                TrySetProperty(e, "IsInPrivateModeEnabled", true);
+                TrySetProperty(e, "NonPersistentDataStore", true);
+                TrySetProperty(e, "UserDataFolder", directory);
+                break;
+        }
+    }
+
+    private static void TrySetProperty(object target, string name, object? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        var property = target.GetType().GetProperty(name);
+        if (property is { CanWrite: true } && property.PropertyType.IsInstanceOfType(value))
+        {
+            property.SetValue(target, value);
         }
     }
 }

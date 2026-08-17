@@ -34,6 +34,9 @@ internal static class CompositionRoot
         services.AddSingleton<ISearchEnginePreferenceStore, JsonSearchEnginePreferenceStore>();
         services.AddSingleton<ISiteZoomStore, JsonSiteZoomStore>();
         services.AddSingleton<IPrivacyPreferenceStore, JsonPrivacyPreferenceStore>();
+        services.AddSingleton<IAppSettingsStore, JsonAppSettingsStore>();
+        services.AddSingleton<IHistoryStore, JsonHistoryStore>();
+        services.AddSingleton<IPasswordStore, JsonPasswordStore>();
         services.AddSingleton<IDownloadHistoryStore, JsonDownloadHistoryStore>();
         services.AddSingleton<IFileExplorer, SystemFileExplorer>();
         // Constructed eagerly here, rather than registered by type, because its
@@ -69,6 +72,8 @@ internal static class CompositionRoot
         // Downloads belong to the profile the same way bookmarks do: a file
         // started in one window is this user's download in every other.
         services.AddSingleton<DownloadsViewModel>();
+        services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<HistoryViewModel>();
 
         // Presentation. Browsers are transient because every tab needs its own
         // engine session and history; the shell creates one per tab.
@@ -85,7 +90,10 @@ internal static class CompositionRoot
             sp.GetRequiredService<IFaviconLoader>(),
             sp.GetRequiredService<ITabSoundPlayer>(),
             sp.GetRequiredService<BookmarksViewModel>(),
-            downloads: sp.GetRequiredService<DownloadsViewModel>()));
+            downloads: sp.GetRequiredService<DownloadsViewModel>(),
+            settings: sp.GetRequiredService<SettingsViewModel>(),
+            history: sp.GetRequiredService<HistoryViewModel>(),
+            appSettings: sp.GetRequiredService<IAppSettingsStore>()));
         services.AddSingleton<SplashViewModel>();
         services.AddSingleton<MainWindowViewModel>();
 

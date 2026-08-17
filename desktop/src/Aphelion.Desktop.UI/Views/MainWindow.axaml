@@ -36,6 +36,13 @@
     <KeyBinding Gesture="Escape" Command="{Binding Shell.FocusedBrowser.CancelAddressEditingCommand}" />
     <KeyBinding Gesture="Ctrl+D" Command="{Binding Shell.BookmarkActiveTabCommand}" />
     <KeyBinding Gesture="Ctrl+J" Command="{Binding Shell.OpenDownloadsPageCommand}" />
+    <KeyBinding Gesture="Ctrl+H" Command="{Binding Shell.OpenHistoryPageCommand}" />
+    <KeyBinding Gesture="Ctrl+Shift+T" Command="{Binding Shell.ReopenClosedTabCommand}" />
+    <KeyBinding Gesture="Ctrl+F" Command="{Binding Shell.FindInPageCommand}" />
+    <KeyBinding Gesture="Ctrl+P" Command="{Binding Shell.PrintActiveCommand}" />
+    <KeyBinding Gesture="Ctrl+K" Command="{Binding Shell.ToggleCommandPaletteCommand}" />
+    <KeyBinding Gesture="F12" Command="{Binding Shell.OpenDevToolsCommand}" />
+    <KeyBinding Gesture="Ctrl+R" Command="{Binding Shell.ReloadActiveCommand}" />
     <KeyBinding Gesture="Ctrl+Shift+B" Command="{Binding Shell.ToggleBookmarkBarCommand}" />
   </Window.KeyBindings>
 
@@ -123,6 +130,22 @@
                                   Command="{Binding Owner.CloseSplitCommand}"
                                   CommandParameter="{Binding}"
                                   IsEnabled="{Binding IsSplit}" />
+                        <Separator />
+                        <MenuItem Header="{Binding PinLabel}"
+                                  Command="{Binding Owner.PinTabCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="{Binding MuteLabel}"
+                                  Command="{Binding Owner.MuteTabCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Duplicate"
+                                  Command="{Binding Owner.DuplicateTabCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Copy URL"
+                                  Command="{Binding Owner.CopyTabUrlCommand}"
+                                  CommandParameter="{Binding}" />
+                        <MenuItem Header="Reopen closed tab"
+                                  Command="{Binding Owner.ReopenClosedTabCommand}"
+                                  IsEnabled="{Binding Owner.CanReopenClosedTab}" />
                         <Separator />
                         <MenuItem Header="Move to new window"
                                   Command="{Binding Owner.MoveTabToNewWindowCommand}"
@@ -505,6 +528,12 @@
       </Border>
 
     </Grid>
+
+    <Popup IsOpen="{Binding Shell.IsCommandPaletteOpen}"
+           Placement="Center"
+           IsLightDismissEnabled="True">
+      <views:CommandPaletteView DataContext="{Binding Shell.Palette}" />
+    </Popup>
 
   </DockPanel>
 

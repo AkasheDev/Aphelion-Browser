@@ -9,12 +9,13 @@ namespace Aphelion.Desktop.Domain;
 public enum InternalPageKind
 {
     Downloads,
+    Settings,
+    History,
 }
 
 /// <summary>
 /// Addresses and titles of <see cref="InternalPageKind"/> pages. Adding a new
-/// internal surface (settings, history) is a new kind plus a host here, not a
-/// new scheme.
+/// internal surface is a new kind plus a host here, not a new scheme.
 /// </summary>
 public static class InternalPages
 {
@@ -22,10 +23,38 @@ public static class InternalPages
 
     public const string DownloadsAddress = "aphelion://downloads";
 
+    public const string SettingsAddress = "aphelion://settings";
+
+    public const string HistoryAddress = "aphelion://history";
+
     public const string DownloadsTitle = "Downloads";
+
+    public const string SettingsTitle = "Settings";
+
+    public const string HistoryTitle = "History";
 
     public static bool IsDownloads(string? address) =>
         TryMatch(address, out var kind) && kind == InternalPageKind.Downloads;
+
+    public static bool IsSettings(string? address) =>
+        TryMatch(address, out var kind) && kind == InternalPageKind.Settings;
+
+    public static bool IsHistory(string? address) =>
+        TryMatch(address, out var kind) && kind == InternalPageKind.History;
+
+    public static string AddressOf(InternalPageKind kind) => kind switch
+    {
+        InternalPageKind.Settings => SettingsAddress,
+        InternalPageKind.History => HistoryAddress,
+        _ => DownloadsAddress,
+    };
+
+    public static string TitleOf(InternalPageKind kind) => kind switch
+    {
+        InternalPageKind.Settings => SettingsTitle,
+        InternalPageKind.History => HistoryTitle,
+        _ => DownloadsTitle,
+    };
 
     /// <summary>
     /// True when <paramref name="input"/> is an <c>aphelion://</c> URL, known
@@ -50,6 +79,18 @@ public static class InternalPages
         if (string.Equals(host, "downloads", StringComparison.OrdinalIgnoreCase))
         {
             kind = InternalPageKind.Downloads;
+            return true;
+        }
+
+        if (string.Equals(host, "settings", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = InternalPageKind.Settings;
+            return true;
+        }
+
+        if (string.Equals(host, "history", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = InternalPageKind.History;
             return true;
         }
 

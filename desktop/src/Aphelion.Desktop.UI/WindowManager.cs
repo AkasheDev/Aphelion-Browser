@@ -1,4 +1,6 @@
+using Aphelion.Desktop.Application.Dtos;
 using Aphelion.Desktop.Application.Ports;
+using Aphelion.Desktop.Infrastructure.Storage;
 using Aphelion.Desktop.Domain.ValueObjects;
 using Aphelion.Desktop.UI.ViewModels;
 using Aphelion.Desktop.UI.Views;
@@ -19,12 +21,18 @@ namespace Aphelion.Desktop.UI;
 /// and unsubmitted form state are lost. Chrome avoids this with a process per
 /// renderer, which this application does not have.
 /// </remarks>
-internal sealed class WindowManager(IServiceProvider services)
+internal sealed class WindowManager
 {
-    private readonly IServiceProvider _services =
-        services ?? throw new ArgumentNullException(nameof(services));
-
+    private readonly IServiceProvider _services;
+    private readonly ISessionStore _sessionStore;
     private readonly List<MainWindow> _windows = [];
+    private bool _persisting;
+
+    public WindowManager(IServiceProvider services, ISessionStore sessionStore)
+    {
+        _services = services ?? throw new ArgumentNullException(nameof(services));
+        _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
+    }
 
     public IReadOnlyList<MainWindow> Windows => _windows;
 
@@ -38,10 +46,12 @@ internal sealed class WindowManager(IServiceProvider services)
             sessionStore: null,
             favicons: _services.GetService<IFaviconLoader>(),
             tabSounds: null,
-            // Bookmarks belong to the profile, so an ordinary new window shows
-            // the same bar as the one it was opened from.
             bookmarks: _services.GetService<BookmarksViewModel>(),
-            downloads: _services.GetService<DownloadsViewModel>());
+            downloads: _services.GetService<DownloadsViewModel>(),
+            settings: _services.GetService<SettingsViewModel>(),
+            history: _services.GetService<HistoryViewModel>(),
+            appSettings: _services.GetService<IAppSettingsStore>(),
+            restoreOnStart: false);
 
         var window = new MainWindow
         {
@@ -59,32 +69,24 @@ internal sealed class WindowManager(IServiceProvider services)
     }
 
     /// <summary>
-    /// Opens a private window. "Private" here means every cookie its tabs wrote
-    /// is deleted the moment the window closes — see
-    /// <see cref="Aphelion.Desktop.BrowserEngine.NativeWebViewSession.ClearBrowsingDataAsync"/>
-    /// for why this is a clear-on-close guarantee rather than a separate storage
-    /// partition, which the host platform's web view does not expose publicly.
-    /// The session store is withheld either way, so nothing here is restored on
-    /// the next launch regardless.
+    /// Opens a private window with its own engine profile directory so cookies
+    /// and site data never share a store with ordinary windows. The directory is
+    /// deleted when the window closes. Session restore is withheld.
     /// </summary>
     public MainWindow CreatePrivateWindow(PageAddress? initialAddress = null)
     {
-        // A private window gets its own ambient view model rather than the
-        // process-wide singleton DI would otherwise hand it, so weather off by
-        // default (see NewTabAmbientViewModel's private-instance behaviour) is
-        // this window's own setting: it cannot see or change what the ordinary
-        // windows have chosen, and nothing here outlives the window.
         var privateAmbient = new NewTabAmbientViewModel(
             _services.GetRequiredService<Aphelion.Desktop.Application.Ports.ICurrentWeatherProvider>(),
             _services.GetRequiredService<Aphelion.Desktop.Application.Ports.IPrivacyPreferenceStore>(),
             isPrivateInstance: true);
 
-        // A private window gets its own download list: the files still land
-        // on disk, but the list itself must not leak into the profile or into
-        // ordinary windows, and it dies with the window.
         var privateDownloads = new DownloadsViewModel(
             store: null,
             files: _services.GetService<IFileExplorer>());
+
+        var location = _services.GetRequiredService<IUserDataLocation>();
+        var privateDirectory = Path.Combine(location.RootDirectory, "private", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(privateDirectory);
 
         var factory = () => ActivatorUtilities.CreateInstance<BrowserViewModel>(
             _services,
@@ -97,13 +99,13 @@ internal sealed class WindowManager(IServiceProvider services)
             sessionStore: null,
             favicons: _services.GetService<IFaviconLoader>(),
             tabSounds: null,
-            // Bookmarks are shown and can be added here too. They are things the
-            // user chose to keep, not a record of where they have been, so they
-            // are not what private mode is protecting — the same call Chrome
-            // makes. Browsing history and cookies remain untouched by them.
             bookmarks: _services.GetService<BookmarksViewModel>(),
             isPrivateWindow: true,
-            downloads: privateDownloads);
+            downloads: privateDownloads,
+            settings: _services.GetService<SettingsViewModel>(),
+            history: new HistoryViewModel(new MemoryHistoryStore()) { IsPrivateSession = true },
+            isolatedUserDataDirectory: privateDirectory,
+            restoreOnStart: false);
 
         var window = new MainWindow { DataContext = new MainWindowViewModel(shell), Title = "Private Mode — Aphelion" };
 
@@ -127,6 +129,18 @@ internal sealed class WindowManager(IServiceProvider services)
             foreach (var browser in shell.Browsers.ToList())
             {
                 _ = browser.ClearPrivateBrowsingDataAsync();
+            }
+
+            try
+            {
+                if (Directory.Exists(privateDirectory))
+                {
+                    Directory.Delete(privateDirectory, recursive: true);
+                }
+            }
+            catch (Exception)
+            {
+                // Best effort: leftover private profiles are unused on the next run.
             }
         };
 
@@ -176,14 +190,20 @@ internal sealed class WindowManager(IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(transfer);
 
-        var initialAddress = transfer.IsDownloadsPage ? null : transfer.PrimaryAddress;
+        var initialAddress = transfer.InternalPage is not null || transfer.IsDownloadsPage
+            ? null
+            : transfer.PrimaryAddress;
         var window = transfer.IsPrivate
             ? CreatePrivateWindow(initialAddress)
             : CreateWindow(initialAddress);
 
         if (window.DataContext is MainWindowViewModel { Shell: { } shell })
         {
-            if (transfer.IsDownloadsPage)
+            if (transfer.InternalPage is { } page)
+            {
+                shell.ActiveBrowser?.ShowInternal(page, recordHistory: false);
+            }
+            else if (transfer.IsDownloadsPage)
             {
                 shell.ActiveBrowser?.ShowDownloads(recordHistory: false);
             }
@@ -270,6 +290,74 @@ internal sealed class WindowManager(IServiceProvider services)
         }
 
         return null;
+    }
+
+    public void PersistAll()
+    {
+        if (_persisting)
+        {
+            return;
+        }
+
+        _persisting = true;
+        try
+        {
+            var windows = new List<SessionWindowSnapshot>();
+
+            foreach (var window in _windows)
+            {
+                if (window.DataContext is not MainWindowViewModel { Shell: { } shell } ||
+                    shell.IsPrivateWindow)
+                {
+                    continue;
+                }
+
+                windows.Add(shell.CaptureWindowSnapshot(
+                    window.Position.X,
+                    window.Position.Y,
+                    window.Width,
+                    window.Height));
+            }
+
+            if (windows.Count == 0)
+            {
+                return;
+            }
+
+            _sessionStore.Save(new SessionSnapshot(windows[0].Tabs, windows[0].ActiveIndex, windows));
+        }
+        finally
+        {
+            _persisting = false;
+        }
+    }
+
+    public void RestoreExtraWindows()
+    {
+        if (_sessionStore.Load() is not { Windows.Count: > 1 } snapshot)
+        {
+            return;
+        }
+
+        for (var i = 1; i < snapshot.Windows.Count; i++)
+        {
+            var saved = snapshot.Windows[i];
+            var window = CreateWindow();
+            if (window.DataContext is MainWindowViewModel { Shell: { } shell })
+            {
+                shell.ReplaceFromSnapshot(saved);
+            }
+
+            if (saved.Width > 0 && saved.Height > 0)
+            {
+                window.WindowStartupLocation = WindowStartupLocation.Manual;
+                window.Position = new PixelPoint(saved.Left, saved.Top);
+                window.Width = saved.Width;
+                window.Height = saved.Height;
+            }
+
+            window.Show();
+        }
     }
 
     private static bool WindowIsPrivate(MainWindow window) =>

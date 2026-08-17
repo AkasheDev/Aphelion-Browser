@@ -1,0 +1,77 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+             xmlns:dto="using:Aphelion.Desktop.Application.Dtos"
+             x:Class="Aphelion.Desktop.UI.Views.HistoryView"
+             x:DataType="vm:HistoryViewModel">
+
+  <DockPanel Background="{DynamicResource SurfaceBaseBrush}">
+
+    <Grid DockPanel.Dock="Top"
+          ColumnDefinitions="*,Auto"
+          Margin="48,28,48,12"
+          MaxWidth="860">
+      <StackPanel Grid.Column="0" Spacing="14">
+        <TextBlock Classes="downloads-heading" Text="History" />
+        <TextBox Classes="downloads-search"
+                 PlaceholderText="Search history"
+                 Text="{Binding SearchText}" />
+      </StackPanel>
+      <Button Grid.Column="1"
+              Classes="download-clear"
+              Content="Clear all"
+              VerticalAlignment="Bottom"
+              Command="{Binding ClearCommand}"
+              IsVisible="{Binding !IsPrivateSession}" />
+    </Grid>
+
+    <Panel>
+      <TextBlock Classes="downloads-empty-title"
+                 Text="History isn’t saved in Private Mode"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center"
+                 IsVisible="{Binding IsPrivateSession}" />
+
+      <StackPanel HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  Spacing="8"
+                  IsVisible="{Binding IsEmpty}">
+        <TextBlock Classes="downloads-empty-title" Text="No history yet" />
+        <TextBlock Classes="downloads-empty-copy" Text="Pages you visit will show up here." />
+      </StackPanel>
+
+      <TextBlock Classes="downloads-empty"
+                 Text="No matching visits"
+                 HorizontalAlignment="Center"
+                 VerticalAlignment="Center"
+                 IsVisible="{Binding HasNoSearchMatches}" />
+
+      <ScrollViewer IsVisible="{Binding HasDays}">
+        <ItemsControl ItemsSource="{Binding Days}" Margin="48,0,48,28" MaxWidth="860">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:HistoryDayGroupViewModel">
+              <StackPanel Margin="0,0,0,18">
+                <TextBlock Classes="settings-section" Text="{Binding Heading}" Margin="0,0,0,8" />
+                <ItemsControl ItemsSource="{Binding Visits}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="dto:HistoryVisit">
+                      <Grid ColumnDefinitions="*,Auto" Margin="0,4">
+                        <StackPanel>
+                          <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Classes="settings-copy" Text="{Binding Address}" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="Delete"
+                                Command="{Binding $parent[UserControl].((vm:HistoryViewModel)DataContext).DeleteCommand}"
+                                CommandParameter="{Binding}" />
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Panel>
+  </DockPanel>
+</UserControl>

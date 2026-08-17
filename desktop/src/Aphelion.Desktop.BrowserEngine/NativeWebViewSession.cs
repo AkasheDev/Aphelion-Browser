@@ -2,6 +2,8 @@ using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.BrowserEngine.Windows;
 using Aphelion.Desktop.Domain.ValueObjects;
 using Avalonia.Controls;
+using Avalonia.Threading;
+using System.Text.Json;
 
 namespace Aphelion.Desktop.BrowserEngine;
 
@@ -21,20 +23,24 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     private readonly WebView2ZoomBridge _windowsZoom;
     private readonly WebView2DownloadBridge _windowsDownloads;
     private readonly WebView2FullscreenBridge _windowsFullscreen;
+    private readonly DispatcherTimer _pagePoll;
     private bool _disposed;
     private bool _navigationInProgress;
+    private bool _muted;
     private Uri? _latestNavigationRequest;
     private double _desiredZoomFactor = 1d;
     private double _actualZoomFactor = 1d;
 
-    public NativeWebViewSession(NativeWebView webView)
+    public NativeWebViewSession(NativeWebView webView, Func<string?>? downloadDirectory = null)
     {
         _webView = webView ?? throw new ArgumentNullException(nameof(webView));
         _windowsZoom = new WebView2ZoomBridge(OnNativeZoomChanged);
-        _windowsDownloads = new WebView2DownloadBridge(OnEngineDownloadStarted);
+        _windowsDownloads = new WebView2DownloadBridge(OnEngineDownloadStarted, downloadDirectory);
         _windowsFullscreen = new WebView2FullscreenBridge(
             OnEngineFullScreenElementChanged,
             OnEngineAcceleratorKeyPressed);
+        _pagePoll = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _pagePoll.Tick += OnPagePollTick;
 
         _webView.NavigationStarted += OnNavigationStarted;
         _webView.NavigationCompleted += OnNavigationCompleted;
@@ -42,6 +48,7 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         _webView.AdapterDestroyed += OnAdapterDestroyed;
 
         TryAttachPlatformBridges(_webView.TryGetPlatformHandle());
+        _pagePoll.Start();
     }
 
     public bool CanGoBack => _webView.CanGoBack;
@@ -59,6 +66,8 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     public event EventHandler<EngineFullScreenElementChangedEventArgs>? FullScreenElementChanged;
 
     public event EventHandler<EngineAcceleratorKeyPressedEventArgs>? AcceleratorKeyPressed;
+
+    public event EventHandler<EnginePageMessageEventArgs>? PageMessage;
 
     public void Navigate(PageAddress address)
     {
@@ -152,6 +161,100 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         }
     }
 
+    public async Task<EngineFindResult?> FindAsync(string text, bool forward, bool matchCase)
+    {
+        if (_disposed)
+        {
+            return null;
+        }
+
+        var query = EscapeJavaScript(text ?? string.Empty);
+        var result = await EvaluateAsync(
+            $$"""
+            (() => {
+              const q = '{{query}}';
+              const cs = {{(matchCase ? "true" : "false")}};
+              const back = {{(forward ? "false" : "true")}};
+              if (!q) {
+                window.getSelection()?.removeAllRanges();
+                return '0|0';
+              }
+              const hay = document.body ? document.body.innerText : '';
+              const src = cs ? hay : hay.toLowerCase();
+              const needle = cs ? q : q.toLowerCase();
+              let count = 0, from = 0;
+              while (needle && (from = src.indexOf(needle, from)) >= 0) {
+                count++;
+                from += needle.length;
+              }
+              const found = window.find(q, cs, back, true, false, false, false);
+              return count + '|' + (found ? '1' : '0');
+            })()
+            """).ConfigureAwait(true);
+
+        if (result is null)
+        {
+            return null;
+        }
+
+        var parts = result.Trim().Trim('"').Split('|');
+        var count = parts.Length > 0 && int.TryParse(parts[0], out var n) ? n : 0;
+        var active = parts.Length > 1 && parts[1] == "1" && count > 0 ? 1 : 0;
+        return new EngineFindResult(count, active);
+    }
+
+    public async Task StopFindAsync() =>
+        await EvaluateAsync("window.getSelection()?.removeAllRanges(); 'ok';").ConfigureAwait(true);
+
+    public async Task PrintAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var showPrint = _webView.GetType().GetMethod("ShowPrintUI", Type.EmptyTypes);
+        if (showPrint is not null)
+        {
+            try
+            {
+                showPrint.Invoke(_webView, null);
+                return;
+            }
+            catch (Exception)
+            {
+                // Fall through to the document's own print.
+            }
+        }
+
+        await EvaluateAsync("window.print(); 'ok';").ConfigureAwait(true);
+    }
+
+    public bool OpenDevTools() => !_disposed && _windowsFullscreen.TryOpenDevTools();
+
+    public async Task SetMutedAsync(bool muted)
+    {
+        _muted = muted;
+        var flag = muted ? "true" : "false";
+        await EvaluateAsync(
+            $$"""
+            (() => {
+              document.querySelectorAll('audio,video').forEach(el => { el.muted = {{flag}}; });
+              return 'ok';
+            })()
+            """).ConfigureAwait(true);
+    }
+
+    public IEngineDownloadOperation StartDownload(Uri source, string filePath)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+
+        var operation = new HttpDownloadOperation(source, filePath);
+        operation.Start();
+        return operation;
+    }
+
     private void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
     {
         if (e.Request is { } request &&
@@ -180,6 +283,15 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         {
             _ = ApplyZoomAsync();
             _actualZoomFactor = _desiredZoomFactor;
+        }
+
+        if (completesLatestNavigation)
+        {
+            _ = InstallPageHooksAsync();
+            if (_muted)
+            {
+                _ = SetMutedAsync(true);
+            }
         }
 
         if (!completesLatestNavigation)
@@ -381,12 +493,6 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         }
     }
 
-    /// <summary>
-    /// Stops the document and replaces it with an inert page before this native
-    /// surface leaves its tab. Removing a hosted native control alone is not a
-    /// reliable media-lifecycle signal on every platform, so this explicitly
-    /// tears down active audio and video playback first.
-    /// </summary>
     public void Close()
     {
         if (_disposed)
@@ -413,6 +519,8 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
             return;
         }
 
+        _pagePoll.Stop();
+        _pagePoll.Tick -= OnPagePollTick;
         _webView.NavigationStarted -= OnNavigationStarted;
         _webView.NavigationCompleted -= OnNavigationCompleted;
         _webView.AdapterCreated -= OnAdapterCreated;
@@ -422,4 +530,88 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         _windowsFullscreen.Dispose();
         _disposed = true;
     }
+
+    private async Task InstallPageHooksAsync()
+    {
+        await EvaluateAsync(
+            """
+            (() => {
+              if (window.__aphelionInstalled) return 'ok';
+              window.__aphelionInstalled = true;
+              window.__aphelionQ = [];
+              document.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                var a = e.target.closest && e.target.closest('a');
+                var img = e.target.closest && e.target.closest('img');
+                window.__aphelionQ.push({
+                  t: 'ctx',
+                  x: e.clientX,
+                  y: e.clientY,
+                  href: (a && a.href) || '',
+                  src: (img && img.src) || '',
+                  sel: String((window.getSelection && window.getSelection()) || '')
+                });
+              }, true);
+              document.addEventListener('click', function(e) {
+                var a = e.target.closest && e.target.closest('a[download]');
+                if (!a || !a.href) return;
+                e.preventDefault();
+                window.__aphelionQ.push({
+                  t: 'download',
+                  href: a.href,
+                  name: a.getAttribute('download') || ''
+                });
+              }, true);
+              document.addEventListener('fullscreenchange', function() {
+                window.__aphelionQ.push({ t: 'fs', on: !!document.fullscreenElement });
+              });
+              return 'ok';
+            })()
+            """).ConfigureAwait(true);
+    }
+
+    private async void OnPagePollTick(object? sender, EventArgs e)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var raw = await EvaluateAsync(
+            "(() => { const q = window.__aphelionQ || []; window.__aphelionQ = []; return JSON.stringify(q); })()")
+            .ConfigureAwait(true);
+
+        if (string.IsNullOrWhiteSpace(raw) || raw is "[]" or "\"[]\"")
+        {
+            return;
+        }
+
+        try
+        {
+            var json = raw.Trim().Trim('"').Replace("\\\"", "\"", StringComparison.Ordinal);
+            using var doc = JsonDocument.Parse(json.StartsWith('[') ? json : raw.Trim().Trim('"'));
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return;
+            }
+
+            foreach (var item in doc.RootElement.EnumerateArray())
+            {
+                var kind = item.TryGetProperty("t", out var t) ? t.GetString() ?? string.Empty : string.Empty;
+                PageMessage?.Invoke(this, new EnginePageMessageEventArgs(kind, item.GetRawText()));
+            }
+        }
+        catch (Exception)
+        {
+            // A malformed page payload is ignored; polling continues.
+        }
+    }
+
+    private static string EscapeJavaScript(string value) =>
+        value
+            .Replace("\\", "\\\\", StringComparison.Ordinal)
+            .Replace("'", "\\'", StringComparison.Ordinal)
+            .Replace("\r", "\\r", StringComparison.Ordinal)
+            .Replace("\n", "\\n", StringComparison.Ordinal);
 }

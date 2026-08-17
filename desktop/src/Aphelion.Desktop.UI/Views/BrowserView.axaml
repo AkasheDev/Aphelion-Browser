@@ -30,8 +30,60 @@
         <views:DownloadsView DataContext="{Binding Downloads}" />
       </Panel>
 
+      <Panel IsVisible="{Binding IsSettingsPage}">
+        <views:SettingsView DataContext="{Binding Settings}" />
+      </Panel>
+
+      <Panel IsVisible="{Binding IsHistoryPage}">
+        <views:HistoryView DataContext="{Binding History}" />
+      </Panel>
+
       <views:NavigationErrorPage DataContext="{Binding ErrorPage}"
                                  IsVisible="{Binding IsVisible}" />
+
+      <Border Classes="find-bar"
+              HorizontalAlignment="Right"
+              VerticalAlignment="Top"
+              Margin="12"
+              IsVisible="{Binding IsFindBarOpen}">
+        <StackPanel Orientation="Horizontal" Spacing="6" Margin="8">
+          <TextBox Width="180"
+                   PlaceholderText="Find in page"
+                   Text="{Binding FindQuery}">
+            <TextBox.KeyBindings>
+              <KeyBinding Gesture="Enter" Command="{Binding FindNextCommand}" />
+              <KeyBinding Gesture="Escape" Command="{Binding CloseFindBarCommand}" />
+            </TextBox.KeyBindings>
+          </TextBox>
+          <Button Content="Previous" Command="{Binding FindPreviousCommand}" />
+          <Button Content="Next" Command="{Binding FindNextCommand}" />
+          <CheckBox Content="Match case" IsChecked="{Binding FindMatchCase}" />
+          <TextBlock VerticalAlignment="Center" Text="{Binding FindStatus}" />
+          <Button Classes="icon small" Command="{Binding CloseFindBarCommand}">
+            <Path Classes="glyph" Data="M0,0 L8,8 M8,0 L0,8" />
+          </Button>
+        </StackPanel>
+      </Border>
+
+      <ContextMenu Name="PageMenu"
+                   IsVisible="{Binding IsPageMenuOpen}">
+        <MenuItem Header="Back" Command="{Binding PageMenuBackCommand}" />
+        <MenuItem Header="Forward" Command="{Binding PageMenuForwardCommand}" />
+        <MenuItem Header="Reload" Command="{Binding PageMenuReloadCommand}" />
+        <Separator />
+        <MenuItem Header="Open link in new tab"
+                  Command="{Binding OpenPageMenuLinkCommand}"
+                  IsVisible="{Binding PageMenuLink, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <MenuItem Header="Save link as"
+                  Command="{Binding SavePageMenuLinkCommand}"
+                  IsVisible="{Binding PageMenuLink, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <MenuItem Header="Copy"
+                  Command="{Binding CopyPageMenuSelectionCommand}"
+                  IsVisible="{Binding PageMenuSelection, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        <MenuItem Header="Search for selection"
+                  Command="{Binding SearchPageMenuSelectionCommand}"
+                  IsVisible="{Binding PageMenuSelection, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </ContextMenu>
 
     </Panel>
 

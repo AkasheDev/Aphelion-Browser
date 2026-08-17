@@ -97,6 +97,57 @@ public interface IBrowserEngineSession
     /// if it wants the engine to ignore the key; the window then acts on it.
     /// </summary>
     event EventHandler<EngineAcceleratorKeyPressedEventArgs>? AcceleratorKeyPressed;
+
+    /// <summary>
+    /// Finds <paramref name="text"/> in the current document. Returns how many
+    /// matches exist and which one is selected, or null when the engine cannot
+    /// search this surface.
+    /// </summary>
+    Task<EngineFindResult?> FindAsync(string text, bool forward, bool matchCase);
+
+    /// <summary>Clears the current find highlight, if any.</summary>
+    Task StopFindAsync();
+
+    /// <summary>Asks the page to print, using the engine's print UI when it has one.</summary>
+    Task PrintAsync();
+
+    /// <summary>
+    /// Opens the engine's developer tools. Returns false on hosts that do not
+    /// expose a tools window.
+    /// </summary>
+    bool OpenDevTools();
+
+    /// <summary>Mutes or unmutes media elements in the current document.</summary>
+    Task SetMutedAsync(bool muted);
+
+    /// <summary>
+    /// Starts fetching <paramref name="source"/> as a download the application
+    /// can pause, resume and cancel. Used on hosts whose engine does not raise
+    /// <see cref="DownloadStarted"/>, and for "Save link as" from the page menu.
+    /// </summary>
+    IEngineDownloadOperation StartDownload(Uri source, string filePath);
+
+    /// <summary>
+    /// Page-originated UI requests that the chrome must handle: a custom context
+    /// menu, a Fullscreen API change on hosts without a native signal, or a
+    /// download the page asked for itself.
+    /// </summary>
+    event EventHandler<EnginePageMessageEventArgs>? PageMessage;
+}
+
+public sealed class EngineFindResult(int matchCount, int activeIndex)
+{
+    public int MatchCount { get; } = matchCount;
+
+    public int ActiveIndex { get; } = activeIndex;
+}
+
+public sealed class EnginePageMessageEventArgs(string kind, string? payload) : EventArgs
+{
+    /// <summary>One of <c>ctx</c>, <c>fs</c>, <c>download</c>.</summary>
+    public string Kind { get; } = kind;
+
+    public string? Payload { get; } = payload;
 }
 
 public sealed class EngineDownloadStartedEventArgs(IEngineDownloadOperation operation) : EventArgs

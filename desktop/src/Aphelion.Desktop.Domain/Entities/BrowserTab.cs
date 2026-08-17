@@ -63,24 +63,49 @@ public sealed class BrowserTab
     public string? FailureReason { get; private set; }
 
     /// <summary>
+    /// A local page drawn by the application rather than the engine, or null
+    /// when this tab is a document or a blank New Tab.
+    /// </summary>
+    public InternalPageKind? InternalPage { get; private set; }
+
+    /// <summary>
     /// The local downloads page, drawn by the application rather than the
     /// engine. Distinct from a blank New Tab: this tab has a name and an icon
     /// of its own, and it is not an empty surface waiting for an address.
     /// </summary>
-    public bool IsDownloadsPage { get; private set; }
+    public bool IsDownloadsPage => InternalPage == InternalPageKind.Downloads;
+
+    public bool IsSettingsPage => InternalPage == InternalPageKind.Settings;
+
+    public bool IsHistoryPage => InternalPage == InternalPageKind.History;
+
+    /// <summary>True when this tab is showing a surface the engine never sees.</summary>
+    public bool HasInternalPage => InternalPage is not null;
 
     /// <summary>
     /// A tab that has never been navigated. The UI shows a new-tab page for these
     /// rather than an empty engine surface.
     /// </summary>
-    public bool IsBlank => Address is null && !IsDownloadsPage;
+    public bool IsBlank => Address is null && InternalPage is null;
+
+    /// <summary>
+    /// New Tab or an internal page — Back treats these as local rather than
+    /// asking the engine, which never navigated to them.
+    /// </summary>
+    public bool IsLocalSurface => IsBlank || HasInternalPage;
+
+    /// <summary>Pinned tabs stay on the left of the strip and survive "close others".</summary>
+    public bool IsPinned { get; private set; }
+
+    /// <summary>Media in this tab should play silently until unmuted.</summary>
+    public bool IsMuted { get; private set; }
 
     /// <summary>
     /// Best available label for the tab strip: the search term for a results page,
     /// otherwise the page's own title, falling back to the host while it loads.
     /// </summary>
     public string DisplayTitle =>
-        IsDownloadsPage ? InternalPages.DownloadsTitle
+        InternalPage is { } page ? InternalPages.TitleOf(page)
         : IsBlank ? "New tab"
         : !string.IsNullOrWhiteSpace(SearchTerm) ? SearchTerm!
         : !string.IsNullOrWhiteSpace(Title) ? Title
@@ -95,7 +120,7 @@ public sealed class BrowserTab
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        IsDownloadsPage = false;
+        InternalPage = null;
         Address = address;
         LoadState = TabLoadState.Loading;
         FailureReason = null;
@@ -140,23 +165,32 @@ public sealed class BrowserTab
         FailureReason = string.IsNullOrWhiteSpace(reason) ? "Navigation failed." : reason;
     }
 
-    /// <summary>Opens the local downloads page in this tab.</summary>
-    public void ShowDownloads()
+    /// <summary>Opens a local application page in this tab.</summary>
+    public void ShowInternal(InternalPageKind kind)
     {
         Address = null;
-        IsDownloadsPage = true;
-        Title = InternalPages.DownloadsTitle;
+        InternalPage = kind;
+        Title = InternalPages.TitleOf(kind);
         FaviconAddress = null;
         SearchTerm = null;
         LoadState = TabLoadState.Idle;
         FailureReason = null;
     }
 
+    /// <summary>Opens the local downloads page in this tab.</summary>
+    public void ShowDownloads() => ShowInternal(InternalPageKind.Downloads);
+
+    public void Pin() => IsPinned = true;
+
+    public void Unpin() => IsPinned = false;
+
+    public void SetMuted(bool muted) => IsMuted = muted;
+
     /// <summary>Returns this tab to the local New Tab experience.</summary>
     public void ResetToBlank()
     {
         Address = null;
-        IsDownloadsPage = false;
+        InternalPage = null;
         Title = string.Empty;
         FaviconAddress = null;
         SearchTerm = null;
@@ -182,7 +216,7 @@ public sealed class BrowserTab
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        IsDownloadsPage = false;
+        InternalPage = null;
         Address = address;
         Title = title ?? string.Empty;
         SearchTerm = string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm;

@@ -97,6 +97,46 @@ public sealed class BrowsingSession
         return true;
     }
 
+    /// <summary>
+    /// Pins a tab and moves it to the end of the pinned cluster on the left.
+    /// </summary>
+    public bool PinTab(TabId id)
+    {
+        var tab = _tabs.Find(t => t.Id == id);
+
+        if (tab is null)
+        {
+            return false;
+        }
+
+        tab.Pin();
+        return MovePinnedCluster();
+    }
+
+    /// <summary>Unpins a tab and places it just after the remaining pins.</summary>
+    public bool UnpinTab(TabId id)
+    {
+        var tab = _tabs.Find(t => t.Id == id);
+
+        if (tab is null)
+        {
+            return false;
+        }
+
+        tab.Unpin();
+        return MovePinnedCluster();
+    }
+
+    private bool MovePinnedCluster()
+    {
+        var pinned = _tabs.FindAll(t => t.IsPinned);
+        var rest = _tabs.FindAll(t => !t.IsPinned);
+        _tabs.Clear();
+        _tabs.AddRange(pinned);
+        _tabs.AddRange(rest);
+        return true;
+    }
+
     public bool Activate(TabId id)
     {
         var tab = _tabs.Find(t => t.Id == id);

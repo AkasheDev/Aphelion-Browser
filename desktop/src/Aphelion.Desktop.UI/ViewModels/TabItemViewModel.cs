@@ -116,6 +116,14 @@ public sealed partial class TabItemViewModel(
 
     public bool IsDownloadsPage => Tab.IsDownloadsPage;
 
+    public bool IsPinned => Tab.IsPinned;
+
+    public bool IsMuted => Tab.IsMuted;
+
+    public string PinLabel => IsPinned ? "Unpin" : "Pin tab";
+
+    public string MuteLabel => IsMuted ? "Unmute" : "Mute site";
+
     public bool ShowsGlobeFallback => Favicon is null && !IsDownloadsPage;
 
     /// <summary>Pulls display state back from the domain tab.</summary>
@@ -132,6 +140,10 @@ public sealed partial class TabItemViewModel(
         GroupBrush = groupColor is null ? null : GroupBrushes.For(groupColor.Value);
 
         OnPropertyChanged(nameof(IsDownloadsPage));
+        OnPropertyChanged(nameof(IsPinned));
+        OnPropertyChanged(nameof(IsMuted));
+        OnPropertyChanged(nameof(PinLabel));
+        OnPropertyChanged(nameof(MuteLabel));
         OnPropertyChanged(nameof(ShowsGlobeFallback));
 
         LoadFaviconIfChanged();

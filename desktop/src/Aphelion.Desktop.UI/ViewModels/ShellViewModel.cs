@@ -52,6 +52,11 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// <summary>The session as last written out, so an unchanged one is not rewritten.</summary>
     private string? _lastPersisted;
 
+    private readonly IAppSettingsStore? _appSettings;
+    private readonly SettingsViewModel? _settings;
+    private readonly HistoryViewModel? _history;
+    private readonly Stack<ClosedTabRecord> _closedTabs = new();
+
     public ShellViewModel(
         Func<BrowserViewModel> browserFactory,
         object? windowManager = null,
@@ -60,7 +65,12 @@ public sealed partial class ShellViewModel : ViewModelBase
         ITabSoundPlayer? tabSounds = null,
         BookmarksViewModel? bookmarks = null,
         bool isPrivateWindow = false,
-        DownloadsViewModel? downloads = null)
+        DownloadsViewModel? downloads = null,
+        SettingsViewModel? settings = null,
+        HistoryViewModel? history = null,
+        IAppSettingsStore? appSettings = null,
+        string? isolatedUserDataDirectory = null,
+        bool restoreOnStart = true)
     {
         _browserFactory = browserFactory ?? throw new ArgumentNullException(nameof(browserFactory));
         WindowManager = windowManager;
@@ -69,7 +79,14 @@ public sealed partial class ShellViewModel : ViewModelBase
         _tabSounds = tabSounds;
         Bookmarks = bookmarks;
         Downloads = downloads;
+        Settings = settings;
+        History = history;
+        _settings = settings;
+        _history = history;
+        _appSettings = appSettings;
+        IsolatedUserDataDirectory = isolatedUserDataDirectory;
         IsPrivateWindow = isPrivateWindow;
+        Palette = new CommandPaletteViewModel(this);
 
         if (Bookmarks is not null)
         {
@@ -106,7 +123,14 @@ public sealed partial class ShellViewModel : ViewModelBase
                 SplitWithNewTab();
             });
 
-        if (!TryRestore())
+        if (restoreOnStart)
+        {
+            if (!OpenInitialTabs())
+            {
+                NewTab();
+            }
+        }
+        else
         {
             NewTab();
         }
@@ -133,6 +157,17 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// Ctrl+J and the bubble's "Show all downloads" open the full page.
     /// </summary>
     public DownloadsViewModel? Downloads { get; }
+
+    public SettingsViewModel? Settings { get; }
+
+    public HistoryViewModel? History { get; }
+
+    public CommandPaletteViewModel Palette { get; }
+
+    public string? IsolatedUserDataDirectory { get; }
+
+    [ObservableProperty]
+    private bool _isCommandPaletteOpen;
 
     /// <summary>The toolbar flyout. Separate from the full downloads page.</summary>
     [ObservableProperty]
@@ -925,6 +960,7 @@ public sealed partial class ShellViewModel : ViewModelBase
             // Noted before the close, since the tab is the only thing that knows
             // which group it was in once it is gone.
             var leavingGroup = item.Tab.GroupId;
+            RememberClosed(item.Tab);
 
             // A delayed close may race a transfer or a group operation. Identity,
             // not merely the id, proves this is still the same tab in this window.
@@ -1472,7 +1508,8 @@ public sealed partial class ShellViewModel : ViewModelBase
             item.Tab.Address,
             partner?.Address,
             item.Tab.IsDownloadsPage,
-            IsPrivateWindow);
+            IsPrivateWindow,
+            item.Tab.InternalPage);
 
         Detach(item.Id);
 
@@ -1521,12 +1558,16 @@ public sealed partial class ShellViewModel : ViewModelBase
     {
         ArgumentNullException.ThrowIfNull(transfer);
 
-        var tab = _session.OpenTab(transfer.IsDownloadsPage ? null : transfer.PrimaryAddress);
+        var tab = _session.OpenTab(transfer.InternalPage is not null ? null : transfer.PrimaryAddress);
         Attach(tab);
         _session.MoveVisibleTabBefore(tab.Id, before?.Id, group);
         _session.Activate(tab.Id);
 
-        if (transfer.IsDownloadsPage)
+        if (transfer.InternalPage is { } page)
+        {
+            _browsers[tab.Id].ShowInternal(page, recordHistory: false);
+        }
+        else if (transfer.IsDownloadsPage)
         {
             _browsers[tab.Id].ShowDownloads(recordHistory: false);
         }
@@ -1580,17 +1621,26 @@ public sealed partial class ShellViewModel : ViewModelBase
             }
 
             tabs.Add(new SessionTabSnapshot(
-                tab.IsDownloadsPage ? InternalPages.DownloadsAddress : tab.Address?.ToString(),
+                tab.InternalPage is { } page
+                    ? InternalPages.AddressOf(page)
+                    : tab.Address?.ToString(),
                 group?.Name,
                 group?.Color.ToString(),
                 group?.IsCollapsed ?? false,
                 tab.SplitPartnerId is { } partnerId
                     ? _session.Tabs.ToList().FindIndex(t => t.Id == partnerId)
                     : null,
-                group?.SavedGroupId?.ToString()));
+                group?.SavedGroupId?.ToString(),
+                tab.IsPinned));
         }
 
         return new SessionSnapshot(tabs, activeIndex);
+    }
+
+    public SessionWindowSnapshot CaptureWindowSnapshot(int left, int top, double width, double height)
+    {
+        var snapshot = CaptureSnapshot();
+        return new SessionWindowSnapshot(snapshot.Tabs, snapshot.ActiveIndex, left, top, width, height);
     }
 
     /// <summary>
@@ -1599,16 +1649,38 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// </summary>
     private bool TryRestore()
     {
-        if (_sessionStore?.Load() is not { Tabs.Count: > 0 } snapshot)
+        if (_sessionStore?.Load() is not { } loaded)
         {
             return false;
         }
 
-        if (!snapshot.Tabs.Any(saved => saved is not null))
+        var snapshot = loaded.Windows is { Count: > 0 } windows
+            ? new SessionSnapshot(windows[0].Tabs, windows[0].ActiveIndex, loaded.Windows)
+            : loaded;
+
+        if (snapshot.Tabs.Count == 0 || !snapshot.Tabs.Any(saved => saved is not null))
         {
             return false;
         }
 
+        return RestoreLoadedSnapshot(snapshot);
+    }
+
+    public void ReplaceFromSnapshot(SessionWindowSnapshot window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        foreach (var tab in _session.Tabs.ToList())
+        {
+            Detach(tab.Id);
+            _session.CloseTab(tab.Id);
+        }
+
+        RestoreLoadedSnapshot(new SessionSnapshot(window.Tabs, window.ActiveIndex));
+    }
+
+    private bool RestoreLoadedSnapshot(SessionSnapshot snapshot)
+    {
         var restoredDurableIds = new HashSet<SavedTabGroupId>();
         TabGroup? currentRun = null;
         string? currentRunSignature = null;
@@ -1634,9 +1706,10 @@ public sealed partial class ShellViewModel : ViewModelBase
                 }
 
                 PageAddress? address = null;
-                var isDownloadsPage = InternalPages.IsDownloads(saved.Address);
+                InternalPages.TryMatch(saved.Address, out var internalKind);
+                var isInternal = InternalPages.TryMatch(saved.Address, out internalKind);
 
-                if (!isDownloadsPage &&
+                if (!isInternal &&
                     saved.Address is not null &&
                     Uri.TryCreate(saved.Address, UriKind.Absolute, out var uri))
                 {
@@ -1647,9 +1720,14 @@ public sealed partial class ShellViewModel : ViewModelBase
                 restored[sourceIndex] = tab;
                 Attach(tab);
 
-                if (isDownloadsPage)
+                if (isInternal)
                 {
-                    _browsers[tab.Id].ShowDownloads(recordHistory: false);
+                    _browsers[tab.Id].ShowInternal(internalKind, recordHistory: false);
+                }
+
+                if (saved.IsPinned)
+                {
+                    _session.PinTab(tab.Id);
                 }
 
                 if (saved.GroupName is not null)
@@ -1740,11 +1818,15 @@ public sealed partial class ShellViewModel : ViewModelBase
     private void Attach(BrowserTab tab)
     {
         var browser = _browserFactory();
+        browser.ConfigureChrome(_settings, IsPrivateWindow ? null : _history, IsolatedUserDataDirectory);
         browser.Bind(tab);
         browser.PropertyChanged += OnBrowserPropertyChanged;
         browser.ZoomFeedbackRequested += OnZoomFeedbackRequested;
         browser.DownloadStarted += OnBrowserDownloadStarted;
         browser.AcceleratorKeyPressed += OnBrowserAcceleratorKeyPressed;
+        browser.OpenInNewTabRequested += OnOpenInNewTabRequested;
+        browser.SearchRequested += OnSearchRequested;
+        browser.CopyTextRequested += OnCopyTextRequested;
         _browsers[tab.Id] = browser;
     }
 
@@ -1756,6 +1838,9 @@ public sealed partial class ShellViewModel : ViewModelBase
             browser.ZoomFeedbackRequested -= OnZoomFeedbackRequested;
             browser.DownloadStarted -= OnBrowserDownloadStarted;
             browser.AcceleratorKeyPressed -= OnBrowserAcceleratorKeyPressed;
+            browser.OpenInNewTabRequested -= OnOpenInNewTabRequested;
+            browser.SearchRequested -= OnSearchRequested;
+            browser.CopyTextRequested -= OnCopyTextRequested;
 
             if (browser.ContainsFullScreenElement)
             {
@@ -2071,7 +2156,18 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// </remarks>
     private void PersistSession()
     {
-        if (_sessionStore is null || _isReopeningGroup)
+        if (_isReopeningGroup || IsPrivateWindow)
+        {
+            return;
+        }
+
+        if (this.WindowManager is Aphelion.Desktop.UI.WindowManager manager)
+        {
+            manager.PersistAll();
+            return;
+        }
+
+        if (_sessionStore is null)
         {
             return;
         }

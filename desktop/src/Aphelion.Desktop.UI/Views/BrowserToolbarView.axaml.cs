@@ -1,5 +1,7 @@
 using Aphelion.Desktop.UI.ViewModels;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 
 namespace Aphelion.Desktop.UI.Views;
@@ -46,4 +48,22 @@ public partial class BrowserToolbarView : UserControl
             },
             DispatcherPriority.Input);
 
+    private void OnAddressGotFocus(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel { Shell.FocusedBrowser: { } browser })
+        {
+            browser.IsAddressEditing = true;
+            _ = browser.RefreshAddressSuggestionsAsync();
+        }
+    }
+
+    private void OnAddressLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is MainWindowViewModel { Shell.FocusedBrowser: { } browser })
+        {
+            Dispatcher.UIThread.Post(
+                () => browser.IsAddressEditing = false,
+                DispatcherPriority.Background);
+        }
+    }
 }

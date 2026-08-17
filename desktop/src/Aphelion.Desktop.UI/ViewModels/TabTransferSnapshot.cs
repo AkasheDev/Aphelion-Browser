@@ -1,3 +1,4 @@
+using Aphelion.Desktop.Domain;
 using Aphelion.Desktop.Domain.ValueObjects;
 
 namespace Aphelion.Desktop.UI.ViewModels;
@@ -15,4 +16,5 @@ public sealed record TabTransferSnapshot(
     PageAddress? PrimaryAddress,
     PageAddress? PartnerAddress,
     bool IsDownloadsPage = false,
-    bool IsPrivate = false);
+    bool IsPrivate = false,
+    InternalPageKind? InternalPage = null);

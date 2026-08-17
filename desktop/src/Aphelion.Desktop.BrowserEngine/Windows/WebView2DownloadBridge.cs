@@ -20,10 +20,13 @@ namespace Aphelion.Desktop.BrowserEngine.Windows;
 /// browser-engine adapter; the application only observes a portable
 /// <see cref="IEngineDownloadOperation"/>.
 /// </remarks>
-internal sealed class WebView2DownloadBridge(Action<IEngineDownloadOperation> downloadStarted) : IDisposable
+internal sealed class WebView2DownloadBridge(
+    Action<IEngineDownloadOperation> downloadStarted,
+    Func<string?>? downloadDirectory = null) : IDisposable
 {
     private readonly Action<IEngineDownloadOperation> _downloadStarted =
         downloadStarted ?? throw new ArgumentNullException(nameof(downloadStarted));
+    private readonly Func<string?>? _downloadDirectory = downloadDirectory;
 
     private WebView2Core4? _core;
     private WebView2DownloadStartingCallback? _handler;
@@ -90,6 +93,25 @@ internal sealed class WebView2DownloadBridge(Action<IEngineDownloadOperation> do
         try
         {
             var operation = new WebView2DownloadOperation(args.GetDownloadOperation());
+
+            var folder = _downloadDirectory?.Invoke();
+            if (!string.IsNullOrWhiteSpace(folder))
+            {
+                try
+                {
+                    Directory.CreateDirectory(folder);
+                    var current = args.GetResultFilePath();
+                    var name = string.IsNullOrWhiteSpace(current)
+                        ? "download"
+                        : Path.GetFileName(current);
+                    args.SetResultFilePath(Path.Combine(folder, name));
+                }
+                catch (Exception)
+                {
+                    // Keep the engine's default path if the chosen folder cannot
+                    // be used; the download itself must still proceed.
+                }
+            }
 
             // Handled hides WebView2's own download dialog; the transfer itself
             // proceeds untouched, on the default uniquified path in the user's

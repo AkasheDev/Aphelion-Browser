@@ -237,6 +237,24 @@ internal sealed class WebView2FullscreenBridge(
         _acceleratorToken = default;
     }
 
+    public bool TryOpenDevTools()
+    {
+        if (_core is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            _core.OpenDevToolsWindow();
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     public void Dispose() => Detach();
 }
 
@@ -264,8 +282,9 @@ internal partial interface WebView2Core
     void Reserved32(); void Reserved33(); void Reserved34(); void Reserved35();
     void Reserved36(); void Reserved37(); void Reserved38(); void Reserved39();
     void Reserved40(); void Reserved41(); void Reserved42(); void Reserved43();
-    void Reserved44(); void Reserved45(); void Reserved46(); void Reserved47();
-    void Reserved48();
+    void Reserved44(); void Reserved45(); void Reserved46();     void Reserved47();
+
+    void OpenDevToolsWindow();
 
     void AddContainsFullScreenElementChanged(
         [MarshalAs(UnmanagedType.Interface)] WebView2ContainsFullScreenElementChangedHandler eventHandler,

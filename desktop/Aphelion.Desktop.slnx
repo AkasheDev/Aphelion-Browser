@@ -6,4 +6,7 @@
     <Project Path="src/Aphelion.Desktop.Infrastructure/Aphelion.Desktop.Infrastructure.csproj" />
     <Project Path="src/Aphelion.Desktop.UI/Aphelion.Desktop.UI.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Aphelion.Desktop.Tests/Aphelion.Desktop.Tests.csproj" />
+  </Folder>
 </Solution>

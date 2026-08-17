@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+             x:Class="Aphelion.Desktop.UI.Views.CommandPaletteView"
+             x:DataType="vm:CommandPaletteViewModel">
+
+  <Border Classes="panel" Width="420" MaxHeight="420">
+    <DockPanel>
+      <TextBox DockPanel.Dock="Top"
+               PlaceholderText="Search commands"
+               Text="{Binding Query}"
+               Margin="10">
+        <TextBox.KeyBindings>
+          <KeyBinding Gesture="Enter" Command="{Binding RunCommand}"
+                      CommandParameter="{Binding Selected}" />
+        </TextBox.KeyBindings>
+      </TextBox>
+      <ListBox ItemsSource="{Binding Matches}"
+               SelectedItem="{Binding Selected}"
+               DoubleTapped="OnRun">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:CommandPaletteItem">
+            <Grid ColumnDefinitions="*,Auto" Margin="8,6">
+              <TextBlock Text="{Binding Title}" />
+              <TextBlock Grid.Column="1"
+                         Classes="settings-copy"
+                         Text="{Binding Shortcut}" />
+            </Grid>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+    </DockPanel>
+  </Border>
+</UserControl>

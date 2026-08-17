@@ -1,0 +1,28 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+        x:Class="Aphelion.Desktop.UI.Views.OnboardingWindow"
+        x:DataType="vm:OnboardingViewModel"
+        Title="Welcome to Aphelion"
+        Width="520" Height="420"
+        WindowStartupLocation="CenterScreen"
+        CanResize="False">
+
+  <StackPanel Margin="36" Spacing="16">
+    <TextBlock Classes="downloads-heading" Text="Welcome to Aphelion" />
+    <TextBlock Classes="settings-copy"
+               TextWrapping="Wrap"
+               Text="Choose a look and a search engine. You can change both later in Settings." />
+
+    <TextBlock Classes="settings-section" Text="Theme" />
+    <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}" Width="240" />
+
+    <TextBlock Classes="settings-section" Text="Search engine" />
+    <ComboBox ItemsSource="{Binding SearchEngines}" SelectedItem="{Binding SelectedEngine}" Width="240" />
+
+    <Button Content="Start browsing"
+            HorizontalAlignment="Left"
+            Margin="0,12,0,0"
+            Command="{Binding FinishCommand}" />
+  </StackPanel>
+</Window>

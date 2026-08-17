@@ -12,14 +12,20 @@ Windows, Linux and macOS desktop client built on .NET 10 and Avalonia UI.
 
 ## Packages
 
-Versions are managed centrally in `Directory.Packages.props`. Approved set: Avalonia
-(core, Desktop, Fluent theme, Inter fonts, Diagnostics in Debug), `CommunityToolkit.Mvvm`
-and `Microsoft.Extensions.DependencyInjection`. Persistence, identity, observability and
-test packages require explicit approval and an architecture decision record.
+Versions are managed centrally in `Directory.Packages.props`. UI packages: Avalonia
+(core, Desktop, Fluent theme, Inter fonts, WebView), `CommunityToolkit.Mvvm`
+and `Microsoft.Extensions.DependencyInjection`. Tests use xunit (ADR-0002).
 
-## Build and run
+## Runtime prerequisites
+
+- Windows: WebView2 Runtime (preinstalled on Windows 11).
+- macOS: WKWebView (macOS 10.15+).
+- Linux: WPE WebKit (`libwpewebkit-2.0-1` on Debian/Ubuntu 24.04+).
+
+## Build, test and run
 
 ```bash
 dotnet build desktop/Aphelion.Desktop.slnx
+dotnet test desktop/Aphelion.Desktop.slnx
 dotnet run --project desktop/src/Aphelion.Desktop.UI
 ```

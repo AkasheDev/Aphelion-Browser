@@ -375,6 +375,55 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (e.Key == Key.H && e.KeyModifiers == KeyModifiers.Control)
+            {
+                bookmarkShell.OpenHistoryPageCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.T && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
+            {
+                bookmarkShell.ReopenClosedTabCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Control)
+            {
+                bookmarkShell.FindInPageCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.P && e.KeyModifiers == KeyModifiers.Control)
+            {
+                bookmarkShell.PrintActiveCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.K && e.KeyModifiers == KeyModifiers.Control)
+            {
+                bookmarkShell.ToggleCommandPaletteCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.R && e.KeyModifiers == KeyModifiers.Control)
+            {
+                bookmarkShell.ReloadActiveCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+
+            if (e.Key == Key.F12 && e.KeyModifiers == KeyModifiers.None)
+            {
+                bookmarkShell.OpenDevToolsCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
+
             if (e.Key == Key.B && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
             {
                 bookmarkShell.ToggleBookmarkBarCommand.Execute(null);

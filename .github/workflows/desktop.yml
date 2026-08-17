@@ -1,0 +1,30 @@
+name: Desktop
+
+on:
+  push:
+    paths:
+      - "desktop/**"
+      - "shared/**"
+      - ".github/workflows/desktop.yml"
+  pull_request:
+    paths:
+      - "desktop/**"
+      - "shared/**"
+      - ".github/workflows/desktop.yml"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build
+        run: dotnet build desktop/Aphelion.Desktop.slnx -c Release
+      - name: Test
+        run: dotnet test desktop/Aphelion.Desktop.slnx -c Release --no-build

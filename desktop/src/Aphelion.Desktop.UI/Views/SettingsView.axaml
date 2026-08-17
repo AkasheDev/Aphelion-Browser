@@ -1,0 +1,79 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
+             xmlns:dto="using:Aphelion.Desktop.Application.Dtos"
+             x:Class="Aphelion.Desktop.UI.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="48,28,48,40" MaxWidth="720" Spacing="22">
+
+      <TextBlock Classes="downloads-heading" Text="Settings" />
+
+      <TextBlock Classes="settings-section" Text="Appearance" />
+      <TextBlock Classes="settings-copy" Text="Theme" />
+      <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}" Width="240" />
+
+      <TextBlock Classes="settings-section" Text="On startup" />
+      <ComboBox ItemsSource="{Binding StartupModes}" SelectedItem="{Binding Startup}" Width="280" />
+      <TextBox PlaceholderText="One address per line"
+               AcceptsReturn="True"
+               Height="90"
+               Text="{Binding StartupPagesText}"
+               IsVisible="{Binding ShowsCustomPages}" />
+
+      <TextBlock Classes="settings-section" Text="Search" />
+      <ComboBox ItemsSource="{Binding SearchEngines}" SelectedItem="{Binding SelectedEngine}" Width="240" />
+
+      <TextBlock Classes="settings-section" Text="New Tab" />
+      <CheckBox Content="Show weather" IsChecked="{Binding WeatherEnabled}" />
+      <CheckBox Content="Show search suggestions" IsChecked="{Binding SuggestionsEnabled}" />
+
+      <TextBlock Classes="settings-section" Text="Downloads" />
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <TextBox Grid.Column="0"
+                 PlaceholderText="System downloads folder"
+                 Text="{Binding DownloadFolder}" />
+        <Button Grid.Column="1"
+                Content="Use default"
+                Command="{Binding UseDefaultDownloadFolderCommand}" />
+      </Grid>
+
+      <TextBlock Classes="settings-section" Text="Default browser" />
+      <TextBlock Classes="settings-copy"
+                 Text="Windows and macOS keep default apps in system settings. Linux uses xdg-settings when it is installed."
+                 TextWrapping="Wrap" />
+      <Button Content="Open default-app settings"
+              HorizontalAlignment="Left"
+              Command="{Binding OpenDefaultAppsCommand}" />
+
+      <TextBlock Classes="settings-section" Text="Updates" />
+      <ComboBox ItemsSource="{Binding UpdateChannels}" SelectedItem="{Binding UpdateChannel}" Width="200" />
+
+      <TextBlock Classes="settings-section" Text="Saved passwords" />
+      <TextBlock Classes="settings-copy"
+                 Text="Stored only on this device. Pages are not filled automatically."
+                 TextWrapping="Wrap" />
+      <Grid ColumnDefinitions="*,*,*,Auto" ColumnSpacing="6">
+        <TextBox Grid.Column="0" PlaceholderText="Host" Text="{Binding NewPasswordHost}" />
+        <TextBox Grid.Column="1" PlaceholderText="Username" Text="{Binding NewPasswordUsername}" />
+        <TextBox Grid.Column="2" PlaceholderText="Password" PasswordChar="•" Text="{Binding NewPasswordSecret}" />
+        <Button Grid.Column="3" Content="Save" Command="{Binding AddPasswordCommand}" />
+      </Grid>
+      <ItemsControl ItemsSource="{Binding Passwords}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="dto:SavedCredential">
+            <Grid ColumnDefinitions="*,*,Auto" Margin="0,4">
+              <TextBlock Grid.Column="0" Text="{Binding Host}" />
+              <TextBlock Grid.Column="1" Text="{Binding Username}" />
+              <Button Grid.Column="2" Content="Remove"
+                      Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).RemovePasswordCommand}"
+                      CommandParameter="{Binding}" />
+            </Grid>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

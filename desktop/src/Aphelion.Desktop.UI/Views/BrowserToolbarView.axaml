@@ -62,17 +62,35 @@
       <Panel Grid.Column="4" Margin="8,0,0,0">
         <TextBox Name="AddressBox"
                  Classes="address"
-                 Padding="14,0,40,0"
+                 Padding="36,0,40,0"
                  Text="{Binding Shell.FocusedBrowser.AddressText}"
-                 PlaceholderText="Search or enter address">
+                 PlaceholderText="Search or enter address"
+                 GotFocus="OnAddressGotFocus"
+                 LostFocus="OnAddressLostFocus">
           <TextBox.KeyBindings>
             <KeyBinding Gesture="Enter" Command="{Binding Shell.FocusedBrowser.NavigateCommand}" />
             <KeyBinding Gesture="Escape" Command="{Binding Shell.FocusedBrowser.CancelAddressEditingCommand}" />
           </TextBox.KeyBindings>
         </TextBox>
 
-        <!-- Filled once the open page is saved, hollow otherwise, and the anchor
-             the add/edit form hangs from. -->
+        <Button Name="SiteInfoButton"
+                Classes="icon inset"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center"
+                Margin="5,0,0,0"
+                ToolTip.Tip="Site information"
+                Command="{Binding Shell.FocusedBrowser.ToggleSiteInfoCommand}">
+          <Path Classes="glyph"
+                Data="M6.5,1.5 A5,5 0 1 1 6.5,11.5 A5,5 0 1 1 6.5,1.5 M6.5,6 V9 M6.5,4 V4.2" />
+        </Button>
+
+        <TextBlock Classes="omnibox-badge"
+                   HorizontalAlignment="Left"
+                   VerticalAlignment="Center"
+                   Margin="34,0,0,0"
+                   IsHitTestVisible="False"
+                   Text="{Binding Shell.FocusedBrowser.OmniboxBadge}" />
+
         <Button Name="BookmarkStar"
                 Classes="icon inset"
                 Classes.bookmarked="{Binding Shell.IsActivePageBookmarked}"
@@ -108,7 +126,8 @@
            glyph styling — and its hover — like every other icon here. -->
       <Button Grid.Column="6"
               Classes="icon"
-              ToolTip.Tip="Settings">
+              ToolTip.Tip="Settings"
+              Command="{Binding Shell.OpenSettingsPageCommand}">
         <Path Classes="glyph" StrokeThickness="2.2"
               Data="M6.5,2 L6.5,2 M6.5,6.5 L6.5,6.5 M6.5,11 L6.5,11" />
       </Button>
@@ -130,6 +149,42 @@
              ShouldUseOverlayLayer="False"
              Closed="OnDownloadsClosed">
         <views:DownloadsBubbleView DataContext="{Binding Shell}" />
+      </Popup>
+
+      <Popup IsOpen="{Binding Shell.FocusedBrowser.IsSiteInfoOpen}"
+             PlacementTarget="{Binding ElementName=SiteInfoButton}"
+             Placement="BottomEdgeAlignedLeft"
+             VerticalOffset="8"
+             IsLightDismissEnabled="True">
+        <Border Classes="panel" Width="280" Padding="14">
+          <StackPanel Spacing="8">
+            <TextBlock FontWeight="SemiBold" Text="{Binding Shell.FocusedBrowser.SiteHost}" />
+            <TextBlock Classes="settings-copy" Text="{Binding Shell.FocusedBrowser.SiteScheme}" />
+            <TextBlock Classes="settings-copy"
+                       Text="Cookies, location, notifications and camera stay with the page until you change them in the site itself. Aphelion does not grant extra permissions from this window."
+                       TextWrapping="Wrap" />
+          </StackPanel>
+        </Border>
+      </Popup>
+
+      <Popup IsOpen="{Binding Shell.FocusedBrowser.HasAddressSuggestions}"
+             PlacementTarget="{Binding ElementName=AddressBox}"
+             Placement="BottomEdgeAlignedLeft"
+             VerticalOffset="4"
+             IsLightDismissEnabled="True">
+        <Border Classes="panel" MinWidth="360">
+          <ItemsControl ItemsSource="{Binding Shell.FocusedBrowser.AddressSuggestions}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="x:String">
+                <Button Classes="panel-row"
+                        HorizontalAlignment="Stretch"
+                        Content="{Binding}"
+                        Command="{Binding $parent[UserControl].((vm:MainWindowViewModel)DataContext).Shell.FocusedBrowser.ChooseAddressSuggestionCommand}"
+                        CommandParameter="{Binding}" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </Border>
       </Popup>
 
     </Grid>

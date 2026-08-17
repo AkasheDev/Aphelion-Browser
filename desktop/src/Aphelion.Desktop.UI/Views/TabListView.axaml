@@ -57,6 +57,22 @@
                               CommandParameter="{Binding}"
                               IsEnabled="{Binding IsSplit}" />
                     <Separator />
+                    <MenuItem Header="{Binding PinLabel}"
+                              Command="{Binding Owner.PinTabCommand}"
+                              CommandParameter="{Binding}" />
+                    <MenuItem Header="{Binding MuteLabel}"
+                              Command="{Binding Owner.MuteTabCommand}"
+                              CommandParameter="{Binding}" />
+                    <MenuItem Header="Duplicate"
+                              Command="{Binding Owner.DuplicateTabCommand}"
+                              CommandParameter="{Binding}" />
+                    <MenuItem Header="Copy URL"
+                              Command="{Binding Owner.CopyTabUrlCommand}"
+                              CommandParameter="{Binding}" />
+                    <MenuItem Header="Reopen closed tab"
+                              Command="{Binding Owner.ReopenClosedTabCommand}"
+                              IsEnabled="{Binding Owner.CanReopenClosedTab}" />
+                    <Separator />
                     <MenuItem Header="Move to new window"
                               Command="{Binding Owner.MoveTabToNewWindowCommand}"
                               CommandParameter="{Binding}" />
