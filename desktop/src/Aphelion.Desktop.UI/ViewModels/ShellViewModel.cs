@@ -168,7 +168,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         var tab = _session.OpenTab();
         _tabSounds?.PlayTabOpened();
         Attach(tab);
-        _browsers[tab.Id].ShowDownloads();
+        _browsers[tab.Id].ShowDownloads(recordHistory: false);
         var item = ItemFor(tab);
         item.IsExiting = true;
         SyncTabs();
@@ -1528,7 +1528,7 @@ public sealed partial class ShellViewModel : ViewModelBase
 
         if (transfer.IsDownloadsPage)
         {
-            _browsers[tab.Id].ShowDownloads();
+            _browsers[tab.Id].ShowDownloads(recordHistory: false);
         }
 
         if (transfer.PartnerAddress is not null)
@@ -1649,7 +1649,7 @@ public sealed partial class ShellViewModel : ViewModelBase
 
                 if (isDownloadsPage)
                 {
-                    _browsers[tab.Id].ShowDownloads();
+                    _browsers[tab.Id].ShowDownloads(recordHistory: false);
                 }
 
                 if (saved.GroupName is not null)

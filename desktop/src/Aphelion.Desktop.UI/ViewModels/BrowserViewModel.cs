@@ -32,30 +32,34 @@ public sealed partial class BrowserViewModel : ViewModelBase
     private PageAddress? _lastStartedAddress;
 
     /// <summary>
-    /// How many engine history steps this tab has taken since it last left New
-    /// Tab, or <see cref="NotAnchoredToNewTab"/> when it is not sitting above a
-    /// New Tab at all.
+    /// How many engine history steps this tab has taken since it last left a
+    /// local page (New Tab or Downloads), or <see cref="NotAnchoredToNewTab"/>
+    /// when it is not sitting above one.
     /// </summary>
     /// <remarks>
-    /// The native web view never navigates to New Tab — it is a local surface
-    /// this application draws instead of a page, see <see cref="IsBlank"/> — so
-    /// New Tab is absent from the engine's history entirely, and the engine
-    /// cannot be asked where the boundary is. Counting the steps is what puts it
-    /// back: at zero, the page below the current one is New Tab.
-    ///
-    /// A plain "did this tab come from New Tab" flag was not enough. Returning to
-    /// New Tab leaves the engine's own history untouched, so the next navigation
-    /// stacked on top of entries from before, and stepping back walked into those
-    /// stale pages instead of ever reaching New Tab again.
+    /// The native web view never navigates to those pages — they are surfaces
+    /// this application draws instead of a document — so they are absent from
+    /// the engine's history, and the engine cannot be asked where the boundary
+    /// is. Counting the steps is what puts them back: at zero, Back restores
+    /// the local page below rather than walking into engine entries from before
+    /// this tab last returned there.
     /// </remarks>
     private int _newTabDepth = NotAnchoredToNewTab;
 
     private const int NotAnchoredToNewTab = -1;
 
     /// <summary>
-    /// The page this tab stepped back from when it returned to New Tab, kept so
-    /// going forward can return to it. Cleared as soon as the tab navigates
-    /// somewhere else, which is what discards a forward entry in any browser.
+    /// Local pages (and the engine document under Downloads) waiting behind the
+    /// current surface. The engine cannot report these, so Back reads here when
+    /// it has run out of engine steps — or when the current page is itself local.
+    /// </summary>
+    private readonly Stack<LocalBackEntry> _localBack = new();
+
+    /// <summary>
+    /// The page this tab stepped back from when it returned to a local surface,
+    /// kept so going forward can return to it. Cleared as soon as the tab
+    /// navigates somewhere else, which is what discards a forward entry in any
+    /// browser.
     /// </summary>
     private BlankStepBack? _newTabForward;
 
@@ -65,12 +69,32 @@ public sealed partial class BrowserViewModel : ViewModelBase
     /// </summary>
     private bool _isTraversing;
 
-    /// <summary>What returning forward from New Tab has to put back on the tab.</summary>
+    /// <summary>
+    /// Set before an engine Navigate this view model already counted, so
+    /// <see cref="OnNavigationStarted"/> does not count further steps until
+    /// that load finishes. A single ignore bit was consumed by the first
+    /// started event; a second one (the document the engine still held under
+    /// New Tab, or a redirect) then looked like a link click, so Back walked
+    /// into that leftover URL instead of New Tab.
+    /// </summary>
+    private bool _suppressEngineHistory;
+
+    private enum LocalBackKind
+    {
+        NewTab,
+        Downloads,
+        Engine,
+    }
+
+    private sealed record LocalBackEntry(LocalBackKind Kind, BlankStepBack? Page, int EngineDepth);
+
+    /// <summary>What returning forward from a local page has to put back on the tab.</summary>
     private sealed record BlankStepBack(
         PageAddress Address,
         string? Title,
         string? SearchTerm,
-        PageAddress? FaviconAddress);
+        PageAddress? FaviconAddress,
+        int EngineDepth);
 
     public BrowserViewModel(
         NavigateFromAddressBar navigateFromAddressBar,
@@ -121,14 +145,30 @@ public sealed partial class BrowserViewModel : ViewModelBase
     private bool _isDownloadsPage;
 
     /// <summary>
-    /// Turns this tab into the local downloads page, as Ctrl+J does. Counted as
-    /// leaving New Tab so Back returns there rather than disabling.
+    /// Turns this tab into the local downloads page. The engine is not asked to
+    /// move. Pass <paramref name="recordHistory"/> when the user left a surface
+    /// they should be able to return to — New Tab via the address bar, or the
+    /// document still sitting underneath. A tab created for Downloads (Ctrl+J,
+    /// session restore) has no such surface; recording one made Back invent a
+    /// New Tab and leave <c>aphelion://downloads</c> in the address bar.
     /// </summary>
-    public void ShowDownloads()
+    public void ShowDownloads(bool recordHistory = true)
     {
+        if (_tab.IsDownloadsPage)
+        {
+            AddressText = InternalPages.DownloadsAddress;
+            return;
+        }
+
         ErrorPage.Hide();
-        NoteNavigationAway(_tab.IsBlank);
+        if (recordHistory)
+        {
+            PushCurrentToLocalBack();
+        }
+
         _tab.ShowDownloads();
+        _newTabDepth = NotAnchoredToNewTab;
+        _newTabForward = null;
         SyncFromTab();
     }
 
@@ -156,9 +196,18 @@ public sealed partial class BrowserViewModel : ViewModelBase
         ArgumentNullException.ThrowIfNull(address);
 
         ErrorPage.Hide();
+
+        var leftLocal = _tab.IsBlank || _tab.IsDownloadsPage;
+        if (leftLocal)
+        {
+            PushCurrentToLocalBack();
+        }
+
+        _suppressEngineHistory = true;
         _tab.BeginNavigation(address);
         ApplySiteZoom();
         _session?.Navigate(address);
+        NoteNavigationAway(leftLocal);
         SyncFromTab();
     }
 
@@ -174,24 +223,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
             return true;
         }
 
-        if (_session is null)
-        {
-            return false;
-        }
-
-        // Recorded before the domain tab loses IsBlank, since that is the only
-        // signal that this navigation's origin was New Tab rather than a link
-        // followed from an already-loaded page.
-        var leftNewTab = _tab.IsBlank;
-        var navigated = _navigateFromAddressBar.Execute(_tab, _session, query);
-
-        if (navigated)
-        {
-            NoteNavigationAway(leftNewTab);
-            SyncFromTab();
-        }
-
-        return navigated;
+        return NavigateThroughEngine(query);
     }
 
     /// <summary>
@@ -223,15 +255,15 @@ public sealed partial class BrowserViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Records a navigation the user asked for: leaving New Tab anchors the tab
-    /// to it, and any other navigation is one more step away from wherever it is
-    /// anchored. Either way the forward entry New Tab held is now gone.
+    /// Records a navigation the user asked for: leaving a local page anchors the
+    /// tab to it, and any other navigation is one more step away from wherever it
+    /// is anchored. Either way the forward entry that page held is now gone.
     /// </summary>
-    private void NoteNavigationAway(bool leftNewTab)
+    private void NoteNavigationAway(bool leftLocal)
     {
         _newTabForward = null;
 
-        if (leftNewTab)
+        if (leftLocal)
         {
             _newTabDepth = 0;
         }
@@ -239,6 +271,67 @@ public sealed partial class BrowserViewModel : ViewModelBase
         {
             _newTabDepth++;
         }
+    }
+
+    /// <summary>
+    /// Pushes the surface the user is looking at so Back can restore it. Local
+    /// pages are not engine history entries; the document under Downloads is not
+    /// either, because showing Downloads never moved the engine.
+    /// </summary>
+    private void PushCurrentToLocalBack()
+    {
+        if (_tab.IsBlank)
+        {
+            _localBack.Push(new LocalBackEntry(LocalBackKind.NewTab, null, _newTabDepth));
+            return;
+        }
+
+        if (_tab.IsDownloadsPage)
+        {
+            _localBack.Push(new LocalBackEntry(LocalBackKind.Downloads, null, _newTabDepth));
+            return;
+        }
+
+        if (_tab.Address is { } address)
+        {
+            _localBack.Push(new LocalBackEntry(
+                LocalBackKind.Engine,
+                new BlankStepBack(address, _tab.Title, _tab.SearchTerm, _tab.FaviconAddress, _newTabDepth),
+                _newTabDepth));
+        }
+    }
+
+    private bool NavigateThroughEngine(string? input)
+    {
+        if (_session is null)
+        {
+            return false;
+        }
+
+        var leftLocal = _tab.IsBlank || _tab.IsDownloadsPage;
+        if (leftLocal)
+        {
+            PushCurrentToLocalBack();
+        }
+
+        // Count this step before the engine reports it — Navigate may raise
+        // started asynchronously, after BeginNavigation has already cleared
+        // IsBlank, which would otherwise look like a second step.
+        _suppressEngineHistory = true;
+        if (!_navigateFromAddressBar.Execute(_tab, _session, input))
+        {
+            _suppressEngineHistory = false;
+            if (leftLocal && _localBack.Count > 0)
+            {
+                _localBack.Pop();
+            }
+
+            return false;
+        }
+
+        NoteNavigationAway(leftLocal);
+        SyncFromTab();
+        return true;
     }
 
     /// <summary>
@@ -251,6 +344,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
     {
         if (_session is not null && _tab.Address is { } address)
         {
+            _suppressEngineHistory = true;
             _tab.BeginNavigation(address);
             ApplySiteZoom();
             _session.Navigate(address);
@@ -371,28 +465,12 @@ public sealed partial class BrowserViewModel : ViewModelBase
     [RelayCommand]
     private void Navigate()
     {
-        // Recorded before the domain tab loses IsBlank — see the remarks on
-        // _cameFromNewTab. This command is the address bar's Enter key, which is
-        // how most New-Tab-to-page navigations actually happen; the New Tab
-        // page's own search box goes through NavigateFromNewTab instead, but both
-        // need the same flag set the same way.
-        var leftNewTab = _tab.IsBlank || _tab.IsDownloadsPage;
-
         if (TryOpenInternalPage(AddressText))
         {
             return;
         }
 
-        if (_session is null)
-        {
-            return;
-        }
-
-        if (_navigateFromAddressBar.Execute(_tab, _session, AddressText))
-        {
-            NoteNavigationAway(leftNewTab);
-            SyncFromTab();
-        }
+        NavigateThroughEngine(AddressText);
     }
 
     [RelayCommand]
@@ -404,18 +482,12 @@ public sealed partial class BrowserViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanGoBack))]
     private void GoBack()
     {
-        // Sitting directly above New Tab, that is what back means — checked before
-        // the engine, because the engine may still hold pages from before this tab
-        // last returned to New Tab, and walking into those would step past the
-        // boundary rather than onto it.
-        if (_newTabDepth == 0)
+        // Local pages, and the first engine document above one, are restored
+        // from the stack — not from the engine, which never saw those pages and
+        // may still hold entries from before this tab last returned to them.
+        if (_tab.IsDownloadsPage || _tab.IsBlank || _newTabDepth == 0 || _session?.CanGoBack != true)
         {
-            ReturnToNewTab();
-            return;
-        }
-
-        if (_session?.CanGoBack != true)
-        {
+            RestoreLocalBack();
             return;
         }
 
@@ -431,11 +503,12 @@ public sealed partial class BrowserViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanGoForward))]
     private void GoForward()
     {
-        // Forward out of New Tab is the mirror of the step that got here: the
-        // engine never moved, so the page it is still showing only has to be put
-        // back on the tab.
-        if (_tab.IsBlank && _newTabForward is { } resume)
+        // Forward out of a local page is the mirror of the step that got here:
+        // the engine never moved, so the page it is still showing only has to be
+        // put back on the tab.
+        if ((_tab.IsBlank || _tab.IsDownloadsPage) && _newTabForward is { } resume)
         {
+            PushCurrentToLocalBack();
             _tab.RestoreFromBlank(
                 resume.Address,
                 resume.Title,
@@ -443,7 +516,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
                 resume.FaviconAddress);
 
             _newTabForward = null;
-            _newTabDepth = 0;
+            _newTabDepth = resume.EngineDepth;
             ApplySiteZoom();
             SyncFromTab();
             return;
@@ -511,16 +584,18 @@ public sealed partial class BrowserViewModel : ViewModelBase
             // A step the page took for itself is one more step from New Tab, and
             // it drops whatever was ahead. A traversal this view model asked for
             // has already accounted for itself, and a redirect replaces the entry
-            // it came from rather than adding one.
+            // it came from rather than adding one. Suppression lasts until the
+            // load completes so a second started event cannot sneak a leftover
+            // document into the count.
             var isRedirect = _lastStartedAddress is not null && _tab.LoadState == TabLoadState.Loading;
 
             if (_isTraversing)
             {
                 _isTraversing = false;
             }
-            else if (!isRedirect)
+            else if (!_suppressEngineHistory && !isRedirect)
             {
-                NoteNavigationAway(_tab.IsBlank);
+                NoteNavigationAway(_tab.IsBlank || _tab.IsDownloadsPage);
             }
 
             _lastStartedAddress = address;
@@ -541,6 +616,8 @@ public sealed partial class BrowserViewModel : ViewModelBase
         // Native controls can report their initial/previous document while a
         // blank tab is taking ownership of the surface. A blank domain tab has no
         // navigation to complete and must never inherit that document's identity.
+        // A completion for that leftover document must not lift history
+        // suppression either: the next Navigate is still in flight.
         if (_tab.Address is not { } current)
         {
             RefreshHistoryState();
@@ -567,6 +644,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
             return;
         }
 
+        _suppressEngineHistory = false;
         _lastStartedAddress = null;
 
         // Chrome leaves the engine document on screen: a real page, a challenge,
@@ -731,11 +809,14 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
     private void RefreshHistoryState()
     {
-        // New Tab is a place this tab can be but the engine cannot report, so both
-        // directions add it to whatever the engine knows.
-        CanGoBack = (_session?.CanGoBack ?? false) || _newTabDepth == 0;
+        // Local pages are not in the engine's history. Depth counts engine steps
+        // above one; the stack holds the pages themselves. An unanchored restored
+        // tab still uses the engine, because it never sat on New Tab.
+        CanGoBack = _localBack.Count > 0
+            || _newTabDepth >= 0
+            || (!_tab.IsBlank && !_tab.IsDownloadsPage && (_session?.CanGoBack ?? false));
         CanGoForward = (_session?.CanGoForward ?? false) ||
-            (_tab.IsBlank && _newTabForward is not null);
+            ((_tab.IsBlank || _tab.IsDownloadsPage) && _newTabForward is not null);
     }
 
     /// <summary>
@@ -837,21 +918,75 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
         // Kept before the reset clears it, so forward can put the tab back on the
         // page the engine is still showing.
-        _newTabForward = _tab.Address is { } leaving
-            ? new BlankStepBack(leaving, _tab.Title, _tab.SearchTerm, _tab.FaviconAddress)
-            : null;
+        _newTabForward = CaptureCurrentPage();
 
         _tab.ResetToBlank();
+        AddressText = string.Empty;
         ApplySiteZoom();
         ErrorPage.Hide();
 
-        // Back at New Tab, so there is nothing further back to return to until
-        // the next time it is left.
+        // New Tab is the floor of this tab's local history.
         _newTabDepth = NotAnchoredToNewTab;
+        _localBack.Clear();
+        _suppressEngineHistory = false;
 
         SyncFromTab();
         RefreshHistoryState();
     }
+
+    private void RestoreLocalBack()
+    {
+        if (_localBack.Count == 0)
+        {
+            ReturnToNewTab();
+            return;
+        }
+
+        var entry = _localBack.Pop();
+        switch (entry.Kind)
+        {
+            case LocalBackKind.Downloads:
+                RevealDownloads();
+                break;
+
+            case LocalBackKind.Engine when entry.Page is not null:
+                RevealEnginePage(entry.Page);
+                break;
+
+            default:
+                ReturnToNewTab();
+                break;
+        }
+    }
+
+    private void RevealDownloads()
+    {
+        _session?.StopLoading();
+        _newTabForward = CaptureCurrentPage();
+        _tab.ShowDownloads();
+        _newTabDepth = NotAnchoredToNewTab;
+        ErrorPage.Hide();
+        SyncFromTab();
+    }
+
+    private void RevealEnginePage(BlankStepBack page)
+    {
+        _tab.RestoreFromBlank(page.Address, page.Title, page.SearchTerm, page.FaviconAddress);
+        _newTabDepth = page.EngineDepth;
+        ApplySiteZoom();
+        ErrorPage.Hide();
+        SyncFromTab();
+    }
+
+    private BlankStepBack? CaptureCurrentPage() =>
+        _tab.Address is { } leaving
+            ? new BlankStepBack(
+                leaving,
+                _tab.Title,
+                _tab.SearchTerm,
+                _tab.FaviconAddress,
+                _newTabDepth < 0 ? 0 : _newTabDepth)
+            : null;
 
     private void OnErrorPagePropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {

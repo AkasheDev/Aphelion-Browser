@@ -185,7 +185,7 @@ internal sealed class WindowManager(IServiceProvider services)
         {
             if (transfer.IsDownloadsPage)
             {
-                shell.ActiveBrowser?.ShowDownloads();
+                shell.ActiveBrowser?.ShowDownloads(recordHistory: false);
             }
             if (transfer.PartnerAddress is not null)
             {
