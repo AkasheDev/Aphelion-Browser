@@ -164,7 +164,17 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
     private bool NavigateFromNewTab(string query)
     {
-        if (_session is null || string.IsNullOrWhiteSpace(query))
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return false;
+        }
+
+        if (TryOpenInternalPage(query))
+        {
+            return true;
+        }
+
+        if (_session is null)
         {
             return false;
         }
@@ -182,6 +192,34 @@ public sealed partial class BrowserViewModel : ViewModelBase
         }
 
         return navigated;
+    }
+
+    /// <summary>
+    /// Opens an <c>aphelion://</c> page in this tab. The engine never sees these
+    /// addresses; adding settings later is another <see cref="InternalPageKind"/>.
+    /// </summary>
+    private bool TryOpenInternalPage(string? input)
+    {
+        if (!InternalPages.TryMatch(input, out var kind))
+        {
+            return false;
+        }
+
+        switch (kind)
+        {
+            case InternalPageKind.Downloads:
+                if (_tab.IsDownloadsPage)
+                {
+                    AddressText = InternalPages.DownloadsAddress;
+                    return true;
+                }
+
+                ShowDownloads();
+                return true;
+
+            default:
+                return false;
+        }
     }
 
     /// <summary>
@@ -316,11 +354,6 @@ public sealed partial class BrowserViewModel : ViewModelBase
     [RelayCommand]
     private void Navigate()
     {
-        if (_session is null)
-        {
-            return;
-        }
-
         // Recorded before the domain tab loses IsBlank — see the remarks on
         // _cameFromNewTab. This command is the address bar's Enter key, which is
         // how most New-Tab-to-page navigations actually happen; the New Tab
@@ -328,8 +361,12 @@ public sealed partial class BrowserViewModel : ViewModelBase
         // need the same flag set the same way.
         var leftNewTab = _tab.IsBlank || _tab.IsDownloadsPage;
 
-        if (_tab.IsDownloadsPage &&
-            InternalPages.IsDownloads(AddressText))
+        if (TryOpenInternalPage(AddressText))
+        {
+            return;
+        }
+
+        if (_session is null)
         {
             return;
         }
@@ -476,38 +513,45 @@ public sealed partial class BrowserViewModel : ViewModelBase
         // Native controls can report their initial/previous document while a
         // blank tab is taking ownership of the surface. A blank domain tab has no
         // navigation to complete and must never inherit that document's identity.
-        if (_tab.Address is null)
+        if (_tab.Address is not { } current)
         {
             RefreshHistoryState();
             return;
         }
 
         PageAddress.TryCreate(e.RequestedUrl, out var completedAddress);
+
+        if (!e.IsSuccess && e.RequestedUrl is null)
+        {
+            return;
+        }
+
         completedAddress ??= e.RequestedUrl is null ? _lastStartedAddress : null;
 
-        if (completedAddress is null ||
-            !completedAddress.Equals(_tab.Address))
+        if (completedAddress is null)
+        {
+            return;
+        }
+
+        if (!completedAddress.Equals(current) &&
+            !AreLoopbackAliases(completedAddress.Value, current.Value))
         {
             return;
         }
 
         _lastStartedAddress = null;
 
-        if (e.IsSuccess)
+        // Chrome leaves the engine document on screen: a real page, a challenge,
+        // or Chromium's own "can't be reached" page. An Avalonia overlay on top
+        // of that is what hid CAPTCHAs and disagreed with localhost vs 127.0.0.1.
+        if (!completedAddress.Equals(current))
         {
-            _tab.CompleteNavigation(title: null);
-        }
-        else
-        {
-            _tab.FailNavigation(e.FailureReason);
+            _tab.BeginNavigation(completedAddress);
         }
 
+        _tab.CompleteNavigation(title: null);
         SyncFromTab();
-
-        if (e.IsSuccess)
-        {
-            await ReadPageIdentityAsync();
-        }
+        await ReadPageIdentityAsync();
     }
 
     /// <summary>
@@ -623,10 +667,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
             CompleteLoadingProgress();
         }
 
-        if (_tab.LoadState == TabLoadState.Failed)
-        {
-            ErrorPage.Present(_tab.Address, _tab.FailureReason);
-        }
+        ErrorPage.Hide();
 
         // Do not overwrite the address bar while the user is typing into it: only
         // follow the tab when a navigation is in flight or has just landed.
@@ -747,6 +788,17 @@ public sealed partial class BrowserViewModel : ViewModelBase
             NavigateTo(address);
         }
     }
+
+    private static bool AreLoopbackAliases(Uri left, Uri right) =>
+        left.Port == right.Port &&
+        IsLoopbackHost(left.Host) &&
+        IsLoopbackHost(right.Host);
+
+    private static bool IsLoopbackHost(string host) =>
+        string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(host, "127.0.0.1", StringComparison.Ordinal) ||
+        string.Equals(host, "[::1]", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase);
 
     private void ReturnToNewTab()
     {

@@ -146,14 +146,19 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
 
     private void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs e)
     {
-        _navigationInProgress = true;
-        _latestNavigationRequest = e.Request;
+        if (e.Request is { } request &&
+            (request.Scheme == Uri.UriSchemeHttp || request.Scheme == Uri.UriSchemeHttps))
+        {
+            _navigationInProgress = true;
+            _latestNavigationRequest = request;
+        }
+
         NavigationStarted?.Invoke(this, new EngineNavigationStartedEventArgs(e.Request));
     }
 
     private void OnNavigationCompleted(object? sender, WebViewNavigationCompletedEventArgs e)
     {
-        var completesLatestNavigation = RequestsMatch(e.Request, _latestNavigationRequest);
+        var completesLatestNavigation = CompletesLatestNavigation(e.Request, _latestNavigationRequest, e.IsSuccess);
 
         // Apply again after a new document has arrived. Native zoom owns the
         // whole renderer; only engines without that facility use CSS fallback.
@@ -169,11 +174,13 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
             _actualZoomFactor = _desiredZoomFactor;
         }
 
-        if (completesLatestNavigation)
+        if (!completesLatestNavigation)
         {
-            _navigationInProgress = false;
-            _latestNavigationRequest = null;
+            return;
         }
+
+        _navigationInProgress = false;
+        _latestNavigationRequest = null;
 
         NavigationCompleted?.Invoke(
             this,
@@ -183,15 +190,52 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
                 e.Request));
     }
 
-    private static bool RequestsMatch(Uri? completed, Uri? latest) =>
-        completed is null ||
-        latest is not null &&
-        Uri.Compare(
-            completed,
-            latest,
-            UriComponents.HttpRequestUrl,
-            UriFormat.SafeUnescaped,
-            StringComparison.OrdinalIgnoreCase) == 0;
+    /// <summary>
+    /// A failed completion with no URL is a blank surface or subframe. Loopback
+    /// aliases (localhost / 127.0.0.1) count as the same navigation, as Chrome
+    /// treats them; other URL changes are redirects and update
+    /// <c>_latestNavigationRequest</c> via NavigationStarted first.
+    /// </summary>
+    private static bool CompletesLatestNavigation(Uri? completed, Uri? latest, bool success)
+    {
+        if (latest is null)
+        {
+            return false;
+        }
+
+        if (completed is null)
+        {
+            return success;
+        }
+
+        if (Uri.Compare(
+                completed,
+                latest,
+                UriComponents.HttpRequestUrl,
+                UriFormat.SafeUnescaped,
+                StringComparison.OrdinalIgnoreCase) == 0)
+        {
+            return true;
+        }
+
+        return AreLoopbackAliases(completed, latest);
+    }
+
+    private static bool AreLoopbackAliases(Uri left, Uri right)
+    {
+        if (left.Port != right.Port)
+        {
+            return false;
+        }
+
+        return IsLoopbackHost(left.Host) && IsLoopbackHost(right.Host);
+    }
+
+    private static bool IsLoopbackHost(string host) =>
+        string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(host, "127.0.0.1", StringComparison.Ordinal) ||
+        string.Equals(host, "[::1]", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase);
 
     private async Task ApplyZoomAsync()
     {

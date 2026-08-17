@@ -36,12 +36,19 @@ public static class AddressBarInput
         }
 
         // An explicit scheme is taken at face value. If it is one we refuse to
-        // navigate to, the input becomes a search rather than silently failing.
+        // navigate to, the input becomes a search rather than silently failing —
+        // except aphelion://, which is this application's own pages. Known hosts
+        // are opened by the shell; unknown ones are not a web search.
         if (Uri.TryCreate(trimmed, UriKind.Absolute, out var explicitUri))
         {
             if (PageAddress.TryCreate(explicitUri, out address))
             {
                 return AddressBarIntent.Navigate;
+            }
+
+            if (string.Equals(explicitUri.Scheme, InternalPages.Scheme, StringComparison.OrdinalIgnoreCase))
+            {
+                return AddressBarIntent.Empty;
             }
 
             searchTerm = trimmed;
