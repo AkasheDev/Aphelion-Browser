@@ -1,10 +1,12 @@
 using System.Collections.Specialized;
 using System.ComponentModel;
+using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.UI.ViewModels;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 
 namespace Aphelion.Desktop.UI.Views;
@@ -13,6 +15,21 @@ public partial class MainWindow : Window
 {
     private TabStripDragHandler? _tabDrag;
     private ShellViewModel? _hookedShell;
+
+    /// <summary>F11 browser fullscreen, independent of an HTML video's own fullscreen.</summary>
+    private bool _f11FullScreen;
+
+    /// <summary>True while any tab has an HTML element using the Fullscreen API.</summary>
+    private bool _htmlFullScreen;
+
+    /// <summary>
+    /// Set when HTML fullscreen just ended, so the same Escape that left YouTube
+    /// does not also drop an F11 lock.
+    /// </summary>
+    private bool _suppressF11ExitOnEscape;
+
+    private WindowState _restoreWindowState = WindowState.Normal;
+    private bool _applyingFullScreen;
 
     /// <summary>One live browser view per open tab, kept in the visual tree.</summary>
     private readonly Dictionary<BrowserViewModel, BrowserView> _pool = [];
@@ -84,6 +101,8 @@ public partial class MainWindow : Window
         {
             _hookedShell.PropertyChanged -= OnShellPropertyChanged;
             _hookedShell.Browsers.CollectionChanged -= OnBrowsersChanged;
+            _hookedShell.HtmlFullScreenElementChanged -= OnHtmlFullScreenElementChanged;
+            _hookedShell.AcceleratorKeyPressed -= OnAcceleratorKeyPressed;
         }
 
         _hookedShell = Shell;
@@ -93,6 +112,8 @@ public partial class MainWindow : Window
             _hookedShell.PropertyChanged += OnShellPropertyChanged;
 
             _hookedShell.Browsers.CollectionChanged += OnBrowsersChanged;
+            _hookedShell.HtmlFullScreenElementChanged += OnHtmlFullScreenElementChanged;
+            _hookedShell.AcceleratorKeyPressed += OnAcceleratorKeyPressed;
 
             // "Move to new window" needs the window manager and this window's
             // geometry, so the window supplies it rather than the view model.
@@ -296,6 +317,13 @@ public partial class MainWindow : Window
     /// </summary>
     private void OnNavigationShortcutTunnel(object? sender, KeyEventArgs e)
     {
+        if (e.Key == Key.F11 && e.KeyModifiers == KeyModifiers.None)
+        {
+            ToggleF11FullScreen();
+            e.Handled = true;
+            return;
+        }
+
         if (e.Key == Key.Escape && e.KeyModifiers == KeyModifiers.None && Shell is { IsOverflowOpen: true } overflowShell)
         {
             overflowShell.CloseOverflowCommand.Execute(null);
@@ -308,6 +336,25 @@ public partial class MainWindow : Window
             downloadsShell.CloseDownloadsBubbleCommand.Execute(null);
             e.Handled = true;
             return;
+        }
+
+        if (e.Key == Key.Escape && e.KeyModifiers == KeyModifiers.None)
+        {
+            if (_suppressF11ExitOnEscape)
+            {
+                _suppressF11ExitOnEscape = false;
+            }
+            else if (_htmlFullScreen)
+            {
+                // YouTube (and other HTML fullscreen) owns this Escape.
+            }
+            else if (_f11FullScreen)
+            {
+                _f11FullScreen = false;
+                ApplyBrowserFullScreen();
+                e.Handled = true;
+                return;
+            }
         }
 
         // Handled here as well as in the window's KeyBindings because a hosted
@@ -481,10 +528,172 @@ public partial class MainWindow : Window
     private void OnMinimizeRequested(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
         WindowState = WindowState.Minimized;
 
-    private void OnMaximizeRequested(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+    private void OnMaximizeRequested(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_f11FullScreen || _htmlFullScreen)
+        {
+            return;
+        }
+
         WindowState = WindowState == WindowState.Maximized
             ? WindowState.Normal
             : WindowState.Maximized;
+    }
+
+    private void OnHtmlFullScreenElementChanged(object? sender, EventArgs e)
+    {
+        var html = Shell?.HasHtmlFullScreenElement == true;
+
+        if (_htmlFullScreen && !html)
+        {
+            _suppressF11ExitOnEscape = true;
+        }
+
+        _htmlFullScreen = html;
+        ApplyBrowserFullScreen();
+    }
+
+    private void OnAcceleratorKeyPressed(object? sender, EngineAcceleratorKeyPressedEventArgs e)
+    {
+        if (!e.IsKeyDown)
+        {
+            return;
+        }
+
+        const int virtualKeyF11 = 0x7A;
+        const int virtualKeyEscape = 0x1B;
+
+        if (e.VirtualKey == virtualKeyF11)
+        {
+            e.Handled = true;
+            Dispatcher.UIThread.Post(ToggleF11FullScreen);
+            return;
+        }
+
+        if (e.VirtualKey != virtualKeyEscape)
+        {
+            return;
+        }
+
+        if (Shell is { IsOverflowOpen: true })
+        {
+            e.Handled = true;
+            Dispatcher.UIThread.Post(() => Shell?.CloseOverflowCommand.Execute(null));
+            return;
+        }
+
+        if (Shell is { IsDownloadsBubbleOpen: true })
+        {
+            e.Handled = true;
+            Dispatcher.UIThread.Post(() => Shell?.CloseDownloadsBubbleCommand.Execute(null));
+            return;
+        }
+
+        if (_htmlFullScreen)
+        {
+            // YouTube (and other HTML fullscreen) owns this Escape.
+            return;
+        }
+
+        if (_f11FullScreen)
+        {
+            e.Handled = true;
+            Dispatcher.UIThread.Post(() =>
+            {
+                _f11FullScreen = false;
+                ApplyBrowserFullScreen();
+            });
+        }
+    }
+
+    private void ToggleF11FullScreen()
+    {
+        _f11FullScreen = !_f11FullScreen;
+        ApplyBrowserFullScreen();
+    }
+
+    /// <summary>
+    /// F11 and HTML fullscreen share one chrome-hidden window state. Leaving
+    /// YouTube must not drop an F11 lock, and leaving F11 must not interrupt a
+    /// video that is still in the Fullscreen API.
+    /// </summary>
+    private void ApplyBrowserFullScreen()
+    {
+        if (_applyingFullScreen)
+        {
+            return;
+        }
+
+        _applyingFullScreen = true;
+
+        try
+        {
+            var hideChrome = _f11FullScreen || _htmlFullScreen;
+
+            if (Shell is { } shell)
+            {
+                shell.IsBrowserFullScreen = hideChrome;
+
+                if (hideChrome)
+                {
+                    if (shell.IsOverflowOpen)
+                    {
+                        shell.CloseOverflowCommand.Execute(null);
+                    }
+
+                    shell.IsDownloadsBubbleOpen = false;
+                }
+            }
+
+            ExtendClientAreaTitleBarHeightHint = hideChrome ? 0 : -1;
+
+            if (hideChrome)
+            {
+                if (WindowState != WindowState.FullScreen)
+                {
+                    _restoreWindowState = WindowState;
+                    WindowState = WindowState.FullScreen;
+                }
+            }
+            else if (WindowState == WindowState.FullScreen)
+            {
+                WindowState = _restoreWindowState == WindowState.FullScreen
+                    ? WindowState.Normal
+                    : _restoreWindowState;
+            }
+        }
+        finally
+        {
+            _applyingFullScreen = false;
+        }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+
+        if (change.Property != WindowStateProperty || _applyingFullScreen)
+        {
+            return;
+        }
+
+        // Never force fullscreen back on. Doing that kept chrome hidden after
+        // YouTube left HTML fullscreen while the window had been maximised:
+        // the engine restored Maximized first, then this handler saw the HTML
+        // flag still set and put the window into FullScreen again.
+        if (WindowState != WindowState.FullScreen && (_f11FullScreen || _htmlFullScreen || Shell?.IsBrowserFullScreen == true))
+        {
+            _f11FullScreen = false;
+            _htmlFullScreen = false;
+
+            if (Shell is { } shell)
+            {
+                shell.IsBrowserFullScreen = false;
+            }
+
+            ExtendClientAreaTitleBarHeightHint = -1;
+        }
+    }
 
     private void OnCloseRequested(object? sender, Avalonia.Interactivity.RoutedEventArgs e) => Close();
 

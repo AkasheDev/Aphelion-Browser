@@ -118,6 +118,22 @@ public sealed class BrowserTab
         }
     }
 
+    /// <summary>
+    /// Aborts an in-flight load. The document already on screen stays; chrome
+    /// returns to idle so reload is available again. Not a failure: the user
+    /// asked to stop, the same way Chrome's X does.
+    /// </summary>
+    public void CancelNavigation()
+    {
+        if (LoadState != TabLoadState.Loading)
+        {
+            return;
+        }
+
+        LoadState = TabLoadState.Idle;
+        FailureReason = null;
+    }
+
     public void FailNavigation(string? reason)
     {
         LoadState = TabLoadState.Failed;

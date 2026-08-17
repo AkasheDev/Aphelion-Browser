@@ -20,6 +20,7 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     private readonly NativeWebView _webView;
     private readonly WebView2ZoomBridge _windowsZoom;
     private readonly WebView2DownloadBridge _windowsDownloads;
+    private readonly WebView2FullscreenBridge _windowsFullscreen;
     private bool _disposed;
     private bool _navigationInProgress;
     private Uri? _latestNavigationRequest;
@@ -31,6 +32,9 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         _webView = webView ?? throw new ArgumentNullException(nameof(webView));
         _windowsZoom = new WebView2ZoomBridge(OnNativeZoomChanged);
         _windowsDownloads = new WebView2DownloadBridge(OnEngineDownloadStarted);
+        _windowsFullscreen = new WebView2FullscreenBridge(
+            OnEngineFullScreenElementChanged,
+            OnEngineAcceleratorKeyPressed);
 
         _webView.NavigationStarted += OnNavigationStarted;
         _webView.NavigationCompleted += OnNavigationCompleted;
@@ -51,6 +55,10 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     public event EventHandler<EngineZoomFactorChangedEventArgs>? ZoomFactorChanged;
 
     public event EventHandler<EngineDownloadStartedEventArgs>? DownloadStarted;
+
+    public event EventHandler<EngineFullScreenElementChangedEventArgs>? FullScreenElementChanged;
+
+    public event EventHandler<EngineAcceleratorKeyPressedEventArgs>? AcceleratorKeyPressed;
 
     public void Navigate(PageAddress address)
     {
@@ -273,6 +281,7 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
     {
         _windowsZoom.Detach();
         _windowsDownloads.Detach();
+        _windowsFullscreen.Detach();
     }
 
     private void TryAttachPlatformBridges(Avalonia.Platform.IPlatformHandle? platformHandle)
@@ -283,6 +292,7 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         }
 
         _windowsDownloads.TryAttach(platformHandle);
+        _windowsFullscreen.TryAttach(platformHandle);
 
         if (!_windowsZoom.TryAttach(platformHandle))
         {
@@ -301,6 +311,24 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         if (!_disposed)
         {
             DownloadStarted?.Invoke(this, new EngineDownloadStartedEventArgs(operation));
+        }
+    }
+
+    private void OnEngineFullScreenElementChanged(bool containsFullScreenElement)
+    {
+        if (!_disposed)
+        {
+            FullScreenElementChanged?.Invoke(
+                this,
+                new EngineFullScreenElementChangedEventArgs(containsFullScreenElement));
+        }
+    }
+
+    private void OnEngineAcceleratorKeyPressed(EngineAcceleratorKeyPressedEventArgs e)
+    {
+        if (!_disposed)
+        {
+            AcceleratorKeyPressed?.Invoke(this, e);
         }
     }
 
@@ -391,6 +419,7 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
         _webView.AdapterDestroyed -= OnAdapterDestroyed;
         _windowsZoom.Dispose();
         _windowsDownloads.Dispose();
+        _windowsFullscreen.Dispose();
         _disposed = true;
     }
 }

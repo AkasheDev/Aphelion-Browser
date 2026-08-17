@@ -78,6 +78,25 @@ public interface IBrowserEngineSession
     /// anticipated by ADR-0001's download-handling follow-up.
     /// </remarks>
     event EventHandler<EngineDownloadStartedEventArgs>? DownloadStarted;
+
+    /// <summary>
+    /// Raised when an HTML element inside the page enters or leaves fullscreen,
+    /// such as a video using the Fullscreen API.
+    /// </summary>
+    /// <remarks>
+    /// The engine only fills its own surface. The host has to hide window chrome
+    /// in response, or the video sits under the title bar and toolbar. Only
+    /// raised where the platform exposes the signal — WebView2 on Windows today.
+    /// </remarks>
+    event EventHandler<EngineFullScreenElementChangedEventArgs>? FullScreenElementChanged;
+
+    /// <summary>
+    /// Raised for keys WebView2 treats as accelerators (F11, Escape, Ctrl/Alt
+    /// combos) while the page has focus. The host must set
+    /// <see cref="EngineAcceleratorKeyPressedEventArgs.Handled"/> before returning
+    /// if it wants the engine to ignore the key; the window then acts on it.
+    /// </summary>
+    event EventHandler<EngineAcceleratorKeyPressedEventArgs>? AcceleratorKeyPressed;
 }
 
 public sealed class EngineDownloadStartedEventArgs(IEngineDownloadOperation operation) : EventArgs
@@ -88,6 +107,25 @@ public sealed class EngineDownloadStartedEventArgs(IEngineDownloadOperation oper
 public sealed class EngineZoomFactorChangedEventArgs(double factor) : EventArgs
 {
     public double Factor { get; } = factor;
+}
+
+public sealed class EngineFullScreenElementChangedEventArgs(bool containsFullScreenElement) : EventArgs
+{
+    public bool ContainsFullScreenElement { get; } = containsFullScreenElement;
+}
+
+public sealed class EngineAcceleratorKeyPressedEventArgs(int virtualKey, bool isKeyDown) : EventArgs
+{
+    /// <summary>Win32 virtual-key code, for example 0x7A (F11) or 0x1B (Escape).</summary>
+    public int VirtualKey { get; } = virtualKey;
+
+    public bool IsKeyDown { get; } = isKeyDown;
+
+    /// <summary>
+    /// Set during the raise. The engine reads it afterwards and tells WebView2
+    /// whether the page should still see the key.
+    /// </summary>
+    public bool Handled { get; set; }
 }
 
 public sealed class EngineNavigationStartedEventArgs(Uri? requestedUrl) : EventArgs

@@ -43,7 +43,8 @@
 
     <Border DockPanel.Dock="Top"
             Classes="titlebar"
-            chrome:WindowDecorationProperties.ElementRole="TitleBar">
+            chrome:WindowDecorationProperties.ElementRole="TitleBar"
+            IsVisible="{Binding !Shell.IsBrowserFullScreen}">
 
       <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" DataContext="{Binding Shell}">
 
@@ -349,7 +350,9 @@
          Other Tabs reserves a drawer beside it because a native WebView cannot
          be composited underneath an Avalonia overlay. -->
     <!-- One toolbar for the window, above both panes -->
-    <views:BrowserToolbarView Name="BrowserToolbar" DockPanel.Dock="Top" />
+    <views:BrowserToolbarView Name="BrowserToolbar"
+                              DockPanel.Dock="Top"
+                              IsVisible="{Binding !Shell.IsBrowserFullScreen}" />
 
     <!-- Sits between the toolbar and the page, as in Chrome, and stays visible.
          Hiding it will become a setting once there is a settings store to keep
@@ -357,7 +360,7 @@
          worse than no toggle. -->
     <ContentControl DockPanel.Dock="Top"
                     Content="{Binding Shell}"
-                    IsVisible="{Binding Shell.IsBookmarkBarVisible}">
+                    IsVisible="{Binding Shell.IsBookmarkBarShowing}">
       <ContentControl.ContentTemplate>
         <DataTemplate DataType="vm:ShellViewModel">
           <views:BookmarkBarView Shell="{Binding}"
@@ -366,15 +369,13 @@
       </ContentControl.ContentTemplate>
     </ContentControl>
 
-    <!-- Below the bookmark bar rather than tucked under the navigation strip, so
-         it reads as the line where the browser's own chrome ends and the page
-         begins no matter what sits above it. -->
-    <ProgressBar DockPanel.Dock="Top"
-                 Classes="navigation-progress"
-                 Minimum="0"
-                 Maximum="100"
-                 Value="{Binding Shell.FocusedBrowser.LoadingProgress}"
-                 IsVisible="{Binding Shell.FocusedBrowser.IsLoadingProgressVisible}" />
+    <Panel DockPanel.Dock="Top" IsVisible="{Binding !Shell.IsBrowserFullScreen}">
+      <ProgressBar Classes="navigation-progress"
+                   Minimum="0"
+                   Maximum="100"
+                   Value="{Binding Shell.FocusedBrowser.LoadingProgress}"
+                   IsVisible="{Binding Shell.FocusedBrowser.IsLoadingProgressVisible}" />
+    </Panel>
 
     <Grid Name="ContentHost" ColumnDefinitions="*,0">
 

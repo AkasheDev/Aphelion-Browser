@@ -167,6 +167,21 @@ internal partial interface WebView2Controller
         out EventRegistrationToken token);
 
     void RemoveZoomFactorChanged(EventRegistrationToken token);
+
+    void ReservedSetBoundsAndZoomFactor();
+    void ReservedMoveFocus();
+    void ReservedAddMoveFocusRequested();
+    void ReservedRemoveMoveFocusRequested();
+    void ReservedAddGotFocus();
+    void ReservedRemoveGotFocus();
+    void ReservedAddLostFocus();
+    void ReservedRemoveLostFocus();
+
+    void AddAcceleratorKeyPressed(
+        [MarshalAs(UnmanagedType.Interface)] WebView2AcceleratorKeyPressedHandler eventHandler,
+        out EventRegistrationToken token);
+
+    void RemoveAcceleratorKeyPressed(EventRegistrationToken token);
 }
 
 [GeneratedComInterface(Options = ComInterfaceOptions.ManagedObjectWrapper)]

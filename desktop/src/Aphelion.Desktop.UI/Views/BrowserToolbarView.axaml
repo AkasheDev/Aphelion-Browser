@@ -31,14 +31,16 @@
 
       <Button Grid.Column="2" Classes="icon" ToolTip.Tip="Reload"
             Command="{Binding Shell.FocusedBrowser.ReloadCommand}"
-            IsVisible="{Binding !Shell.FocusedBrowser.IsLoading}">
+            IsVisible="{Binding !Shell.FocusedBrowser.IsLoading}"
+            IsHitTestVisible="{Binding !Shell.FocusedBrowser.IsLoading}">
       <Path Classes="glyph"
             Data="M12,6.5 A5.5,5.5 0 1 1 10.1,2.3 M12.3,0 V3.2 H9.1" />
       </Button>
 
       <Button Grid.Column="2" Classes="icon" ToolTip.Tip="Stop"
             Command="{Binding Shell.FocusedBrowser.StopLoadingCommand}"
-            IsVisible="{Binding Shell.FocusedBrowser.IsLoading}">
+            IsVisible="{Binding Shell.FocusedBrowser.IsLoading}"
+            IsHitTestVisible="{Binding Shell.FocusedBrowser.IsLoading}">
       <Path Classes="glyph" Data="M2,2 L11,11 M11,2 L2,11" />
       </Button>
 

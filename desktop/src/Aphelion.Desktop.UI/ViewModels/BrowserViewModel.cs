@@ -266,6 +266,8 @@ public sealed partial class BrowserViewModel : ViewModelBase
     private string _statusText = string.Empty;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ReloadCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StopLoadingCommand))]
     private bool _isLoading;
 
     [ObservableProperty]
@@ -288,6 +290,19 @@ public sealed partial class BrowserViewModel : ViewModelBase
     /// surfaces its bubble.
     /// </summary>
     public event EventHandler? DownloadStarted;
+
+    /// <summary>
+    /// True while an HTML element in this tab is using the Fullscreen API.
+    /// The window hides its chrome in response so the video can fill the screen.
+    /// </summary>
+    [ObservableProperty]
+    private bool _containsFullScreenElement;
+
+    /// <summary>
+    /// Raised for F11 and Escape while this tab's page has native focus.
+    /// Must be handled synchronously so WebView2 can be told not to eat the key.
+    /// </summary>
+    public event EventHandler<EngineAcceleratorKeyPressedEventArgs>? AcceleratorKeyPressed;
 
     /// <summary>Simulated, monotonic navigation progress from 0 to 100.</summary>
     [ObservableProperty]
@@ -328,6 +343,8 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _session.NavigationCompleted += OnNavigationCompleted;
         _session.ZoomFactorChanged += OnZoomFactorChanged;
         _session.DownloadStarted += OnDownloadStarted;
+        _session.FullScreenElementChanged += OnFullScreenElementChanged;
+        _session.AcceleratorKeyPressed += OnAcceleratorKeyPressed;
 
         RefreshHistoryState();
         ResumePendingNavigation();
@@ -446,7 +463,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _session.GoForward();
     }
 
-    [RelayCommand]
+    [RelayCommand(CanExecute = nameof(CanReload))]
     private void Reload()
     {
         if (_tab.IsBlank || _tab.IsDownloadsPage)
@@ -457,6 +474,8 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _session?.Reload();
     }
 
+    private bool CanReload() => !IsLoading && !_tab.IsBlank && !_tab.IsDownloadsPage;
+
     [RelayCommand]
     private void ZoomIn() => SetZoom(PageZoom.FromPercent(ZoomPercent).Increase());
 
@@ -466,8 +485,17 @@ public sealed partial class BrowserViewModel : ViewModelBase
     [RelayCommand]
     private void ResetZoom() => SetZoom(PageZoom.Default);
 
-    [RelayCommand]
-    private void StopLoading() => _session?.StopLoading();
+    [RelayCommand(CanExecute = nameof(IsLoading))]
+    private void StopLoading()
+    {
+        _session?.StopLoading();
+
+        if (_tab.LoadState == TabLoadState.Loading)
+        {
+            _tab.CancelNavigation();
+            SyncFromTab();
+        }
+    }
 
     private void OnNavigationStarted(object? sender, EngineNavigationStartedEventArgs e)
     {
@@ -730,6 +758,9 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _session.NavigationCompleted -= OnNavigationCompleted;
         _session.ZoomFactorChanged -= OnZoomFactorChanged;
         _session.DownloadStarted -= OnDownloadStarted;
+        _session.FullScreenElementChanged -= OnFullScreenElementChanged;
+        _session.AcceleratorKeyPressed -= OnAcceleratorKeyPressed;
+        ContainsFullScreenElement = false;
         _session = null;
         _lastStartedAddress = null;
         _sessionGeneration++;
@@ -902,6 +933,43 @@ public sealed partial class BrowserViewModel : ViewModelBase
         {
             Dispatcher.UIThread.Post(Apply);
         }
+    }
+
+    private void OnFullScreenElementChanged(object? sender, EngineFullScreenElementChangedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, _session))
+        {
+            return;
+        }
+
+        void Apply()
+        {
+            if (!ReferenceEquals(sender, _session))
+            {
+                return;
+            }
+
+            ContainsFullScreenElement = e.ContainsFullScreenElement;
+        }
+
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            Apply();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(Apply);
+        }
+    }
+
+    private void OnAcceleratorKeyPressed(object? sender, EngineAcceleratorKeyPressedEventArgs e)
+    {
+        if (!ReferenceEquals(sender, _session))
+        {
+            return;
+        }
+
+        AcceleratorKeyPressed?.Invoke(this, e);
     }
 
     private void RequestZoomFeedback(int percent) =>

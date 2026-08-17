@@ -186,6 +186,9 @@ public sealed partial class ShellViewModel : ViewModelBase
     private void OnBrowserDownloadStarted(object? sender, EventArgs e) =>
         IsDownloadsBubbleOpen = true;
 
+    private void OnBrowserAcceleratorKeyPressed(object? sender, EngineAcceleratorKeyPressedEventArgs e) =>
+        AcceleratorKeyPressed?.Invoke(this, e);
+
     /// <summary>
     /// Private windows may read explicit bookmarks, but their live tab groups
     /// must never leak browsing activity into persistent saved-group records.
@@ -226,7 +229,47 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// toggle whose state is forgotten on every launch is worse than none.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBookmarkBarShowing))]
     private bool _isBookmarkBarVisible = true;
+
+    /// <summary>
+    /// True while F11 or an HTML fullscreen element has taken the window. The
+    /// title bar, toolbar and bookmark bar hide so the page can fill the screen.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBookmarkBarShowing))]
+    private bool _isBrowserFullScreen;
+
+    /// <summary>The bookmark bar stays off while the window is in fullscreen.</summary>
+    public bool IsBookmarkBarShowing => IsBookmarkBarVisible && !IsBrowserFullScreen;
+
+    /// <summary>
+    /// Raised when any tab's HTML fullscreen element appears or disappears, so
+    /// the window can enter or leave fullscreen around it.
+    /// </summary>
+    public event EventHandler? HtmlFullScreenElementChanged;
+
+    /// <summary>
+    /// Raised for F11 and Escape while a page in this window has native focus.
+    /// Handled synchronously so WebView2 can be told not to swallow the key.
+    /// </summary>
+    public event EventHandler<EngineAcceleratorKeyPressedEventArgs>? AcceleratorKeyPressed;
+
+    public bool HasHtmlFullScreenElement
+    {
+        get
+        {
+            foreach (var browser in _browsers.Values)
+            {
+                if (browser.ContainsFullScreenElement)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
 
     /// <summary>The add/edit form behind the star, or null when it is closed.</summary>
     [ObservableProperty]
@@ -1701,6 +1744,7 @@ public sealed partial class ShellViewModel : ViewModelBase
         browser.PropertyChanged += OnBrowserPropertyChanged;
         browser.ZoomFeedbackRequested += OnZoomFeedbackRequested;
         browser.DownloadStarted += OnBrowserDownloadStarted;
+        browser.AcceleratorKeyPressed += OnBrowserAcceleratorKeyPressed;
         _browsers[tab.Id] = browser;
     }
 
@@ -1711,6 +1755,12 @@ public sealed partial class ShellViewModel : ViewModelBase
             browser.PropertyChanged -= OnBrowserPropertyChanged;
             browser.ZoomFeedbackRequested -= OnZoomFeedbackRequested;
             browser.DownloadStarted -= OnBrowserDownloadStarted;
+            browser.AcceleratorKeyPressed -= OnBrowserAcceleratorKeyPressed;
+
+            if (browser.ContainsFullScreenElement)
+            {
+                HtmlFullScreenElementChanged?.Invoke(this, EventArgs.Empty);
+            }
         }
     }
 
@@ -1780,6 +1830,11 @@ public sealed partial class ShellViewModel : ViewModelBase
             or nameof(BrowserViewModel.FaviconAddress))
         {
             SyncSavedGroups();
+        }
+
+        if (e.PropertyName == nameof(BrowserViewModel.ContainsFullScreenElement))
+        {
+            HtmlFullScreenElementChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
