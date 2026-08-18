@@ -78,18 +78,11 @@
                 HorizontalAlignment="Left"
                 VerticalAlignment="Center"
                 Margin="5,0,0,0"
-                ToolTip.Tip="Site information"
+                ToolTip.Tip="{Binding Shell.FocusedBrowser.OmniboxBadge}"
                 Command="{Binding Shell.FocusedBrowser.ToggleSiteInfoCommand}">
           <Path Classes="glyph"
                 Data="M6.5,1.5 A5,5 0 1 1 6.5,11.5 A5,5 0 1 1 6.5,1.5 M6.5,6 V9 M6.5,4 V4.2" />
         </Button>
-
-        <TextBlock Classes="omnibox-badge"
-                   HorizontalAlignment="Left"
-                   VerticalAlignment="Center"
-                   Margin="34,0,0,0"
-                   IsHitTestVisible="False"
-                   Text="{Binding Shell.FocusedBrowser.OmniboxBadge}" />
 
         <Button Name="BookmarkStar"
                 Classes="icon inset"

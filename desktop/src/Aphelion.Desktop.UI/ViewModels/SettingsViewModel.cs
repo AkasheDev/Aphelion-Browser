@@ -44,14 +44,61 @@ public sealed partial class SettingsViewModel : ViewModelBase
         ReloadPasswords();
     }
 
-    public IReadOnlyList<ThemePreference> Themes { get; } =
-        [ThemePreference.System, ThemePreference.Light, ThemePreference.Dark];
+    public IReadOnlyList<Choice<ThemePreference>> ThemeChoices { get; } =
+    [
+        new(ThemePreference.System, "Match system"),
+        new(ThemePreference.Light, "Light"),
+        new(ThemePreference.Dark, "Dark"),
+    ];
 
-    public IReadOnlyList<StartupMode> StartupModes { get; } =
-        [StartupMode.RestoreSession, StartupMode.NewTab, StartupMode.CustomPages];
+    public IReadOnlyList<Choice<StartupMode>> StartupChoices { get; } =
+    [
+        new(StartupMode.RestoreSession, "Restore previous session"),
+        new(StartupMode.NewTab, "Open the New Tab page"),
+        new(StartupMode.CustomPages, "Open specific pages"),
+    ];
 
-    public IReadOnlyList<UpdateChannel> UpdateChannels { get; } =
-        [UpdateChannel.Stable, UpdateChannel.Beta];
+    public IReadOnlyList<Choice<UpdateChannel>> UpdateChannelChoices { get; } =
+    [
+        new(UpdateChannel.Stable, "Stable"),
+        new(UpdateChannel.Beta, "Beta"),
+    ];
+
+    public Choice<ThemePreference>? SelectedTheme
+    {
+        get => ThemeChoices.First(choice => choice.Value == Theme);
+        set
+        {
+            if (value is not null)
+            {
+                Theme = value.Value;
+            }
+        }
+    }
+
+    public Choice<StartupMode>? SelectedStartup
+    {
+        get => StartupChoices.First(choice => choice.Value == Startup);
+        set
+        {
+            if (value is not null)
+            {
+                Startup = value.Value;
+            }
+        }
+    }
+
+    public Choice<UpdateChannel>? SelectedUpdateChannel
+    {
+        get => UpdateChannelChoices.First(choice => choice.Value == UpdateChannel);
+        set
+        {
+            if (value is not null)
+            {
+                UpdateChannel = value.Value;
+            }
+        }
+    }
 
     public IReadOnlyList<SearchEngineKind> SearchEngines { get; } =
         Enum.GetValues<SearchEngineKind>();
@@ -95,12 +142,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     partial void OnThemeChanged(ThemePreference value)
     {
+        OnPropertyChanged(nameof(SelectedTheme));
         Persist();
         ThemeController.Apply(value);
     }
 
     partial void OnStartupChanged(StartupMode value)
     {
+        OnPropertyChanged(nameof(SelectedStartup));
         OnPropertyChanged(nameof(ShowsCustomPages));
         Persist();
     }
@@ -117,7 +166,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     partial void OnDownloadFolderChanged(string value) => Persist();
 
-    partial void OnUpdateChannelChanged(UpdateChannel value) => Persist();
+    partial void OnUpdateChannelChanged(UpdateChannel value)
+    {
+        OnPropertyChanged(nameof(SelectedUpdateChannel));
+        Persist();
+    }
 
     [RelayCommand]
     private void UseDefaultDownloadFolder() => DownloadFolder = string.Empty;
@@ -212,4 +265,10 @@ public sealed partial class SettingsViewModel : ViewModelBase
             UpdateChannel,
             _settings.Load().HasCompletedOnboarding));
     }
+}
+
+/// <summary>A settings combo item that shows a phrase instead of the enum name.</summary>
+public sealed record Choice<T>(T Value, string Label)
+{
+    public override string ToString() => Label;
 }

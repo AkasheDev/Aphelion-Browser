@@ -68,10 +68,11 @@ public sealed partial class BrowserViewModel
 
     public string OmniboxBadge =>
         AddressBarInput.Resolve(AddressText, out _, out _) == AddressBarIntent.Search
-            ? "Search"
-            : IsSecure ? "Secure"
-            : string.IsNullOrEmpty(AddressText) ? string.Empty
-            : "Site";
+            ? "This looks like a search"
+            : IsSecure ? "Connection is secure"
+            : HasInternalPage || IsDownloadsPage || IsBlank ? "Aphelion page"
+            : string.IsNullOrEmpty(AddressText) ? "Site information"
+            : "Connection is not secure";
 
     public void ConfigureChrome(
         SettingsViewModel? settings,

@@ -208,6 +208,7 @@ public partial class MainWindow : Window
             var right = ReferenceEquals(model, shell.SplitBrowser);
 
             Grid.SetColumn(view, right ? 2 : 0);
+            Grid.SetColumnSpan(view, shell.IsSplit ? 1 : 3);
             view.IsVisible = right || ReferenceEquals(model, shell.ActiveBrowser);
             view.Margin = inset;
         }
@@ -226,6 +227,17 @@ public partial class MainWindow : Window
 
         var split = Shell?.IsSplit == true;
 
+        // GridSplitter turns the left star column into a fixed pixel width.
+        // Closing the split must restore star sizing; otherwise the page keeps
+        // its old half-window width and the remainder is an empty surface.
+        if (!split)
+        {
+            host.ColumnDefinitions[0].Width = new GridLength(1, GridUnitType.Star);
+        }
+
+        host.ColumnDefinitions[1].Width = split
+            ? new GridLength(6)
+            : new GridLength(0);
         host.ColumnDefinitions[2].Width = split
             ? new GridLength(1, GridUnitType.Star)
             : new GridLength(0);

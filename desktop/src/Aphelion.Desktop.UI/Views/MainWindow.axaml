@@ -400,9 +400,13 @@
                    IsVisible="{Binding Shell.FocusedBrowser.IsLoadingProgressVisible}" />
     </Panel>
 
-    <Grid Name="ContentHost" ColumnDefinitions="*,0">
+    <Grid Name="ContentHost"
+          ColumnDefinitions="*,0"
+          Background="{DynamicResource SurfaceBaseBrush}">
 
-      <Grid Grid.Column="0" Name="BrowserHost">
+      <Grid Grid.Column="0"
+            Name="BrowserHost"
+            Background="{DynamicResource SurfaceBaseBrush}">
       <Grid.ColumnDefinitions>
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
@@ -527,13 +531,19 @@
                            VerticalAlignment="Stretch" />
       </Border>
 
-    </Grid>
+      <!-- Inside the content grid, not beside it in the DockPanel. A Popup is a
+           zero-sized control that still claims a slot, so as the DockPanel's last
+           child it took the LastChildFill and left the page docked to the left at
+           its desired width, with dead surface filling the rest of the window.
+           Here it costs no layout and centres over the page, as Chrome does. -->
+      <Popup PlacementTarget="{Binding #ContentHost}"
+             IsOpen="{Binding Shell.IsCommandPaletteOpen}"
+             Placement="Center"
+             IsLightDismissEnabled="True">
+        <views:CommandPaletteView DataContext="{Binding Shell.Palette}" />
+      </Popup>
 
-    <Popup IsOpen="{Binding Shell.IsCommandPaletteOpen}"
-           Placement="Center"
-           IsLightDismissEnabled="True">
-      <views:CommandPaletteView DataContext="{Binding Shell.Palette}" />
-    </Popup>
+    </Grid>
 
   </DockPanel>
 

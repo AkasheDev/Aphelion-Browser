@@ -2,7 +2,9 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
              x:Class="Aphelion.Desktop.UI.Views.DownloadsView"
-             x:DataType="vm:DownloadsViewModel">
+             x:DataType="vm:DownloadsViewModel"
+             HorizontalAlignment="Stretch"
+             VerticalAlignment="Stretch">
 
   <!-- chrome://downloads: a full page, not a bubble. Native WebView paints over
        Avalonia overlays, so this page takes the tab's content column. -->

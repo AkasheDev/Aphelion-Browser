@@ -3,19 +3,29 @@
              xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
              xmlns:dto="using:Aphelion.Desktop.Application.Dtos"
              x:Class="Aphelion.Desktop.UI.Views.SettingsView"
-             x:DataType="vm:SettingsViewModel">
+             x:DataType="vm:SettingsViewModel"
+             HorizontalAlignment="Stretch"
+             VerticalAlignment="Stretch"
+             Background="{DynamicResource SurfaceBaseBrush}">
 
-  <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-    <StackPanel Margin="48,28,48,40" MaxWidth="720" Spacing="22">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch">
+    <StackPanel Margin="48,28,48,40" MaxWidth="720" Spacing="22"
+                HorizontalAlignment="Stretch">
 
       <TextBlock Classes="downloads-heading" Text="Settings" />
 
       <TextBlock Classes="settings-section" Text="Appearance" />
       <TextBlock Classes="settings-copy" Text="Theme" />
-      <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}" Width="240" />
+      <ComboBox ItemsSource="{Binding ThemeChoices}"
+                SelectedItem="{Binding SelectedTheme}"
+                Width="240" />
 
       <TextBlock Classes="settings-section" Text="On startup" />
-      <ComboBox ItemsSource="{Binding StartupModes}" SelectedItem="{Binding Startup}" Width="280" />
+      <ComboBox ItemsSource="{Binding StartupChoices}"
+                SelectedItem="{Binding SelectedStartup}"
+                Width="280" />
       <TextBox PlaceholderText="One address per line"
                AcceptsReturn="True"
                Height="90"
@@ -48,7 +58,9 @@
               Command="{Binding OpenDefaultAppsCommand}" />
 
       <TextBlock Classes="settings-section" Text="Updates" />
-      <ComboBox ItemsSource="{Binding UpdateChannels}" SelectedItem="{Binding UpdateChannel}" Width="200" />
+      <ComboBox ItemsSource="{Binding UpdateChannelChoices}"
+                SelectedItem="{Binding SelectedUpdateChannel}"
+                Width="200" />
 
       <TextBlock Classes="settings-section" Text="Saved passwords" />
       <TextBlock Classes="settings-copy"
