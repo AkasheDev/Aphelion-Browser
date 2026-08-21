@@ -17,7 +17,7 @@ namespace Aphelion.Desktop.UI.ViewModels;
 /// or a search belongs to the application layer, and the tab's state transitions
 /// belong to the domain; this class only reflects them for the view.
 /// </remarks>
-public sealed partial class BrowserViewModel : ViewModelBase
+public sealed partial class BrowserViewModel : ViewModelBase, IDisposable
 {
     private readonly NavigateFromAddressBar _navigateFromAddressBar;
     private readonly ISearchSuggestionProvider? _suggestions;
@@ -29,6 +29,9 @@ public sealed partial class BrowserViewModel : ViewModelBase
     private BrowserTab _tab = new(TabId.New());
     private IBrowserEngineSession? _session;
     private bool _isForeground = true;
+    private readonly IPrivacyPreferenceStore? _privacy;
+    private CancellationTokenSource? _suggestionRequest;
+    private bool _suggestionsAllowed = true;
     private readonly DispatcherTimer _loadingProgressTimer;
     private int _sessionGeneration;
     private int _progressGeneration;
@@ -119,6 +122,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _siteZoom = siteZoom;
         _downloads = downloads;
         _isPrivate = isPrivate;
+        _privacy = privacy;
         _loadingProgressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
         _loadingProgressTimer.Tick += OnLoadingProgressTick;
         ErrorPage = new NavigationErrorPageViewModel(RetryNavigation, ReturnToNewTab);
@@ -135,6 +139,22 @@ public sealed partial class BrowserViewModel : ViewModelBase
     }
 
     public NewTabPageViewModel NewTab { get; }
+
+    /// <summary>
+    /// Released when the tab this belongs to is taken off the strip. The engine
+    /// session is not touched here - the view owns that and closes it itself.
+    /// </summary>
+    public void Dispose()
+    {
+        _suggestionRequest?.Cancel();
+        _suggestionRequest?.Dispose();
+        _suggestionRequest = null;
+
+        _loadingProgressTimer.Stop();
+        _loadingProgressTimer.Tick -= OnLoadingProgressTick;
+        ErrorPage.PropertyChanged -= OnErrorPagePropertyChanged;
+        GC.SuppressFinalize(this);
+    }
 
     /// <summary>The shared download list, shown when this tab is the downloads page.</summary>
     public DownloadsViewModel? Downloads => _downloads;

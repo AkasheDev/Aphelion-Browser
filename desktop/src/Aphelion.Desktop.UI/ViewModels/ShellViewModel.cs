@@ -1876,6 +1876,8 @@ public sealed partial class ShellViewModel : ViewModelBase
             {
                 HtmlFullScreenElementChanged?.Invoke(this, EventArgs.Empty);
             }
+
+            browser.Dispose();
         }
     }
 

@@ -52,8 +52,7 @@ public partial class BrowserToolbarView : UserControl
     {
         if (DataContext is MainWindowViewModel { Shell.FocusedBrowser: { } browser })
         {
-            browser.IsAddressEditing = true;
-            _ = browser.RefreshAddressSuggestionsAsync();
+            browser.BeginAddressEditing();
         }
     }
 

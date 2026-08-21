@@ -3,6 +3,7 @@ using System.Text.Json;
 using Aphelion.Desktop.Application.Dtos;
 using Aphelion.Desktop.Application.Ports;
 using Aphelion.Desktop.Domain;
+using Aphelion.Desktop.Domain.Enums;
 using Aphelion.Desktop.Domain.ValueObjects;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -342,24 +343,121 @@ public sealed partial class BrowserViewModel
         }
     }
 
-    public async Task RefreshAddressSuggestionsAsync()
+    /// <summary>
+    /// Starts an editing session in the address bar.
+    /// </summary>
+    /// <remarks>
+    /// The privacy preference is read here rather than per keystroke: the store
+    /// reads the file on every call, and the answer cannot change in the middle
+    /// of someone typing a single address.
+    /// </remarks>
+    public void BeginAddressEditing()
     {
-        AddressSuggestions.Clear();
-        OnPropertyChanged(nameof(HasAddressSuggestions));
+        IsAddressEditing = true;
+        _suggestionsAllowed = _privacy?.Load().SearchSuggestionsEnabled ?? true;
+        RequestAddressSuggestions();
+    }
+
+    /// <summary>
+    /// Asks for suggestions matching what is in the box now.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This used to be called once, when the address bar took focus, and never
+    /// again. Focus is also where the existing address gets selected, so the
+    /// suggestions on offer were completions of the address the user was in the
+    /// middle of replacing, and they never caught up with what was typed.
+    /// </para>
+    /// <para>
+    /// The privacy toggle was not consulted at all on this path. Turning
+    /// suggestions off stopped the New Tab box and left the address bar sending
+    /// every focused address to the search engine, which is the one thing the
+    /// setting promises it will not do.
+    /// </para>
+    /// </remarks>
+    private void RequestAddressSuggestions()
+    {
+        _suggestionRequest?.Cancel();
+        _suggestionRequest?.Dispose();
+        _suggestionRequest = null;
+
         var query = AddressText?.Trim();
-        if (string.IsNullOrEmpty(query) || _suggestions is null || _searchEngines is null)
+
+        if (!_suggestionsAllowed ||
+            _suggestions is null ||
+            _searchEngines is null ||
+            string.IsNullOrEmpty(query) ||
+            query.Length < 2)
         {
+            ClearAddressSuggestions();
             return;
         }
 
-        var list = await _suggestions.GetSuggestionsAsync(_searchEngines.Selected.Kind, query).ConfigureAwait(true);
-        AddressSuggestions.Clear();
-        foreach (var item in list.Take(6))
+        _suggestionRequest = new CancellationTokenSource();
+        _ = LoadAddressSuggestionsAsync(query, _searchEngines.Selected.Kind, _suggestionRequest.Token);
+    }
+
+    private async Task LoadAddressSuggestionsAsync(
+        string query,
+        SearchEngineKind engine,
+        CancellationToken cancellationToken)
+    {
+        try
         {
-            AddressSuggestions.Add(item);
+            // Let the typing settle before spending a request on it, the same
+            // beat the New Tab box waits.
+            await Task.Delay(TimeSpan.FromMilliseconds(220), cancellationToken).ConfigureAwait(true);
+
+            var list = await _suggestions!
+                .GetSuggestionsAsync(engine, query, cancellationToken)
+                .ConfigureAwait(true);
+
+            // A reply that arrived after the box moved on is not an answer to
+            // what is in it now.
+            if (cancellationToken.IsCancellationRequested ||
+                !string.Equals(query, AddressText?.Trim(), StringComparison.Ordinal) ||
+                _searchEngines?.Selected.Kind != engine ||
+                !IsAddressEditing)
+            {
+                return;
+            }
+
+            AddressSuggestions.Clear();
+            foreach (var item in list.Take(6))
+            {
+                AddressSuggestions.Add(item);
+            }
+
+            OnPropertyChanged(nameof(HasAddressSuggestions));
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a later keystroke.
+        }
+    }
+
+    private void ClearAddressSuggestions()
+    {
+        if (AddressSuggestions.Count > 0)
+        {
+            AddressSuggestions.Clear();
         }
 
         OnPropertyChanged(nameof(HasAddressSuggestions));
+    }
+
+    /// <summary>
+    /// Typing is the only thing that should move the suggestions. The address
+    /// text is also written by navigation, by opening an internal page and by
+    /// choosing a suggestion, and none of those is a question for the search
+    /// engine - the editing flag is what tells them apart.
+    /// </summary>
+    partial void OnAddressTextChanged(string value)
+    {
+        if (IsAddressEditing)
+        {
+            RequestAddressSuggestions();
+        }
     }
 
     [RelayCommand]
