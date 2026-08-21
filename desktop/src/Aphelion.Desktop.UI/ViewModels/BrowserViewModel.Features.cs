@@ -370,23 +370,20 @@ public sealed partial class BrowserViewModel
             return;
         }
 
-        // Emptied one row at a time, deliberately. Clear() raises a single reset,
-        // and a reset is the one case where the panel behind this list rebuilds
-        // its logical children by walking them - which it cannot survive when the
-        // click being handled belongs to a button inside that very list. Removing
-        // by index raises ordinary remove events instead and never enters that
-        // path. Neither reordering this against the dismissal nor deferring it to
-        // the next dispatcher pass helped: both still ended in a reset.
-        for (var i = AddressSuggestions.Count - 1; i >= 0; i--)
-        {
-            AddressSuggestions.RemoveAt(i);
-        }
-
-        OnPropertyChanged(nameof(HasAddressSuggestions));
-
         AddressText = suggestion;
         Navigate();
+
+        // Nothing here touches the list. Emptying it from inside a click on one
+        // of its own rows was tried three ways and crashed three ways: as a
+        // reset, as a reset deferred to the next dispatcher pass, and as indexed
+        // removes, that last one out of bounds because the panel had already
+        // dropped its containers by the time the click was being handled. The
+        // popup is bound to this flag as well as to the count, so dropping the
+        // flag is enough to close it, and the list is emptied by the refresh that
+        // runs whenever the address bar takes focus - which is where clearing it
+        // has always been safe.
         IsAddressEditing = false;
+        OnPropertyChanged(nameof(HasAddressSuggestions));
     }
 
     private static bool PayloadFlag(string? json, string name)
