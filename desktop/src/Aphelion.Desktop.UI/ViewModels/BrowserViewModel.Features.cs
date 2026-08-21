@@ -333,6 +333,13 @@ public sealed partial class BrowserViewModel
         OnPropertyChanged(nameof(IsHistoryPage));
         OnPropertyChanged(nameof(HasInternalPage));
         OnPropertyChanged(nameof(ShouldShowWebView));
+
+        // The page stops regrouping itself while nothing is showing it, so a tab
+        // arriving on the history has to ask for what it missed.
+        if (IsHistoryPage)
+        {
+            History?.RefreshIfStale();
+        }
     }
 
     public async Task RefreshAddressSuggestionsAsync()

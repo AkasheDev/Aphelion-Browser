@@ -14,6 +14,7 @@ public sealed partial class HistoryViewModel : ViewModelBase
     private readonly IHistoryStore _store;
     private readonly List<ShellViewModel> _shells = [];
     private IReadOnlyList<HistoryVisit> _all = [];
+    private bool _stale;
 
     public HistoryViewModel(IHistoryStore store)
     {
@@ -74,15 +75,53 @@ public sealed partial class HistoryViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasDays));
     }
 
+    /// <summary>
+    /// Records a visit. The page is only regrouped when one is actually on
+    /// screen: a rebuild walks every kept visit and replaces the whole day tree,
+    /// which is wasted on the ordinary case of browsing with the history page
+    /// nowhere in sight. Otherwise the work is left for whoever opens it next.
+    /// </summary>
     public void Record(HistoryVisit visit)
     {
         ArgumentNullException.ThrowIfNull(visit);
         _store.Add(visit);
-        Reload();
+
+        if (IsOnScreen())
+        {
+            Reload();
+            return;
+        }
+
+        _stale = true;
+    }
+
+    /// <summary>
+    /// Whether any open window is showing this page. Windows already register
+    /// here so a click can be served by whichever one is in front, so the answer
+    /// costs a walk of the open windows rather than a subscription the tabs
+    /// would have to remember to undo - a tab is dropped when it closes, with no
+    /// teardown to hang one off.
+    /// </summary>
+    private bool IsOnScreen() =>
+        _shells.Any(shell =>
+            shell.ActiveBrowser?.IsHistoryPage == true ||
+            shell.SplitBrowser?.IsHistoryPage == true);
+
+    /// <summary>
+    /// Brings the page up to date if it fell behind while nothing was showing
+    /// it. Called as a tab settles on the history page.
+    /// </summary>
+    public void RefreshIfStale()
+    {
+        if (_stale)
+        {
+            Reload();
+        }
     }
 
     public void Reload()
     {
+        _stale = false;
         _all = _store.Load();
         Rebuild();
     }

@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aphelion.Desktop.Application\Aphelion.Desktop.Application.csproj" />
     <ProjectReference Include="..\..\src\Aphelion.Desktop.Domain\Aphelion.Desktop.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Aphelion.Desktop.Infrastructure\Aphelion.Desktop.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

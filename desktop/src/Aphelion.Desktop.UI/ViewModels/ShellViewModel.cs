@@ -888,6 +888,13 @@ public sealed partial class ShellViewModel : ViewModelBase
         // Switching tabs puts a different address on screen, which the star has
         // to reflect even though no navigation happened.
         OnPropertyChanged(nameof(IsActivePageBookmarked));
+
+        // Switching to a tab already sitting on the history is not a navigation
+        // either, and the page may have fallen behind while it was hidden.
+        if (value?.IsHistoryPage == true)
+        {
+            _history?.RefreshIfStale();
+        }
     }
 
 
