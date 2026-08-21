@@ -370,11 +370,18 @@ public sealed partial class BrowserViewModel
             return;
         }
 
+        // Empty the list first. The popup is open because this list has items in
+        // it, so clearing it is what closes the popup - and a reset that arrives
+        // after the dismissal has begun lands in the middle of the panel being
+        // taken apart, where it threw while walking children that were being
+        // removed underneath it. Deferring it does not help: by the time a posted
+        // callback runs, the dismissal is already under way.
+        AddressSuggestions.Clear();
+        OnPropertyChanged(nameof(HasAddressSuggestions));
+
         AddressText = suggestion;
         Navigate();
         IsAddressEditing = false;
-        AddressSuggestions.Clear();
-        OnPropertyChanged(nameof(HasAddressSuggestions));
     }
 
     private static bool PayloadFlag(string? json, string name)
