@@ -39,8 +39,15 @@ public partial class App : Avalonia.Application
         var services = _services!;
 
         var splashViewModel = services.GetRequiredService<SplashViewModel>();
-        var sounds = services.GetRequiredService<ITabSoundPlayer>();
-        splashViewModel.OrbitDuration = sounds.SplashDuration;
+
+        // Built off the UI thread. Constructing this adapter loads the platform's
+        // audio libraries and then blocks reading the cue's length, and both used
+        // to happen before the splash window even existed - dead time with
+        // nothing whatever on screen. The orbit reads its duration every frame,
+        // so it can open on the default and take the real one when the cue is
+        // ready.
+        var soundsTask = Task.Run(() => services.GetRequiredService<ITabSoundPlayer>());
+
         if (Environment.GetCommandLineArgs().Contains("--splash"))
         {
             splashViewModel.LoopOrbit = true;
@@ -49,20 +56,20 @@ public partial class App : Avalonia.Application
         var splash = new SplashWindow { DataContext = splashViewModel };
 
         // The window is on screen at Opened, not at Show: Show only asks the
-        // platform to present it. Play then, and stop when the splash goes away
-        // so the cue never continues under the browser. The hold starts here too,
-        // so the orbit and the cue share one clock.
-        var cueHold = Task.CompletedTask;
+        // platform to present it.
         var opened = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        splash.Opened += (_, _) =>
-        {
-            sounds.PlaySplash(splashViewModel.LoopOrbit);
-            cueHold = Task.Delay(sounds.SplashDuration);
-            opened.TrySetResult();
-        };
-        splash.Closed += (_, _) => sounds.StopSplash();
+        splash.Opened += (_, _) => opened.TrySetResult();
         splash.Show();
         await opened.Task;
+
+        // Start the cue now the splash is up, and stop it when the splash goes
+        // away so it never continues under the browser. The hold starts here
+        // too, so the orbit and the cue share one clock.
+        var sounds = await soundsTask;
+        splashViewModel.OrbitDuration = sounds.SplashDuration;
+        splash.Closed += (_, _) => sounds.StopSplash();
+        sounds.PlaySplash(splashViewModel.LoopOrbit);
+        var cueHold = Task.Delay(sounds.SplashDuration);
 
         // Started with --splash, the splash is the whole application: a looping
         // lap timed to the cue so its orbit can actually be watched.
