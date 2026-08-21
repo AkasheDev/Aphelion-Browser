@@ -370,13 +370,18 @@ public sealed partial class BrowserViewModel
             return;
         }
 
-        // Empty the list first. The popup is open because this list has items in
-        // it, so clearing it is what closes the popup - and a reset that arrives
-        // after the dismissal has begun lands in the middle of the panel being
-        // taken apart, where it threw while walking children that were being
-        // removed underneath it. Deferring it does not help: by the time a posted
-        // callback runs, the dismissal is already under way.
-        AddressSuggestions.Clear();
+        // Emptied one row at a time, deliberately. Clear() raises a single reset,
+        // and a reset is the one case where the panel behind this list rebuilds
+        // its logical children by walking them - which it cannot survive when the
+        // click being handled belongs to a button inside that very list. Removing
+        // by index raises ordinary remove events instead and never enters that
+        // path. Neither reordering this against the dismissal nor deferring it to
+        // the next dispatcher pass helped: both still ended in a reset.
+        for (var i = AddressSuggestions.Count - 1; i >= 0; i--)
+        {
+            AddressSuggestions.RemoveAt(i);
+        }
+
         OnPropertyChanged(nameof(HasAddressSuggestions));
 
         AddressText = suggestion;
