@@ -88,6 +88,10 @@ public sealed partial class ShellViewModel : ViewModelBase
         IsPrivateWindow = isPrivateWindow;
         Palette = new CommandPaletteViewModel(this);
 
+        // Same reason bookmarks register rather than hold a callback: the page
+        // is shared by every window, so a click has to reach the front one.
+        History?.Register(this);
+
         if (Bookmarks is not null)
         {
             // The bookmark view model is one per profile, shared by every window,
@@ -249,6 +253,8 @@ public sealed partial class ShellViewModel : ViewModelBase
     /// <summary>Releases profile-wide bookmark subscriptions when this window closes.</summary>
     public void ReleaseBookmarks()
     {
+        History?.Unregister(this);
+
         if (Bookmarks is null)
         {
             return;

@@ -77,6 +77,55 @@ public sealed partial class DownloadItemViewModel : ViewModelBase
     public string SourceHost =>
         string.IsNullOrEmpty(_item.Source.Host) ? _item.Source.ToString() : _item.Source.Host;
 
+    /// <summary>
+    /// The extension, shown on the row's tile. Chrome draws a real file-type
+    /// icon; the extension itself carries the same information and needs no
+    /// icon set to keep in step with the formats people actually download.
+    /// </summary>
+    public string TypeBadge
+    {
+        get
+        {
+            var extension = Path.GetExtension(FileName).TrimStart('.').ToUpperInvariant();
+
+            return extension.Length switch
+            {
+                0 => "FILE",
+                > 4 => extension[..4],
+                _ => extension,
+            };
+        }
+    }
+
+    /// <summary>
+    /// Tile tints, grouped rather than per-extension: five families the eye can
+    /// tell apart at a glance beat forty colours it cannot. Driven as style
+    /// classes, so the palette stays in the theme with every other colour.
+    /// </summary>
+    public bool IsImageKind => KindOf(TypeBadge) == "image";
+
+    public bool IsMediaKind => KindOf(TypeBadge) == "media";
+
+    public bool IsArchiveKind => KindOf(TypeBadge) == "archive";
+
+    public bool IsDocumentKind => KindOf(TypeBadge) == "document";
+
+    public bool IsCodeKind => KindOf(TypeBadge) == "code";
+
+    private static string KindOf(string extension) => extension switch
+    {
+        "PNG" or "JPG" or "JPEG" or "GIF" or "WEBP" or "SVG" or "BMP" or "HEIC" or "AVIF" => "image",
+        "MP4" or "MOV" or "MKV" or "AVI" or "WEBM" or "MP3" or "WAV" or "FLAC" or "M4A" or "OGG" => "media",
+        "ZIP" or "RAR" or "7Z" or "TAR" or "GZ" or "ISO" or "MSI" or "EXE" or "DMG" or "APPX" => "archive",
+        "PDF" or "DOC" or "DOCX" or "XLS" or "XLSX" or "PPT" or "PPTX" or "TXT" or "MD" or "CSV" => "document",
+        "JSON" or "XML" or "HTML" or "CSS" or "JS" or "TS" or "CS" or "PY" or "SH" or "YML" => "code",
+        _ => "other",
+    };
+
+    /// <summary>The percentage beside the bar, blank until the size is known.</summary>
+    public string ProgressLabel =>
+        _item.ProgressFraction is { } fraction ? $"{fraction * 100:0}%" : string.Empty;
+
     public bool IsLive => _item.IsLive;
 
     public bool CanPause => _item.State == DownloadState.InProgress && _operation is not null;
@@ -257,6 +306,7 @@ public sealed partial class DownloadItemViewModel : ViewModelBase
         OnPropertyChanged(nameof(ShowsProgress));
         OnPropertyChanged(nameof(IsProgressIndeterminate));
         OnPropertyChanged(nameof(ProgressPercent));
+        OnPropertyChanged(nameof(ProgressLabel));
         OnPropertyChanged(nameof(StatusText));
     }
 

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using Aphelion.Desktop.Application.Dtos;
 using Aphelion.Desktop.Application.Ports;
+using Aphelion.Desktop.Domain.ValueObjects;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -11,6 +12,7 @@ namespace Aphelion.Desktop.UI.ViewModels;
 public sealed partial class HistoryViewModel : ViewModelBase
 {
     private readonly IHistoryStore _store;
+    private readonly List<ShellViewModel> _shells = [];
     private IReadOnlyList<HistoryVisit> _all = [];
 
     public HistoryViewModel(IHistoryStore store)
@@ -33,7 +35,44 @@ public sealed partial class HistoryViewModel : ViewModelBase
 
     public bool HasDays => Days.Count > 0 && !IsPrivateSession;
 
+    /// <summary>Everything recorded, not just what the current search shows.</summary>
+    public string TotalLabel => _all.Count switch
+    {
+        0 => "Nothing recorded",
+        1 => "1 page",
+        var count => $"{count:N0} pages",
+    };
+
+    /// <summary>The stat beside it: how much of that total is from today.</summary>
+    public string TodayLabel
+    {
+        get
+        {
+            var today = _all.Count(visit => visit.VisitedAt.LocalDateTime.Date == DateTime.Today);
+            return today == 1 ? "1 today" : $"{today:N0} today";
+        }
+    }
+
+    /// <summary>How many rows the current search is showing, for the filter chip.</summary>
+    public string MatchLabel
+    {
+        get
+        {
+            var matches = Days.Sum(day => day.Visits.Count);
+            return matches == 1 ? "1 match" : $"{matches:N0} matches";
+        }
+    }
+
+    public bool IsSearching => !string.IsNullOrWhiteSpace(SearchText);
+
     partial void OnSearchTextChanged(string value) => Rebuild();
+
+    partial void OnIsPrivateSessionChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(HasNoSearchMatches));
+        OnPropertyChanged(nameof(HasDays));
+    }
 
     public void Record(HistoryVisit visit)
     {
@@ -48,15 +87,50 @@ public sealed partial class HistoryViewModel : ViewModelBase
         Rebuild();
     }
 
-    [RelayCommand]
-    private void Delete(HistoryVisit? visit)
+    /// <summary>
+    /// The page is one per profile and every window draws the same instance, so
+    /// it cannot hold a callback pointing at a single shell — the last window
+    /// opened would answer for all of them. Windows register instead, and a
+    /// click is served by whichever one is in front, as bookmarks do.
+    /// </summary>
+    public void Register(ShellViewModel shell)
     {
-        if (visit is null)
+        ArgumentNullException.ThrowIfNull(shell);
+
+        if (!_shells.Contains(shell))
+        {
+            _shells.Add(shell);
+        }
+    }
+
+    public void Unregister(ShellViewModel shell) => _shells.Remove(shell);
+
+    private ShellViewModel? ActiveShell =>
+        _shells.FirstOrDefault(shell => shell.IsWindowActive) ?? _shells.FirstOrDefault();
+
+    [RelayCommand]
+    private void Open(HistoryVisitViewModel? row)
+    {
+        if (row is null ||
+            !Uri.TryCreate(row.Address, UriKind.Absolute, out var uri) ||
+            !PageAddress.TryCreate(uri, out var address) ||
+            address is null)
         {
             return;
         }
 
-        _store.Delete(visit);
+        ActiveShell?.NavigateActiveTab(address);
+    }
+
+    [RelayCommand]
+    private void Delete(HistoryVisitViewModel? row)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        _store.Delete(row.Visit);
         Reload();
     }
 
@@ -66,6 +140,9 @@ public sealed partial class HistoryViewModel : ViewModelBase
         _store.Clear();
         Reload();
     }
+
+    [RelayCommand]
+    private void ClearSearch() => SearchText = string.Empty;
 
     private void Rebuild()
     {
@@ -82,19 +159,60 @@ public sealed partial class HistoryViewModel : ViewModelBase
         foreach (var day in matches.GroupBy(visit => visit.VisitedAt.LocalDateTime.Date))
         {
             Days.Add(new HistoryDayGroupViewModel(
-                day.Key.ToString("D", CultureInfo.CurrentCulture),
-                day.ToList()));
+                HeadingFor(day.Key),
+                day.Select(visit => new HistoryVisitViewModel(visit)).ToList()));
         }
 
         OnPropertyChanged(nameof(IsEmpty));
         OnPropertyChanged(nameof(HasNoSearchMatches));
         OnPropertyChanged(nameof(HasDays));
+        OnPropertyChanged(nameof(TotalLabel));
+        OnPropertyChanged(nameof(TodayLabel));
+        OnPropertyChanged(nameof(MatchLabel));
+        OnPropertyChanged(nameof(IsSearching));
+    }
+
+    /// <summary>Chrome's wording: the two recent days are named, the rest dated.</summary>
+    private static string HeadingFor(DateTime day)
+    {
+        if (day == DateTime.Today)
+        {
+            return "Today";
+        }
+
+        return day == DateTime.Today.AddDays(-1)
+            ? "Yesterday"
+            : day.ToString("D", CultureInfo.CurrentCulture);
     }
 }
 
-public sealed class HistoryDayGroupViewModel(string heading, IReadOnlyList<HistoryVisit> visits)
+public sealed class HistoryDayGroupViewModel(string heading, IReadOnlyList<HistoryVisitViewModel> visits)
 {
     public string Heading { get; } = heading;
 
-    public IReadOnlyList<HistoryVisit> Visits { get; } = visits;
+    public IReadOnlyList<HistoryVisitViewModel> Visits { get; } = visits;
+
+    public string CountLabel => Visits.Count == 1 ? "1 page" : $"{Visits.Count} pages";
+}
+
+/// <summary>One row on the timeline.</summary>
+public sealed class HistoryVisitViewModel(HistoryVisit visit)
+{
+    public HistoryVisit Visit { get; } = visit;
+
+    public string Address => Visit.Address;
+
+    /// <summary>Pages saved without a title still need something to click.</summary>
+    public string Title => string.IsNullOrWhiteSpace(Visit.Title) ? Host : Visit.Title;
+
+    public string Host =>
+        Uri.TryCreate(Visit.Address, UriKind.Absolute, out var uri)
+            ? uri.Host.StartsWith("www.", StringComparison.OrdinalIgnoreCase) ? uri.Host[4..] : uri.Host
+            : Visit.Address;
+
+    public string TimeLabel => Visit.VisitedAt.LocalDateTime.ToString("HH:mm", CultureInfo.CurrentCulture);
+
+    public bool IsSearch => !string.IsNullOrWhiteSpace(Visit.SearchTerm);
+
+    public string SearchTerm => Visit.SearchTerm ?? string.Empty;
 }

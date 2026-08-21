@@ -1,82 +1,180 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Aphelion.Desktop.UI.ViewModels"
-             xmlns:dto="using:Aphelion.Desktop.Application.Dtos"
              x:Class="Aphelion.Desktop.UI.Views.HistoryView"
              x:DataType="vm:HistoryViewModel"
-             HorizontalAlignment="Stretch"
-             VerticalAlignment="Stretch">
+             Background="{DynamicResource SurfaceBaseBrush}"
+             ClipToBounds="True">
 
-  <DockPanel Background="{DynamicResource SurfaceBaseBrush}"
-             HorizontalAlignment="Stretch"
-             VerticalAlignment="Stretch">
+  <!-- aphelion://history. A record, read as a document: one column, the day as
+       a quiet label over its run of rows, and a rule between every entry. The
+       timeline this used to be - a violet-to-cyan thread with a ringed stop at
+       every page and a lettered tile beside it - spent four leading columns
+       before the title of anything. -->
+  <DockPanel>
 
-    <Grid DockPanel.Dock="Top"
-          ColumnDefinitions="*,Auto"
-          Margin="48,28,48,12"
-          MaxWidth="860"
-          HorizontalAlignment="Stretch">
-      <StackPanel Grid.Column="0" Spacing="14">
-        <TextBlock Classes="downloads-heading" Text="History" />
-        <TextBox Classes="downloads-search"
-                 PlaceholderText="Search history"
-                 Text="{Binding SearchText}" />
+    <StackPanel DockPanel.Dock="Top"
+                Margin="48,40,48,0"
+                MaxWidth="880"
+                Spacing="20">
+
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Grid.Column="0" Spacing="6" VerticalAlignment="Center">
+          <TextBlock Classes="page-title" Text="History" />
+          <TextBlock Classes="page-lede" Text="Every page this profile has opened, newest first." />
+        </StackPanel>
+
+        <!-- The counts, as a sentence rather than as two glass pills. -->
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Bottom"
+                    Margin="24,0,0,2"
+                    IsVisible="{Binding !IsPrivateSession}">
+          <TextBlock Classes="page-count" Text="{Binding TotalLabel}" />
+          <TextBlock Classes="page-count" Text="/" />
+          <TextBlock Classes="page-count" Text="{Binding TodayLabel}" />
+        </StackPanel>
+      </Grid>
+
+      <Grid ColumnDefinitions="*,Auto"
+            ColumnSpacing="12"
+            IsVisible="{Binding !IsPrivateSession}">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12">
+          <TextBox Classes="page-search"
+                   Width="360"
+                   PlaceholderText="Search history"
+                   Text="{Binding SearchText}" />
+          <TextBlock Classes="page-count"
+                     Text="{Binding MatchLabel}"
+                     IsVisible="{Binding IsSearching}" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+          <Button Classes="page-ghost"
+                  Content="Clear search"
+                  Command="{Binding ClearSearchCommand}"
+                  IsVisible="{Binding IsSearching}" />
+          <Button Classes="page-ghost danger"
+                  Content="Clear all history"
+                  Command="{Binding ClearCommand}"
+                  IsVisible="{Binding HasDays}" />
+        </StackPanel>
+      </Grid>
+
+      <Border Classes="page-rule" />
+    </StackPanel>
+
+    <Panel Margin="48,0,48,0">
+
+      <!-- A private window records nothing, so there is nothing here to show
+           and nothing to clear. Say so, rather than leaving a page that looks
+           like the history was lost. -->
+      <StackPanel HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  Spacing="16"
+                  IsVisible="{Binding IsPrivateSession}">
+        <Border Classes="page-empty-icon" HorizontalAlignment="Center">
+          <Path Classes="page-empty-glyph"
+                Data="M16,4 L27,8 V16 C27,22 22,26.5 16,28 C10,26.5 5,22 5,16 V8 Z M11,16 L15,20 L21,12" />
+        </Border>
+        <StackPanel Spacing="6">
+          <TextBlock Classes="page-empty-title" Text="This window keeps no history" />
+          <TextBlock Classes="page-empty-copy"
+                     Text="Pages opened in a private window are never written to the record. Close it and everything from it is gone." />
+        </StackPanel>
       </StackPanel>
-      <Button Grid.Column="1"
-              Classes="download-clear"
-              Content="Clear all"
-              VerticalAlignment="Bottom"
-              Command="{Binding ClearCommand}"
-              IsVisible="{Binding !IsPrivateSession}" />
-    </Grid>
-
-    <Panel>
-      <TextBlock Classes="downloads-empty-title"
-                 Text="History isn’t saved in Private Mode"
-                 HorizontalAlignment="Center"
-                 VerticalAlignment="Center"
-                 IsVisible="{Binding IsPrivateSession}" />
 
       <StackPanel HorizontalAlignment="Center"
                   VerticalAlignment="Center"
-                  Spacing="8"
+                  Spacing="16"
                   IsVisible="{Binding IsEmpty}">
-        <TextBlock Classes="downloads-empty-title" Text="No history yet" />
-        <TextBlock Classes="downloads-empty-copy" Text="Pages you visit will show up here." />
+        <Border Classes="page-empty-icon" HorizontalAlignment="Center">
+          <Path Classes="page-empty-glyph"
+                Data="M16,3 A13,13 0 1 1 16,29 A13,13 0 1 1 16,3 M16,9 V16 L21,19" />
+        </Border>
+        <StackPanel Spacing="6">
+          <TextBlock Classes="page-empty-title" Text="No history yet" />
+          <TextBlock Classes="page-empty-copy"
+                     Text="Once you start browsing, the pages you visit line up here by day." />
+        </StackPanel>
       </StackPanel>
 
-      <TextBlock Classes="downloads-empty"
-                 Text="No matching visits"
-                 HorizontalAlignment="Center"
-                 VerticalAlignment="Center"
-                 IsVisible="{Binding HasNoSearchMatches}" />
+      <StackPanel HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  Spacing="6"
+                  IsVisible="{Binding HasNoSearchMatches}">
+        <TextBlock Classes="page-empty-title" Text="Nothing matches that search" />
+        <TextBlock Classes="page-empty-copy" Text="Try a shorter phrase, or part of the address." />
+      </StackPanel>
 
-      <ScrollViewer IsVisible="{Binding HasDays}">
-        <ItemsControl ItemsSource="{Binding Days}" Margin="48,0,48,28" MaxWidth="860">
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled"
+                    IsVisible="{Binding HasDays}">
+        <ItemsControl ItemsSource="{Binding Days}"
+                      MaxWidth="880"
+                      Margin="0,0,0,40">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:HistoryDayGroupViewModel">
-              <StackPanel Margin="0,0,0,18">
-                <TextBlock Classes="settings-section" Text="{Binding Heading}" Margin="0,0,0,8" />
+
+              <StackPanel>
+
+                <Grid ColumnDefinitions="*,Auto" Margin="0,26,0,8">
+                  <TextBlock Grid.Column="0" Classes="page-section" Text="{Binding Heading}" />
+                  <TextBlock Grid.Column="1" Classes="page-section" Text="{Binding CountLabel}" />
+                </Grid>
+
                 <ItemsControl ItemsSource="{Binding Visits}">
                   <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="dto:HistoryVisit">
-                      <Grid ColumnDefinitions="*,Auto" Margin="0,4">
-                        <StackPanel>
-                          <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
-                          <TextBlock Classes="settings-copy" Text="{Binding Address}" />
-                        </StackPanel>
-                        <Button Grid.Column="1" Content="Delete"
-                                Command="{Binding $parent[UserControl].((vm:HistoryViewModel)DataContext).DeleteCommand}"
-                                CommandParameter="{Binding}" />
-                      </Grid>
+                    <DataTemplate x:DataType="vm:HistoryVisitViewModel">
+
+                      <Button Classes="page-row"
+                              Command="{Binding $parent[UserControl].((vm:HistoryViewModel)DataContext).OpenCommand}"
+                              CommandParameter="{Binding}"
+                              ToolTip.Tip="{Binding Address}">
+                        <Grid ColumnDefinitions="46,4,*,Auto" ColumnSpacing="12">
+
+                          <TextBlock Grid.Column="0"
+                                     Classes="history-time"
+                                     Text="{Binding TimeLabel}" />
+
+                          <Border Grid.Column="1" Classes="history-dot" />
+
+                          <StackPanel Grid.Column="2" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Classes="history-title"
+                                       Text="{Binding Title}"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Classes="history-host"
+                                       Text="{Binding Host}"
+                                       TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+
+                          <Button Grid.Column="3"
+                                  Classes="icon small history-remove"
+                                  VerticalAlignment="Center"
+                                  ToolTip.Tip="Remove from history"
+                                  Command="{Binding $parent[UserControl].((vm:HistoryViewModel)DataContext).DeleteCommand}"
+                                  CommandParameter="{Binding}">
+                            <Path Classes="glyph" Data="M1,1 L9,9 M9,1 L1,9" />
+                          </Button>
+
+                        </Grid>
+                      </Button>
+
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
+
               </StackPanel>
+
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
       </ScrollViewer>
     </Panel>
+
   </DockPanel>
+
 </UserControl>

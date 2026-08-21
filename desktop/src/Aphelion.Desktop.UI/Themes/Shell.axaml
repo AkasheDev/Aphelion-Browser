@@ -1389,4 +1389,507 @@
     <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
   </Style>
 
+  <!-- ============================================================
+       Internal pages (aphelion://downloads, ://history, ://settings)
+
+       These are documents, not dashboards. One column, one hairline under the
+       masthead, rows separated by rules rather than floated as cards, and no
+       gradient anywhere: the violet-to-cyan wash that used to head every page
+       also ran the primary button, the horizon rule, the history thread and the
+       about mark, at which point it had stopped being an accent and become
+       wallpaper. It lives on the New Tab page, which is where this product is
+       supposed to look like itself.
+
+       Three rules hold the set together:
+
+         Type   five sizes, from the scale in the palette. Nothing else.
+         Radius 4 / 8 / 12. The chrome pill is not available here - rounding
+                every edge to its limit is what made the old pages read as a
+                tray of lozenges.
+         Colour opaque surfaces only, so contrast does not drift as the page
+                scrolls, and brand violet spent on one thing: what is selected
+                or in progress. Destructive actions get the close red. File
+                families tint their own letters. Nothing else is coloured.
+       ============================================================ -->
+
+  <!-- The rule under a masthead, and the rule between two rows. Same hairline,
+       so the head of the page and its body are on one grid. Both are inset by
+       the row padding so the rules run a little past the text, which is what
+       stops a column of records from looking like a form. -->
+  <Style Selector="Border.page-rule">
+    <Setter Property="Height" Value="1" />
+    <Setter Property="Margin" Value="-12,0" />
+    <Setter Property="Background" Value="{DynamicResource PageBorderBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.page-title">
+    <Setter Property="FontSize" Value="{DynamicResource TypeDisplay}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="-0.6" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.page-lede">
+    <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <!-- What used to be a pair of glass pills in the corner. A count is a fact
+       about the page, not a statistic worth a card of its own, so it is set as
+       text beside the title. -->
+  <Style Selector="TextBlock.page-count">
+    <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <!-- The label over a run of rows: a day on the history, a group of settings.
+       Small caps carry the break without needing a filled header. -->
+  <Style Selector="TextBlock.page-section">
+    <Setter Property="FontSize" Value="{DynamicResource TypeMeta}" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="LetterSpacing" Value="0.9" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <Style Selector="TextBox.page-search">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
+    <Setter Property="Background" Value="{DynamicResource PageInsetBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PageBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+
+  <Style Selector="TextBox.page-search /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{DynamicResource PageInsetBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PageBorderBrush}" />
+  </Style>
+
+  <Style Selector="TextBox.page-search:focus /template/ Border#PART_BorderElement">
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="Button.page-ghost">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PageBorderBrush}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Button.page-ghost /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.page-ghost:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PageHoverBrush}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Button.page-ghost.danger">
+    <Setter Property="Foreground" Value="{DynamicResource CloseHoverBrush}" />
+  </Style>
+
+  <Style Selector="Button.page-ghost.danger:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource CloseHoverBrush}" />
+    <Setter Property="TextBlock.Foreground" Value="#FFFFFF" />
+  </Style>
+
+  <!-- Flat brand violet. The gradient this used to carry is gone: a button is
+       the smallest thing on the page and had the loudest fill on it. -->
+  <Style Selector="Button.page-primary">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundOnAccentBrush}" />
+  </Style>
+
+  <Style Selector="Button.page-primary /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BrandPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="Button.page-primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource BrandPrimaryBrush}" />
+    <Setter Property="TextBlock.Foreground" Value="{DynamicResource ForegroundOnAccentBrush}" />
+    <Setter Property="Opacity" Value="0.86" />
+  </Style>
+
+  <!-- A record in a list. Border.page-row is a container the row builds itself
+       inside; Button.page-row is the same shape when the whole row is the
+       target. Both are inset by their own padding so the rule underneath lines
+       up with the masthead rule above. -->
+  <Style Selector="Border.page-row">
+    <Setter Property="Padding" Value="12,13" />
+    <Setter Property="Margin" Value="-12,0" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PageBorderBrush}" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <BrushTransition Property="Background" Duration="0:0:0.1" />
+      </Transitions>
+    </Setter>
+  </Style>
+
+  <Style Selector="Border.page-row:pointerover">
+    <Setter Property="Background" Value="{DynamicResource PageHoverBrush}" />
+  </Style>
+
+  <Style Selector="Button.page-row">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Padding" Value="12,13" />
+    <Setter Property="Margin" Value="-12,0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PageBorderBrush}" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.page-row /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="0" />
+  </Style>
+
+  <Style Selector="Button.page-row:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PageHoverBrush}" />
+  </Style>
+
+  <!-- A square of the inset surface behind a glyph or a pair of letters. One
+       size, one radius, used by the download rows and the saved credentials, so
+       the two lists share a left edge. -->
+  <Style Selector="Border.page-tile">
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Background" Value="{DynamicResource PageInsetBrush}" />
+  </Style>
+
+  <Style Selector="Border.page-note">
+    <Setter Property="Padding" Value="14,12" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
+    <Setter Property="Background" Value="{DynamicResource PageInsetBrush}" />
+  </Style>
+
+  <!-- The empty state. A 92px circle in brand cyan used to sit above the copy;
+       an empty list is the least important thing a page can say, so it is now
+       the smallest mark on it. -->
+  <Style Selector="Border.page-empty-icon">
+    <Setter Property="Width" Value="44" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusLarge}" />
+    <Setter Property="Background" Value="{DynamicResource PageInsetBrush}" />
+  </Style>
+
+  <Style Selector="Path.page-empty-glyph">
+    <Setter Property="Width" Value="20" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="Stretch" Value="Uniform" />
+    <Setter Property="Stroke" Value="{DynamicResource ForegroundMutedBrush}" />
+    <Setter Property="StrokeThickness" Value="1.4" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBlock.page-empty-title">
+    <Setter Property="FontSize" Value="{DynamicResource TypeSubtitle}" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBlock.page-empty-copy">
+    <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+    <Setter Property="MaxWidth" Value="380" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+    <Setter Property="TextAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+  </Style>
+
+  <!-- ===== aphelion://history ===== -->
+
+  <Style Selector="TextBlock.history-time">
+    <Setter Property="FontSize" Value="{DynamicResource TypeMeta}" />
+    <Setter Property="Width" Value="46" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <!-- The only mark of colour in the list, and it is four pixels wide. It
+       replaces a 30px tile carrying the first letter of the host, which the
+       host name beside it already said. -->
+  <Style Selector="Border.history-dot">
+    <Setter Property="Width" Value="4" />
+    <Setter Property="Height" Value="4" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="Background" Value="{DynamicResource PageBorderBrush}" />
+  </Style>
+
+  <Style Selector="Button.page-row:pointerover Border.history-dot">
+    <Setter Property="Background" Value="{DynamicResource BrandPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.history-title">
+    <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.history-host">
+    <Setter Property="FontSize" Value="{DynamicResource TypeMeta}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <!-- The delete button on a row only appears under the pointer, so a long list
+       reads as text rather than as a column of icons. -->
+  <Style Selector="Button.page-row Button.history-remove">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+
+  <Style Selector="Button.page-row:pointerover Button.history-remove">
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+
+  <!-- ===== aphelion://downloads ===== -->
+
+  <!-- The file family is carried by the letters, not by a filled block. Five
+       saturated tiles down the left edge were the loudest thing on the page and
+       said no more than the extension already does. -->
+  <Style Selector="TextBlock.download-tile-text">
+    <Setter Property="FontSize" Value="{DynamicResource TypeMeta}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource BadgeOtherBrush}" />
+  </Style>
+
+  <Style Selector="Border.page-tile.document TextBlock.download-tile-text">
+    <Setter Property="Foreground" Value="{DynamicResource BadgeDocumentBrush}" />
+  </Style>
+
+  <Style Selector="Border.page-tile.image TextBlock.download-tile-text">
+    <Setter Property="Foreground" Value="{DynamicResource BadgeImageBrush}" />
+  </Style>
+
+  <Style Selector="Border.page-tile.media TextBlock.download-tile-text">
+    <Setter Property="Foreground" Value="{DynamicResource BadgeMediaBrush}" />
+  </Style>
+
+  <Style Selector="Border.page-tile.archive TextBlock.download-tile-text">
+    <Setter Property="Foreground" Value="{DynamicResource BadgeArchiveBrush}" />
+  </Style>
+
+  <Style Selector="Border.page-tile.code TextBlock.download-tile-text">
+    <Setter Property="Foreground" Value="{DynamicResource BadgeCodeBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.download-title">
+    <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.download-meta">
+    <Setter Property="FontSize" Value="{DynamicResource TypeMeta}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.download-percent">
+    <Setter Property="FontSize" Value="{DynamicResource TypeMeta}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <!-- A transfer in flight is the one thing on this page worth the brand
+       colour, because it is the one thing that is changing. -->
+  <Style Selector="ProgressBar.download-bar">
+    <Setter Property="MinHeight" Value="3" />
+    <Setter Property="Height" Value="3" />
+    <Setter Property="CornerRadius" Value="2" />
+    <Setter Property="Background" Value="{DynamicResource PageInsetBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource BrandPrimaryBrush}" />
+  </Style>
+
+  <!-- The row already carries the hover, so the button inside it draws nothing
+       of its own. -->
+  <Style Selector="Button.download-open">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+
+  <Style Selector="Button.download-open /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <Style Selector="Button.download-open:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+
+  <!-- ===== aphelion://settings ===== -->
+
+  <Style Selector="Border.settings-rail">
+    <Setter Property="Width" Value="232" />
+    <Setter Property="Padding" Value="12,16" />
+    <Setter Property="Background" Value="{DynamicResource PageInsetBrush}" />
+    <Setter Property="BorderThickness" Value="0,0,1,0" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PageBorderBrush}" />
+  </Style>
+
+  <!-- The rail is a ListBox so the selected category carries the selection
+       itself; a column of buttons would need every row told which one is on. -->
+  <Style Selector="ListBox.settings-nav-list">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="ListBox.settings-nav-list ListBoxItem">
+    <Setter Property="Padding" Value="10,8" />
+    <Setter Property="Margin" Value="0,1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+  </Style>
+
+  <Style Selector="ListBox.settings-nav-list ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PageHoverBrush}" />
+  </Style>
+
+  <!-- Selected is a fill, a weight and a coloured glyph. It used to be those
+       three plus a violet bar in the gutter, which is four ways of saying one
+       thing. -->
+  <Style Selector="ListBox.settings-nav-list ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PageSelectedBrush}" />
+  </Style>
+
+  <Style Selector="ListBox.settings-nav-list ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PageSelectedBrush}" />
+  </Style>
+
+  <Style Selector="Path.settings-nav-glyph">
+    <Setter Property="Width" Value="17" />
+    <Setter Property="Height" Value="17" />
+    <Setter Property="Stretch" Value="Uniform" />
+    <Setter Property="Stroke" Value="{DynamicResource ForegroundMutedBrush}" />
+    <Setter Property="StrokeThickness" Value="1.5" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="ListBoxItem:selected Path.settings-nav-glyph">
+    <Setter Property="Stroke" Value="{DynamicResource BrandPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-nav-label">
+    <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <Style Selector="ListBoxItem:selected TextBlock.settings-nav-label">
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-rail-title">
+    <Setter Property="FontSize" Value="{DynamicResource TypeSubtitle}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-pane-title">
+    <Setter Property="FontSize" Value="{DynamicResource TypeDisplay}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="-0.6" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-pane-lede">
+    <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <!-- A preference: what it is on the left, the control that changes it on the
+       right, one per line, separated by the same hairline as every other list
+       in the application. The card that used to hold these had a border, a fill
+       and a 16px radius around what is already a list. -->
+  <Style Selector="Border.settings-row">
+    <Setter Property="Padding" Value="0,15" />
+    <Setter Property="BorderThickness" Value="0,0,0,1" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PageBorderBrush}" />
+  </Style>
+
+  <Style Selector="Border.settings-row.last">
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-label">
+    <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-hint">
+    <Setter Property="FontSize" Value="{DynamicResource TypeMeta}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundMutedBrush}" />
+  </Style>
+
+  <Style Selector="ComboBox.settings-input">
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="TextBox.settings-input">
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="FontSize" Value="{DynamicResource TypeBody}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusMedium}" />
+    <Setter Property="Padding" Value="10,6" />
+  </Style>
+
+  <Style Selector="ToggleSwitch.settings-toggle">
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="OnContent" Value="" />
+    <Setter Property="OffContent" Value="" />
+    <Setter Property="MinWidth" Value="0" />
+  </Style>
+
+  <Style Selector="ToggleSwitch.settings-toggle:checked /template/ Border#SwitchKnobBounds">
+    <Setter Property="Background" Value="{DynamicResource BrandPrimaryBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BrandPrimaryBrush}" />
+  </Style>
+
+  <Style Selector="Border.settings-about-mark">
+    <Setter Property="Width" Value="48" />
+    <Setter Property="Height" Value="48" />
+    <Setter Property="CornerRadius" Value="{DynamicResource RadiusLarge}" />
+    <Setter Property="Background" Value="{DynamicResource PageInsetBrush}" />
+  </Style>
+
+  <Style Selector="TextBlock.settings-version">
+    <Setter Property="FontSize" Value="{DynamicResource TypeSubtitle}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
 </Styles>

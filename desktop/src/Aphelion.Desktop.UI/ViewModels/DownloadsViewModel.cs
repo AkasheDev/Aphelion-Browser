@@ -198,6 +198,32 @@ public sealed partial class DownloadsViewModel : ViewModelBase
         ActiveSweepAngle = anyLive && total > 0
             ? Math.Clamp(360d * received / total, 0d, 360d)
             : 0d;
+
+        OnPropertyChanged(nameof(TotalLabel));
+        OnPropertyChanged(nameof(ActiveLabel));
+    }
+
+    /// <summary>The stats beside the page title.</summary>
+    public string TotalLabel => Items.Count switch
+    {
+        0 => "Nothing yet",
+        1 => "1 file",
+        var count => $"{count} files",
+    };
+
+    public string ActiveLabel
+    {
+        get
+        {
+            var live = Items.Count(row => row.IsLive);
+
+            return live switch
+            {
+                0 => "All finished",
+                1 => "1 in progress",
+                _ => $"{live} in progress",
+            };
+        }
     }
 
     private void TrimHistory()

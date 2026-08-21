@@ -4,88 +4,297 @@
              xmlns:dto="using:Aphelion.Desktop.Application.Dtos"
              x:Class="Aphelion.Desktop.UI.Views.SettingsView"
              x:DataType="vm:SettingsViewModel"
-             HorizontalAlignment="Stretch"
-             VerticalAlignment="Stretch"
-             Background="{DynamicResource SurfaceBaseBrush}">
+             Background="{DynamicResource SurfaceBaseBrush}"
+             ClipToBounds="True">
 
-  <ScrollViewer HorizontalScrollBarVisibility="Disabled"
-                HorizontalAlignment="Stretch"
-                VerticalAlignment="Stretch">
-    <StackPanel Margin="48,28,48,40" MaxWidth="720" Spacing="22"
-                HorizontalAlignment="Stretch">
+  <!-- aphelion://settings. Categories in a rail on the left, one category of
+       preferences on the right. The preferences themselves are a plain list
+       under the heading: the rounded, bordered, filled card that used to wrap
+       them was a container drawn around what is already a list, and it put a
+       second edge inside the pane edge on every screen. -->
+  <DockPanel>
 
-      <TextBlock Classes="downloads-heading" Text="Settings" />
+    <Border DockPanel.Dock="Left" Classes="settings-rail">
+      <DockPanel>
 
-      <TextBlock Classes="settings-section" Text="Appearance" />
-      <TextBlock Classes="settings-copy" Text="Theme" />
-      <ComboBox ItemsSource="{Binding ThemeChoices}"
-                SelectedItem="{Binding SelectedTheme}"
-                Width="240" />
+        <TextBlock DockPanel.Dock="Top"
+                   Classes="settings-rail-title"
+                   Margin="10,2,10,16"
+                   Text="Settings" />
 
-      <TextBlock Classes="settings-section" Text="On startup" />
-      <ComboBox ItemsSource="{Binding StartupChoices}"
-                SelectedItem="{Binding SelectedStartup}"
-                Width="280" />
-      <TextBox PlaceholderText="One address per line"
-               AcceptsReturn="True"
-               Height="90"
-               Text="{Binding StartupPagesText}"
-               IsVisible="{Binding ShowsCustomPages}" />
+        <ListBox Classes="settings-nav-list"
+                 ItemsSource="{Binding Sections}"
+                 SelectedItem="{Binding SelectedSection}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:SettingsSectionViewModel">
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <Path Grid.Column="0" Classes="settings-nav-glyph" Data="{Binding Glyph}" />
+                <TextBlock Grid.Column="1"
+                           Classes="settings-nav-label"
+                           Text="{Binding Label}"
+                           TextTrimming="CharacterEllipsis" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
 
-      <TextBlock Classes="settings-section" Text="Search" />
-      <ComboBox ItemsSource="{Binding SearchEngines}" SelectedItem="{Binding SelectedEngine}" Width="240" />
+      </DockPanel>
+    </Border>
 
-      <TextBlock Classes="settings-section" Text="New Tab" />
-      <CheckBox Content="Show weather" IsChecked="{Binding WeatherEnabled}" />
-      <CheckBox Content="Show search suggestions" IsChecked="{Binding SuggestionsEnabled}" />
+    <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Margin="48,40,48,48" MaxWidth="720" Spacing="20" HorizontalAlignment="Left">
 
-      <TextBlock Classes="settings-section" Text="Downloads" />
-      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-        <TextBox Grid.Column="0"
-                 PlaceholderText="System downloads folder"
-                 Text="{Binding DownloadFolder}" />
-        <Button Grid.Column="1"
-                Content="Use default"
-                Command="{Binding UseDefaultDownloadFolderCommand}" />
-      </Grid>
+        <StackPanel Spacing="6">
+          <TextBlock Classes="settings-pane-title" Text="{Binding SelectedSection.Label}" />
+          <TextBlock Classes="settings-pane-lede" Text="{Binding SelectedSection.Summary}" />
+        </StackPanel>
 
-      <TextBlock Classes="settings-section" Text="Default browser" />
-      <TextBlock Classes="settings-copy"
-                 Text="Windows and macOS keep default apps in system settings. Linux uses xdg-settings when it is installed."
-                 TextWrapping="Wrap" />
-      <Button Content="Open default-app settings"
-              HorizontalAlignment="Left"
-              Command="{Binding OpenDefaultAppsCommand}" />
+        <Border Classes="page-rule" Margin="0" />
 
-      <TextBlock Classes="settings-section" Text="Updates" />
-      <ComboBox ItemsSource="{Binding UpdateChannelChoices}"
-                SelectedItem="{Binding SelectedUpdateChannel}"
-                Width="200" />
-
-      <TextBlock Classes="settings-section" Text="Saved passwords" />
-      <TextBlock Classes="settings-copy"
-                 Text="Stored only on this device. Pages are not filled automatically."
-                 TextWrapping="Wrap" />
-      <Grid ColumnDefinitions="*,*,*,Auto" ColumnSpacing="6">
-        <TextBox Grid.Column="0" PlaceholderText="Host" Text="{Binding NewPasswordHost}" />
-        <TextBox Grid.Column="1" PlaceholderText="Username" Text="{Binding NewPasswordUsername}" />
-        <TextBox Grid.Column="2" PlaceholderText="Password" PasswordChar="•" Text="{Binding NewPasswordSecret}" />
-        <Button Grid.Column="3" Content="Save" Command="{Binding AddPasswordCommand}" />
-      </Grid>
-      <ItemsControl ItemsSource="{Binding Passwords}">
-        <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="dto:SavedCredential">
-            <Grid ColumnDefinitions="*,*,Auto" Margin="0,4">
-              <TextBlock Grid.Column="0" Text="{Binding Host}" />
-              <TextBlock Grid.Column="1" Text="{Binding Username}" />
-              <Button Grid.Column="2" Content="Remove"
-                      Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).RemovePasswordCommand}"
-                      CommandParameter="{Binding}" />
+        <!-- ===== Appearance ===== -->
+        <StackPanel IsVisible="{Binding ShowsAppearance}">
+          <Border Classes="settings-row last">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24">
+              <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                <TextBlock Classes="settings-label" Text="Theme" />
+                <TextBlock Classes="settings-hint"
+                           Text="Follow the system, or hold the browser to light or dark whatever the desktop does." />
+              </StackPanel>
+              <ComboBox Grid.Column="1"
+                        Classes="settings-input"
+                        Width="220"
+                        ItemsSource="{Binding ThemeChoices}"
+                        SelectedItem="{Binding SelectedTheme}" />
             </Grid>
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
+          </Border>
+        </StackPanel>
 
-    </StackPanel>
-  </ScrollViewer>
+        <!-- ===== On startup ===== -->
+        <StackPanel IsVisible="{Binding ShowsStartup}">
+          <Border Classes="settings-row">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24">
+              <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                <TextBlock Classes="settings-label" Text="When Aphelion opens" />
+                <TextBlock Classes="settings-hint"
+                           Text="Pick up where you left off, start clean, or go straight to a set of pages." />
+              </StackPanel>
+              <ComboBox Grid.Column="1"
+                        Classes="settings-input"
+                        Width="240"
+                        ItemsSource="{Binding StartupChoices}"
+                        SelectedItem="{Binding SelectedStartup}" />
+            </Grid>
+          </Border>
+
+          <Border Classes="settings-row last" IsVisible="{Binding ShowsCustomPages}">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="settings-label" Text="Pages to open" />
+              <TextBlock Classes="settings-hint" Text="One address per line." />
+              <TextBox Classes="settings-input"
+                       AcceptsReturn="True"
+                       Height="110"
+                       PlaceholderText="https://example.com"
+                       Text="{Binding StartupPagesText}" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- ===== Search ===== -->
+        <StackPanel IsVisible="{Binding ShowsSearch}">
+          <Border Classes="settings-row last">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24">
+              <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                <TextBlock Classes="settings-label" Text="Search engine" />
+                <TextBlock Classes="settings-hint"
+                           Text="Used by the address bar and the New Tab box when what you type is not an address." />
+              </StackPanel>
+              <ComboBox Grid.Column="1"
+                        Classes="settings-input"
+                        Width="220"
+                        ItemsSource="{Binding SearchEngines}"
+                        SelectedItem="{Binding SelectedEngine}" />
+            </Grid>
+          </Border>
+        </StackPanel>
+
+        <!-- ===== New Tab ===== -->
+        <StackPanel IsVisible="{Binding ShowsNewTab}">
+          <Border Classes="settings-row">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24">
+              <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                <TextBlock Classes="settings-label" Text="Show the weather" />
+                <TextBlock Classes="settings-hint"
+                           Text="The card resolves an approximate location from your IP — the one thing the page fetches before you ask it to." />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="1"
+                            Classes="settings-toggle"
+                            IsChecked="{Binding WeatherEnabled}" />
+            </Grid>
+          </Border>
+
+          <Border Classes="settings-row last">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24">
+              <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                <TextBlock Classes="settings-label" Text="Suggest as you type" />
+                <TextBlock Classes="settings-hint"
+                           Text="Sends what you are typing to the chosen search engine to complete it." />
+              </StackPanel>
+              <ToggleSwitch Grid.Column="1"
+                            Classes="settings-toggle"
+                            IsChecked="{Binding SuggestionsEnabled}" />
+            </Grid>
+          </Border>
+        </StackPanel>
+
+        <!-- ===== Downloads ===== -->
+        <StackPanel IsVisible="{Binding ShowsDownloads}">
+          <Border Classes="settings-row last">
+            <StackPanel Spacing="8">
+              <TextBlock Classes="settings-label" Text="Save files to" />
+              <TextBlock Classes="settings-hint"
+                         Text="Leave this empty to use the system downloads folder." />
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <TextBox Grid.Column="0"
+                         Classes="settings-input"
+                         PlaceholderText="System downloads folder"
+                         Text="{Binding DownloadFolder}" />
+                <Button Grid.Column="1"
+                        Classes="page-ghost"
+                        Content="Use default"
+                        Command="{Binding UseDefaultDownloadFolderCommand}" />
+              </Grid>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- ===== Passwords ===== -->
+        <StackPanel Spacing="20" IsVisible="{Binding ShowsPasswords}">
+          <StackPanel>
+            <Border Classes="settings-row last">
+              <StackPanel Spacing="10">
+                <StackPanel Spacing="3">
+                  <TextBlock Classes="settings-label" Text="Add a credential" />
+                  <TextBlock Classes="settings-hint"
+                             Text="Kept on this device only. Pages are never filled in automatically." />
+                </StackPanel>
+
+                <Grid ColumnDefinitions="*,*,*,Auto" ColumnSpacing="8">
+                  <TextBox Grid.Column="0" Classes="settings-input"
+                           PlaceholderText="Site" Text="{Binding NewPasswordHost}" />
+                  <TextBox Grid.Column="1" Classes="settings-input"
+                           PlaceholderText="Username" Text="{Binding NewPasswordUsername}" />
+                  <TextBox Grid.Column="2" Classes="settings-input"
+                           PlaceholderText="Password" PasswordChar="•"
+                           Text="{Binding NewPasswordSecret}" />
+                  <Button Grid.Column="3" Classes="page-primary" Content="Save"
+                          Command="{Binding AddPasswordCommand}" />
+                </Grid>
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding HasPasswords}">
+            <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+              <TextBlock Grid.Column="0" Classes="page-section" Text="Saved" />
+              <TextBlock Grid.Column="1" Classes="page-section" Text="{Binding PasswordCountLabel}" />
+            </Grid>
+
+            <ItemsControl ItemsSource="{Binding Passwords}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="dto:SavedCredential">
+                  <Border Classes="page-row">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+                      <Border Grid.Column="0" Classes="page-tile">
+                        <Path Classes="settings-nav-glyph"
+                              HorizontalAlignment="Center"
+                              Stroke="{DynamicResource ForegroundMutedBrush}"
+                              Data="M7,10 V7.5 A5,5 0 0 1 17,7.5 V10 M5.5,10 H18.5 V20 H5.5 Z" />
+                      </Border>
+                      <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Classes="settings-label" Text="{Binding Host}" />
+                        <TextBlock Classes="settings-hint" Text="{Binding Username}" />
+                      </StackPanel>
+                      <Button Grid.Column="2"
+                              Classes="page-ghost danger"
+                              Content="Remove"
+                              VerticalAlignment="Center"
+                              Command="{Binding $parent[ItemsControl].((vm:SettingsViewModel)DataContext).RemovePasswordCommand}"
+                              CommandParameter="{Binding}" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </StackPanel>
+
+        <!-- ===== System ===== -->
+        <StackPanel IsVisible="{Binding ShowsSystem}">
+          <Border Classes="settings-row">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24">
+              <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                <TextBlock Classes="settings-label" Text="Default browser" />
+                <TextBlock Classes="settings-hint"
+                           Text="Opens the operating system's own panel — only it can hand over the links other applications open." />
+              </StackPanel>
+              <Button Grid.Column="1"
+                      Classes="page-ghost"
+                      Content="Open system settings"
+                      Command="{Binding OpenDefaultAppsCommand}" />
+            </Grid>
+          </Border>
+
+          <Border Classes="settings-row last">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="24">
+              <StackPanel Grid.Column="0" Spacing="3" VerticalAlignment="Center">
+                <TextBlock Classes="settings-label" Text="Update channel" />
+                <TextBlock Classes="settings-hint"
+                           Text="Beta takes changes as they land; stable waits for them to settle." />
+              </StackPanel>
+              <ComboBox Grid.Column="1"
+                        Classes="settings-input"
+                        Width="180"
+                        ItemsSource="{Binding UpdateChannelChoices}"
+                        SelectedItem="{Binding SelectedUpdateChannel}" />
+            </Grid>
+          </Border>
+        </StackPanel>
+
+        <!-- ===== About ===== -->
+        <StackPanel IsVisible="{Binding ShowsAbout}">
+          <Border Classes="settings-row">
+            <StackPanel Orientation="Horizontal" Spacing="16">
+              <Border Classes="settings-about-mark">
+                <Image Source="avares://Aphelion.Desktop.UI/Assets/aphelion_logo_colored.png"
+                       Width="30" Height="30"
+                       Stretch="Uniform"
+                       RenderOptions.BitmapInterpolationMode="HighQuality" />
+              </Border>
+              <StackPanel Spacing="4" VerticalAlignment="Center">
+                <TextBlock Classes="settings-version" Text="Aphelion" />
+                <TextBlock Classes="settings-hint" Text="A browser that keeps its own pages to itself." />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="settings-row">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Classes="settings-label" Text="Version" />
+              <TextBlock Grid.Column="1" Classes="settings-hint" Text="{Binding AppVersion}" />
+            </Grid>
+          </Border>
+
+          <Border Classes="settings-row last">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Grid.Column="0" Classes="settings-label" Text="Release channel" />
+              <TextBlock Grid.Column="1" Classes="settings-hint" Text="{Binding SelectedUpdateChannel.Label}" />
+            </Grid>
+          </Border>
+        </StackPanel>
+
+      </StackPanel>
+    </ScrollViewer>
+
+  </DockPanel>
+
 </UserControl>
