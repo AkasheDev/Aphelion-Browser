@@ -104,6 +104,24 @@ public sealed class NativeWebViewSession : IBrowserEngineSession, IDisposable
 
     public bool StopLoading() => _webView.Stop();
 
+    /// <inheritdoc />
+    public void SetForeground(bool isForeground)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        if (isForeground)
+        {
+            _pagePoll.Start();
+        }
+        else
+        {
+            _pagePoll.Stop();
+        }
+    }
+
     /// <summary>
     /// Deletes every cookie the underlying adapter reports. This is the closest
     /// this application can come to a private profile: Avalonia's public web view

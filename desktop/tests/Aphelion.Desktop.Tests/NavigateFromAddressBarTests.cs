@@ -62,6 +62,10 @@ public sealed class NavigateFromAddressBarTests
 
         public bool StopLoading() => false;
 
+        public void SetForeground(bool isForeground) => IsForeground = isForeground;
+
+        public bool IsForeground { get; private set; } = true;
+
         public Task ClearBrowsingDataAsync() => Task.CompletedTask;
 
         public Task<string?> EvaluateAsync(string script) => Task.FromResult<string?>(null);

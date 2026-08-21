@@ -33,6 +33,18 @@ public interface IBrowserEngineSession
     bool StopLoading();
 
     /// <summary>
+    /// Tells the session whether its tab is the one on screen.
+    /// </summary>
+    /// <remarks>
+    /// A hidden tab keeps its engine surface alive - see the comment in
+    /// <c>BrowserView</c> about why it is not torn down - so without this every
+    /// open tab goes on polling its page for events forever, four times a second
+    /// each, on the one UI thread they all share. Only the tab being looked at
+    /// can produce the hovers and clicks that polling is there to collect.
+    /// </remarks>
+    void SetForeground(bool isForeground);
+
+    /// <summary>
     /// Removes every cookie this session's engine surface holds.
     /// </summary>
     /// <remarks>

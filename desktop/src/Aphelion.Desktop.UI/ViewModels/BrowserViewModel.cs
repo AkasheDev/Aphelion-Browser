@@ -28,6 +28,7 @@ public sealed partial class BrowserViewModel : ViewModelBase
 
     private BrowserTab _tab = new(TabId.New());
     private IBrowserEngineSession? _session;
+    private bool _isForeground = true;
     private readonly DispatcherTimer _loadingProgressTimer;
     private int _sessionGeneration;
     private int _progressGeneration;
@@ -454,9 +455,23 @@ public sealed partial class BrowserViewModel : ViewModelBase
         _session.AcceleratorKeyPressed += OnAcceleratorKeyPressed;
         _session.PageMessage += OnPageMessage;
 
+        _session.SetForeground(_isForeground);
+
         RefreshHistoryState();
         ResumePendingNavigation();
         _ = ApplyMuteAsync();
+    }
+
+    /// <summary>
+    /// Marks this tab as the one on screen, or not. A hidden tab keeps its
+    /// engine surface, so it has to be told to stop polling the page it is no
+    /// longer showing. Held here as well as passed on, because the session can
+    /// be attached after the shell has already decided which tab is in front.
+    /// </summary>
+    public void SetForeground(bool isForeground)
+    {
+        _isForeground = isForeground;
+        _session?.SetForeground(isForeground);
     }
 
     /// <summary>

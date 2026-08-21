@@ -897,9 +897,26 @@ public sealed partial class ShellViewModel : ViewModelBase
         }
     }
 
-
     partial void OnSplitBrowserChanged(BrowserViewModel? value) =>
         OnPropertyChanged(nameof(FocusedBrowser));
+
+    /// <summary>
+    /// Tells every tab whether it is the one being looked at. A hidden tab keeps
+    /// its engine surface alive, and an engine session left in the foreground
+    /// polls its page four times a second forever, so a window with twenty tabs
+    /// open ran twenty of those on the single UI thread. Recomputed from the
+    /// panes rather than toggled in pairs, so no ordering between the active and
+    /// the split pane can leave a tab polling that nothing is showing.
+    /// </summary>
+    private void SyncForeground()
+    {
+        foreach (var browser in _browsers.Values)
+        {
+            browser.SetForeground(
+                ReferenceEquals(browser, ActiveBrowser) ||
+                (IsSplit && ReferenceEquals(browser, SplitBrowser)));
+        }
+    }
 
     partial void OnIsSplitChanged(bool value) =>
         OnPropertyChanged(nameof(FocusedBrowser));
@@ -2149,6 +2166,10 @@ public sealed partial class ShellViewModel : ViewModelBase
         {
             IsRightPaneFocused = false;
         }
+
+        // Both panes have just been settled, so this is the one place that knows
+        // which tabs are actually on screen.
+        SyncForeground();
     }
 
     /// <summary>
